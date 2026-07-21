@@ -1,0 +1,1 @@
+Inspiración: Notion, Linear, Vercel.
