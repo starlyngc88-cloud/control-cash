@@ -67,7 +67,7 @@ export default function GastosPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!personId || !amount || !description) return
+    if (!personId || !amount) return
     const data = {
       person_id: personId,
       amount: parseFloat(amount),
@@ -136,7 +136,7 @@ export default function GastosPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">{g.concepto}</Label>
-                <Input id="description" placeholder={g.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} required />
+                <Input id="description" placeholder={g.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">{g.fecha}</Label>

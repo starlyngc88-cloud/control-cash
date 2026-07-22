@@ -165,8 +165,10 @@ export async function updateExpense(id: string, data: { person_id: string; amoun
 
 export async function getDashboardData(monthStr?: string) {
   const now = monthStr ? new Date(monthStr + "-01") : new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  const startOfMonth = monthStr ? monthStr + "-01" : new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+  const endOfMonth = monthStr
+    ? new Date(parseInt(monthStr.split("-")[0]), parseInt(monthStr.split("-")[1]), 0).toISOString().split("T")[0]
+    : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 
   const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase
@@ -322,6 +324,7 @@ export async function createBudgetCategory(category: {
 }
 
 export async function deleteBudgetCategory(id: string) {
+  await supabase.from("expenses").update({ budget_category_id: null }).eq("budget_category_id", id)
   const { error } = await supabase.from("budget_categories").delete().eq("id", id)
   if (error) throw error
 }

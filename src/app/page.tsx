@@ -118,8 +118,13 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-violet-600">{fmt(data?.totalBudgeted ?? 0)}</p>
+            <p className="text-[10px] text-muted-foreground -mt-0.5">presupuestado</p>
             {data && data.totalBudgeted > 0 && (
-              <div className="mt-1">
+              <div className="mt-1.5">
+                <div className="flex justify-between text-[11px] mb-0.5">
+                  <span className="text-red-600">-{fmt(data.totalGastos)}</span>
+                  <span className="text-green-600">={fmt(Math.max(0, data.totalBudgeted - data.totalGastos))}</span>
+                </div>
                 <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all ${

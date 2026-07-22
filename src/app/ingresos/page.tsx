@@ -61,7 +61,7 @@ export default function IngresosPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!personId || !amount || !description) return
+    if (!personId || !amount) return
     const data = { person_id: personId, amount: parseFloat(amount), description, date }
     if (editing) {
       await updateIncome(editing.id, data)
@@ -123,7 +123,7 @@ export default function IngresosPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="description">{inc.concepto}</Label>
-                <Input id="description" placeholder={inc.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} required />
+                <Input id="description" placeholder={inc.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="date">{inc.fecha}</Label>

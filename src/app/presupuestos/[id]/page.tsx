@@ -64,7 +64,26 @@ export default function MonthlyBudgetPage() {
         <span className="text-xs text-muted-foreground">· {data.templateName}</span>
       </div>
 
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs border rounded-lg px-3 py-2 bg-muted/30">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border rounded-lg px-3 py-2 bg-muted/30">
+        {(() => {
+          const parentIds = data.categories.filter(c => !c.parent_id).map(c => c.id)
+          if (parentIds.length === 0) return null
+          const allExpanded = parentIds.every(id => expanded.has(id))
+          return (
+            <button
+              onClick={() => {
+                if (allExpanded) {
+                  setExpanded(new Set())
+                } else {
+                  setExpanded(new Set(parentIds))
+                }
+              }}
+              className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:bg-muted shrink-0"
+            >
+              {allExpanded ? "▲" : "▼"}
+            </button>
+          )
+        })()}
         <span><span className="text-muted-foreground">{d.ingresos}</span> <b className="text-green-600">{fmt(data.totalIngresos)}</b></span>
         <span><span className="text-muted-foreground">{d.presupuestado}</span> <b className="text-blue-600">{fmt(data.totalBudgeted)}</b></span>
         <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">{fmt(data.totalGastos)}</b></span>

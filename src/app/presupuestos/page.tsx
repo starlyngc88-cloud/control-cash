@@ -26,7 +26,8 @@ import {
   deleteMonthlyBudget,
   buildCategoryTree,
 } from "@/lib/db"
-import type { BudgetTemplate, BudgetCategory, MonthlyBudget } from "@/types"
+import { supabase } from "@/lib/supabase"
+import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/types"
 import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, PiggyBank, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
@@ -41,6 +42,11 @@ export default function PresupuestosPage() {
   const [openTemplate, setOpenTemplate] = useState(false)
   const [templateName, setTemplateName] = useState("")
   const [editingTemplate, setEditingTemplate] = useState<BudgetTemplate | null>(null)
+
+  const [openDeleteCat, setOpenDeleteCat] = useState(false)
+  const [deleteCatId, setDeleteCatId] = useState("")
+  const [deleteCatName, setDeleteCatName] = useState("")
+  const [deleteCatExpenses, setDeleteCatExpenses] = useState<Expense[]>([])
 
   const [openMonth, setOpenMonth] = useState(false)
   const [selectedTemplateId, setSelectedTemplateId] = useState("")
@@ -161,11 +167,27 @@ export default function PresupuestosPage() {
     load()
   }
 
-  const handleDeleteCategory = async (id: string, parentId: string | null) => {
-    if (parentId === null) {
-      const children = categoriesMap[Object.keys(categoriesMap).find(k => categoriesMap[k].some(c => c.parent_id === id)) ? "" : ""]
+  const handleDeleteCategory = async (id: string, name: string) => {
+    const { data: expenses } = await supabase.from("expenses").select("*").eq("budget_category_id", id)
+    if (expenses && expenses.length > 0) {
+      setDeleteCatId(id)
+      setDeleteCatName(name)
+      setDeleteCatExpenses(expenses)
+      setOpenDeleteCat(true)
+    } else {
+      await deleteBudgetCategory(id)
+      load()
     }
-    await deleteBudgetCategory(id)
+  }
+
+  const confirmDeleteCategory = async () => {
+    for (const exp of deleteCatExpenses) {
+      await supabase.from("expenses").delete().eq("id", exp.id)
+    }
+    await deleteBudgetCategory(deleteCatId)
+    setOpenDeleteCat(false)
+    setDeleteCatExpenses([])
+    setDeleteCatId("")
     load()
   }
 
@@ -223,7 +245,27 @@ export default function PresupuestosPage() {
                 return (
                   <div key={tmpl.id} className="border rounded-lg overflow-hidden bg-background">
                     <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b">
-                      <span className="text-sm font-semibold">{tmpl.name}</span>
+                      <div className="flex items-center gap-1.5">
+                        {(() => {
+                          const parentIds = new Set(allCats.filter(c => !c.parent_id).map(c => c.id))
+                          const allExpanded = parentIds.size > 0 && [...parentIds].every(id => expandedParents.has(id))
+                          return (
+                            <button
+                              onClick={() => {
+                                if (allExpanded) {
+                                  setExpandedParents(prev => { const n = new Set(prev); parentIds.forEach(id => n.delete(id)); return n })
+                                } else {
+                                  setExpandedParents(prev => { const n = new Set(prev); parentIds.forEach(id => n.add(id)); return n })
+                                }
+                              }}
+                              className="text-[10px] text-muted-foreground hover:text-foreground px-1.5 py-0.5 rounded border border-border hover:bg-muted"
+                            >
+                              {allExpanded ? "▲" : "▼"}
+                            </button>
+                          )
+                        })()}
+                        <span className="text-sm font-semibold">{tmpl.name}</span>
+                      </div>
                       <div className="flex items-center gap-1">
                         <Button variant="outline" size="sm" className="h-6 text-[11px]" onClick={() => { setSelectedTemplateId(tmpl.id); setOpenMonth(true) }}>
                           <Calendar className="size-3 mr-1" /> {p.mes}
@@ -239,42 +281,42 @@ export default function PresupuestosPage() {
 
                     {allCats.length > 0 && (
                       <div className="text-xs">
-                        {parents.map((parent) => (
+                        {parents.map((parent) => {
+                          const isExpanded = expandedParents.has(parent.id)
+                          return (
                           <div key={parent.id}>
-                            <div className="flex items-center gap-1 py-1 px-2 hover:bg-muted/30 bg-muted/5 border-t border-border/50 first:border-t-0">
+                            <div className={`flex items-center gap-0.5 py-1 px-2 transition-colors ${isExpanded ? "bg-accent/40" : "hover:bg-muted/30 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
                               <button onClick={() => toggleParent(parent.id)} className="p-0.5 rounded hover:bg-accent text-muted-foreground shrink-0">
                                 {parent.children.length > 0 ? (
-                                  expandedParents.has(parent.id) ? <ChevronDown className="size-2.5" /> : <ChevronRight className="size-2.5" />
+                                  isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />
                                 ) : (
-                                  <span className="size-2.5 block" />
+                                  <span className="size-3 block" />
                                 )}
                               </button>
-                              <span className="font-medium truncate min-w-0 flex-1">{parent.name}</span>
-                              {parent.children.length > 0 ? (
-                                <span className="tabular-nums shrink-0">{fmt(parent.children.reduce((s, c) => s + c.budgeted, 0))}</span>
-                              ) : (
-                                <span className="tabular-nums shrink-0">{fmt(parent.budgeted)}</span>
-                              )}
                               <button className="text-muted-foreground hover:text-primary shrink-0" title="Subcategoría" onClick={() => { setAddingSub(addingSub === parent.id ? null : parent.id); setSubCatName(""); setSubCatBudgeted("") }}>
-                                <FolderDown className="size-2.5" />
+                                <FolderDown className="size-3" />
                               </button>
                               <button className="text-muted-foreground hover:text-primary shrink-0" onClick={() => { setEditingCat(parent); setEditCatName(parent.name); setEditCatBudgeted(String(parent.budgeted)); setOpenCatEdit(true); setEditCatHasChildren(parent.children.length > 0); setEditCatHasSub(parent.children.length > 0 || parent.budgeted === 0) }}>
-                                <Pencil className="size-2.5" />
+                                <Pencil className="size-3" />
                               </button>
-                              <button className="text-muted-foreground hover:text-red-600 shrink-0" onClick={() => handleDeleteCategory(parent.id, null)}>
-                                <Trash2 className="size-2.5" />
+                              <button className="text-muted-foreground hover:text-red-600 shrink-0" onClick={() => handleDeleteCategory(parent.id, parent.name)}>
+                                <Trash2 className="size-3" />
                               </button>
+                              <span className="font-medium truncate min-w-0 ml-1">{parent.name}</span>
+                              <span className="tabular-nums shrink-0 ml-auto">
+                                {parent.children.length > 0 ? fmt(parent.children.reduce((s, c) => s + c.budgeted, 0)) : fmt(parent.budgeted)}
+                              </span>
                             </div>
 
-                            {parent.children.length > 0 && expandedParents.has(parent.id) && parent.children.map((child) => (
-                              <div key={child.id} className="flex items-center gap-1 py-0.5 px-2 pl-6 hover:bg-muted/20 border-t border-dashed border-border/30">
-                                <span className="truncate min-w-0 flex-1 text-muted-foreground">└ {child.name}</span>
-                                <span className="tabular-nums shrink-0">{fmt(child.budgeted)}</span>
+                            {parent.children.length > 0 && isExpanded && parent.children.map((child) => (
+                              <div key={child.id} className="flex items-center gap-0.5 py-0.5 px-2 pl-8 hover:bg-muted/20 border-t border-dashed border-border/30">
+                                <span className="truncate min-w-0 text-muted-foreground">└ {child.name}</span>
+                                <span className="tabular-nums shrink-0 ml-auto">{fmt(child.budgeted)}</span>
                                 <button className="text-muted-foreground hover:text-primary shrink-0" onClick={() => { setEditingCat(child); setEditCatName(child.name); setEditCatBudgeted(String(child.budgeted)); setOpenCatEdit(true) }}>
-                                  <Pencil className="size-2.5" />
+                                  <Pencil className="size-3" />
                                 </button>
-                                <button className="text-muted-foreground hover:text-red-600 shrink-0" onClick={() => handleDeleteCategory(child.id, parent.id)}>
-                                  <Trash2 className="size-2.5" />
+                                <button className="text-muted-foreground hover:text-red-600 shrink-0" onClick={() => handleDeleteCategory(child.id, child.name)}>
+                                  <Trash2 className="size-3" />
                                 </button>
                               </div>
                             ))}
@@ -304,7 +346,8 @@ export default function PresupuestosPage() {
                               </div>
                             )}
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
 
@@ -470,6 +513,35 @@ export default function PresupuestosPage() {
             )}
             <Button type="submit" className="w-full">{p.agregarRubro}</Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openDeleteCat} onOpenChange={setOpenDeleteCat}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">¿Eliminar "{deleteCatName}"?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {deleteCatExpenses.length > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">
+                  {deleteCatExpenses.length} gasto{deleteCatExpenses.length !== 1 ? "s" : ""} asociado{deleteCatExpenses.length !== 1 ? "s" : ""} también será{deleteCatExpenses.length !== 1 ? "n" : ""} eliminado{deleteCatExpenses.length !== 1 ? "s" : ""}:
+                </p>
+                <div className="max-h-40 overflow-y-auto space-y-0.5 text-xs">
+                  {deleteCatExpenses.map((exp) => (
+                    <div key={exp.id} className="flex justify-between px-2 py-0.5 rounded bg-muted/30">
+                      <span className="truncate mr-2">{exp.description || "Sin concepto"}</span>
+                      <span className="tabular-nums shrink-0">{fmt(exp.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 pt-1">
+              <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => setOpenDeleteCat(false)}>Cancelar</Button>
+              <Button variant="destructive" size="sm" className="flex-1 text-xs" onClick={confirmDeleteCategory}>Eliminar todo</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
