@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { getIncomes, createIncome, updateIncome, deleteIncome, getPeople } from "@/lib/db"
 import type { Person, Income } from "@/types"
 import { Plus, Trash2, Pencil, ArrowDownCircle } from "lucide-react"
+import { useLanguage } from "@/i18n/useLanguage"
 
 export default function IngresosPage() {
   const [incomes, setIncomes] = useState<(Income & { people: Pick<Person, "name"> | null })[]>([])
@@ -23,6 +24,8 @@ export default function IngresosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Income | null>(null)
   const [loading, setLoading] = useState(true)
+  const { t } = useLanguage()
+  const inc = t.ingresos
 
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
@@ -75,12 +78,12 @@ export default function IngresosPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar este ingreso?")) return
+    if (!confirm(inc.deleteConfirm)) return
     await deleteIncome(id)
     load()
   }
 
-  if (loading) return <p className="text-muted-foreground">Cargando...</p>
+  if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   const total = incomes.reduce((s, i) => s + Number(i.amount), 0)
 
@@ -92,17 +95,17 @@ export default function IngresosPage() {
             <ArrowDownCircle className="size-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Ingresos</h2>
-            <p className="text-sm text-muted-foreground">Lo que entró</p>
+            <h2 className="text-2xl font-bold tracking-tight">{inc.title}</h2>
+            <p className="text-sm text-muted-foreground">{inc.subtitle}</p>
           </div>
         </div>
         <Dialog key={editing?.id ?? 'new'} open={open} onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v) }}>
-          <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />Nuevo ingreso</Button>} />
+          <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{inc.newIngreso}</Button>} />
           <DialogContent>
-            <DialogHeader><DialogTitle>{editing ? "Editar ingreso" : "Nuevo ingreso"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? inc.editTitle : inc.newTitle}</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="persona">Persona</Label>
+                <Label htmlFor="persona">{inc.persona}</Label>
                 <select
                   id="persona"
                   value={personId}
@@ -110,23 +113,23 @@ export default function IngresosPage() {
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                   required
                 >
-                  <option value="" disabled>Seleccionar persona</option>
+                  <option value="" disabled>{inc.selectPersona}</option>
                   {people.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="amount">Monto</Label>
-                <Input id="amount" type="number" step="0.01" min="0.01" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+                <Label htmlFor="amount">{inc.monto}</Label>
+                <Input id="amount" type="number" step="0.01" min="0.01" placeholder={inc.montoPlaceholder} value={amount} onChange={(e) => setAmount(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="description">Concepto</Label>
-                <Input id="description" placeholder="Ej: Sueldo, freelance, etc." value={description} onChange={(e) => setDescription(e.target.value)} required />
+                <Label htmlFor="description">{inc.concepto}</Label>
+                <Input id="description" placeholder={inc.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date">Fecha</Label>
+                <Label htmlFor="date">{inc.fecha}</Label>
                 <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
               </div>
-              <Button type="submit" className="w-full">{editing ? "Guardar cambios" : "Guardar"}</Button>
+              <Button type="submit" className="w-full">{editing ? inc.guardarCambios : inc.guardar}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -134,11 +137,11 @@ export default function IngresosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">Total: ${total.toLocaleString("es-CO", { minimumFractionDigits: 2 })}</CardTitle>
+          <CardTitle className="text-sm font-medium">{inc.total} ${total.toLocaleString("es-CO", { minimumFractionDigits: 2 })}</CardTitle>
         </CardHeader>
         <CardContent>
           {incomes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay ingresos registrados.</p>
+            <p className="text-sm text-muted-foreground">{inc.empty}</p>
           ) : (
             <div className="space-y-2">
               {incomes.map((inc) => (

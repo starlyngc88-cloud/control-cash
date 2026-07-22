@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getDashboardData } from "@/lib/db"
 import { ArrowDownCircle, ArrowUpCircle, LayoutDashboard, Wallet } from "lucide-react"
+import { useLanguage } from "@/i18n/useLanguage"
 
 type DashboardData = {
   totalIngresos: number
@@ -16,6 +17,8 @@ type DashboardData = {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const { t } = useLanguage()
+  const d = t.dashboard
 
   useEffect(() => {
     getDashboardData()
@@ -24,7 +27,7 @@ export default function DashboardPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <p className="text-muted-foreground">Cargando...</p>
+  if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   return (
     <div className="space-y-6">
@@ -33,15 +36,15 @@ export default function DashboardPage() {
           <LayoutDashboard className="size-5" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-sm text-muted-foreground">Resumen del mes</p>
+          <h2 className="text-2xl font-bold tracking-tight">{d.title}</h2>
+          <p className="text-sm text-muted-foreground">{d.subtitle}</p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Ingresos</CardTitle>
+            <CardTitle className="text-sm font-medium">{d.ingresos}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30">
               <ArrowDownCircle className="size-4" />
             </div>
@@ -55,7 +58,7 @@ export default function DashboardPage() {
 
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Gastos</CardTitle>
+            <CardTitle className="text-sm font-medium">{d.gastos}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30">
               <ArrowUpCircle className="size-4" />
             </div>
@@ -69,7 +72,7 @@ export default function DashboardPage() {
 
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Balance</CardTitle>
+            <CardTitle className="text-sm font-medium">{d.balance}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30">
               <Wallet className="size-4" />
             </div>
@@ -89,11 +92,11 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="transition-all duration-200 hover:shadow-md">
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Últimos ingresos</CardTitle>
+            <CardTitle className="text-sm font-medium">{d.ultimosIngresos}</CardTitle>
           </CardHeader>
           <CardContent>
             {data?.recentIncomes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin ingresos registrados</p>
+              <p className="text-sm text-muted-foreground">{d.sinIngresos}</p>
             ) : (
               <ul className="space-y-2">
                 {data?.recentIncomes.map((inc: any) => (
@@ -114,11 +117,11 @@ export default function DashboardPage() {
 
         <Card className="transition-all duration-200 hover:shadow-md">
           <CardHeader>
-            <CardTitle className="text-sm font-medium">Últimos gastos</CardTitle>
+            <CardTitle className="text-sm font-medium">{d.ultimosGastos}</CardTitle>
           </CardHeader>
           <CardContent>
             {data?.recentExpenses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin gastos registrados</p>
+              <p className="text-sm text-muted-foreground">{d.sinGastos}</p>
             ) : (
               <ul className="space-y-2">
                 {data?.recentExpenses.map((exp: any) => (

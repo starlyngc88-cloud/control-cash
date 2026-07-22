@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { getPeople, createPerson, updatePerson, deletePerson } from "@/lib/db"
 import type { Person } from "@/types"
 import { Plus, Trash2, Pencil, Users } from "lucide-react"
+import { useLanguage } from "@/i18n/useLanguage"
 
 export default function PersonasPage() {
   const [people, setPeople] = useState<Person[]>([])
@@ -22,10 +23,12 @@ export default function PersonasPage() {
   const [editing, setEditing] = useState<Person | null>(null)
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState("")
+  const { t } = useLanguage()
+  const p = t.personas
 
   const load = async () => {
-    const p = await getPeople()
-    setPeople(p)
+    const people = await getPeople()
+    setPeople(people)
     setLoading(false)
   }
 
@@ -37,9 +40,9 @@ export default function PersonasPage() {
     setOpen(true)
   }
 
-  const openEdit = (p: Person) => {
-    setEditing(p)
-    setName(p.name)
+  const openEdit = (person: Person) => {
+    setEditing(person)
+    setName(person.name)
     setOpen(true)
   }
 
@@ -58,12 +61,14 @@ export default function PersonasPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta persona? También se eliminarán sus ingresos y gastos.")) return
+    if (!confirm(p.deleteConfirm)) return
     await deletePerson(id)
     load()
   }
 
-  if (loading) return <p className="text-muted-foreground">Cargando...</p>
+  if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
+
+  const countLabel = p.count.replace("{n}", String(people.length)).replace("{c}", people.length !== 1 ? "s" : "")
 
   return (
     <div className="space-y-6">
@@ -73,20 +78,20 @@ export default function PersonasPage() {
             <Users className="size-5" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">Personas</h2>
-            <p className="text-sm text-muted-foreground">Configuración de personas</p>
+            <h2 className="text-2xl font-bold tracking-tight">{p.title}</h2>
+            <p className="text-sm text-muted-foreground">{p.subtitle}</p>
           </div>
         </div>
         <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setName("") }; setOpen(v) }}>
-          <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />Nueva persona</Button>} />
+          <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{p.newPersona}</Button>} />
           <DialogContent>
-            <DialogHeader><DialogTitle>{editing ? "Editar persona" : "Nueva persona"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{editing ? p.editTitle : p.newTitle}</DialogTitle></DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Nombre</Label>
-                <Input id="name" placeholder="Nombre de la persona" value={name} onChange={(e) => setName(e.target.value)} required />
+                <Label htmlFor="name">{p.nombre}</Label>
+                <Input id="name" placeholder={p.nombrePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
-              <Button type="submit" className="w-full">{editing ? "Guardar cambios" : "Crear persona"}</Button>
+              <Button type="submit" className="w-full">{editing ? p.guardarCambios : p.crearPersona}</Button>
             </form>
           </DialogContent>
         </Dialog>
@@ -94,21 +99,21 @@ export default function PersonasPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">{people.length} persona{people.length !== 1 ? "s" : ""}</CardTitle>
+          <CardTitle className="text-sm font-medium">{countLabel}</CardTitle>
         </CardHeader>
         <CardContent>
           {people.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No hay personas registradas. Crea una para empezar.</p>
+            <p className="text-sm text-muted-foreground">{p.empty}</p>
           ) : (
             <div className="space-y-2">
-              {people.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg border p-3 transition-all duration-200 hover:shadow-sm hover:border-border/80">
-                  <span className="text-sm font-medium">{p.name}</span>
+              {people.map((person) => (
+                <div key={person.id} className="flex items-center justify-between rounded-lg border p-3 transition-all duration-200 hover:shadow-sm hover:border-border/80">
+                  <span className="text-sm font-medium">{person.name}</span>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(p)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(person)}>
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" onClick={() => handleDelete(p.id)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" onClick={() => handleDelete(person.id)}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>
