@@ -3,10 +3,11 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, Users, Wallet } from "lucide-react"
+import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, Users, Wallet, PiggyBank, BookOpen } from "lucide-react"
 
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/presupuestos", label: "Presupuestos", icon: PiggyBank },
   { href: "/ingresos", label: "Ingresos", icon: ArrowDownCircle },
   { href: "/gastos", label: "Gastos", icon: ArrowUpCircle },
   { href: "/personas", label: "Personas", icon: Users },
@@ -47,6 +48,26 @@ export function Sidebar() {
           )
         })}
       </nav>
+      <div className="px-3 pb-1">
+        <div className="h-px bg-border mb-1" />
+        {(() => {
+          const isGuideActive = pathname === "/guia"
+          return (
+            <Link
+              href="/guia"
+              className={cn(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                isGuideActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                  : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:translate-x-0.5"
+              )}
+            >
+              <BookOpen className={cn("size-4", isGuideActive && "text-primary")} />
+              Guía
+            </Link>
+          )
+        })()}
+      </div>
       <div className="p-4 border-t text-[10px] text-muted-foreground text-center">
         KellyCash v1.0
       </div>
