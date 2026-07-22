@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getAllBudgetCategories } from "@/lib/db"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getAllBudgetCategories, buildCategoryTree } from "@/lib/db"
+import type { CategoryTreeNode } from "@/lib/db"
 import type { Person, Expense, BudgetCategory, BudgetTemplate } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
@@ -23,7 +24,7 @@ export default function GastosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [loading, setLoading] = useState(true)
-  const { t } = useLanguage()
+  const { t, fmt } = useLanguage()
   const g = t.gastos
 
   const [personId, setPersonId] = useState("")
@@ -150,9 +151,22 @@ export default function GastosPage() {
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                 >
                   <option value="">{g.sinRubro}</option>
-                  {budgetCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.name} ({cat.budget_templates?.name})</option>
-                  ))}
+                  {(() => {
+                    const tree = buildCategoryTree(budgetCategories)
+                    const flat: { id: string; name: string; depth: number }[] = []
+                    const walk = (nodes: CategoryTreeNode[], depth: number) => {
+                      for (const n of nodes) {
+                        flat.push({ id: n.id, name: n.name, depth })
+                        walk(n.children, depth + 1)
+                      }
+                    }
+                    walk(tree, 0)
+                    return flat.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {"\u00A0".repeat(cat.depth * 4)}{cat.depth > 0 ? "— " : ""}{cat.name} ({budgetCategories.find(c => c.id === cat.id)?.budget_templates?.name ?? ""})
+                      </option>
+                    ))
+                  })()}
                 </select>
               </div>
               <Button type="submit" className="w-full">{editing ? g.guardarCambios : g.guardar}</Button>
@@ -163,7 +177,7 @@ export default function GastosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">{g.total} ${total.toLocaleString("es-CO", { minimumFractionDigits: 2 })}</CardTitle>
+          <CardTitle className="text-sm font-medium">{g.total} {fmt(total)}</CardTitle>
         </CardHeader>
         <CardContent>
           {expenses.length === 0 ? (
@@ -180,7 +194,7 @@ export default function GastosPage() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-sm font-semibold text-red-600">-${Number(exp.amount).toLocaleString("es-CO", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-semibold text-red-600">- {fmt(Number(exp.amount))}</span>
                     <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(exp)}>
                       <Pencil className="size-4" />
                     </Button>

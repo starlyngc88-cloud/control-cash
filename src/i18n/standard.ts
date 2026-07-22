@@ -85,7 +85,7 @@ const standard: Dictionary = {
     plantillas: "Plantillas",
     nueva: "Nueva",
     emptyTemplates: "No hay plantillas. Crea una para empezar.",
-    mes: "Mes",
+    mes: "Abrir mes",
     rubroPlaceholder: "Rubro",
     montoPlaceholder: "Monto",
     agregarRubro: "Rubro",
@@ -153,6 +153,9 @@ const standard: Dictionary = {
     kellycaribe: "KellyCash Caribe",
     standardDesc: "Estilo neutral con textos estándar.",
     caribeDesc: "Estilo caribeño con textos relajados y divertidos.",
+    moneda: "Moneda",
+    copDesc: "Peso colombiano ($)",
+    eurDesc: "Euro (€)",
     savedMessage: "Preferencia guardada.",
   },
   common: {

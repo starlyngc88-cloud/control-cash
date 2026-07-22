@@ -4,22 +4,25 @@ import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { getMonthlyBudgetDashboard } from "@/lib/db"
-import type { MonthlyBudgetDashboard } from "@/lib/db"
-import { ArrowLeft, Circle } from "lucide-react"
+import type { DashboardCategory } from "@/lib/db"
+import { ArrowLeft, Circle, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
 export default function MonthlyBudgetPage() {
   const params = useParams()
   const id = params.id as string
-  const [data, setData] = useState<MonthlyBudgetDashboard | null>(null)
+  const [data, setData] = useState<Awaited<ReturnType<typeof getMonthlyBudgetDashboard>> | null>(null)
   const [loading, setLoading] = useState(true)
-  const { t } = useLanguage()
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const { t, fmt } = useLanguage()
   const d = t.presupuestoDetail
 
   useEffect(() => {
     if (!id) return
     getMonthlyBudgetDashboard(id)
-      .then(setData)
+      .then((res) => {
+        setData(res)
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [id])
@@ -32,7 +35,24 @@ export default function MonthlyBudgetPage() {
     return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
   }
 
-  const fmt = (n: number) => n.toLocaleString("es-CO", { minimumFractionDigits: 2 })
+  const parents = data.categories.filter(c => !c.parent_id)
+  const childrenMap = new Map<string, DashboardCategory[]>()
+  for (const cat of data.categories) {
+    if (cat.parent_id) {
+      const arr = childrenMap.get(cat.parent_id) ?? []
+      arr.push(cat)
+      childrenMap.set(cat.parent_id, arr)
+    }
+  }
+
+  const toggle = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <div className="space-y-3">
@@ -45,10 +65,10 @@ export default function MonthlyBudgetPage() {
       </div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs border rounded-lg px-3 py-2 bg-muted/30">
-        <span><span className="text-muted-foreground">{d.ingresos}</span> <b className="text-green-600">${fmt(data.totalIngresos)}</b></span>
-        <span><span className="text-muted-foreground">{d.presupuestado}</span> <b className="text-blue-600">${fmt(data.totalBudgeted)}</b></span>
-        <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">${fmt(data.totalGastos)}</b></span>
-        <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>${fmt(data.balance)}</b></span>
+        <span><span className="text-muted-foreground">{d.ingresos}</span> <b className="text-green-600">{fmt(data.totalIngresos)}</b></span>
+        <span><span className="text-muted-foreground">{d.presupuestado}</span> <b className="text-blue-600">{fmt(data.totalBudgeted)}</b></span>
+        <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">{fmt(data.totalGastos)}</b></span>
+        <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
       </div>
 
       {data.categories.length === 0 ? (
@@ -67,36 +87,81 @@ export default function MonthlyBudgetPage() {
               </tr>
             </thead>
             <tbody>
-              {data.categories.map((cat) => {
-                const pct = cat.percentage === Infinity ? 0 : Math.round(cat.percentage)
-                return (
-                  <tr key={cat.id} className="border-b last:border-0 hover:bg-muted/30">
+              {parents.flatMap((parent) => {
+                const children = childrenMap.get(parent.id) ?? []
+                const isExpanded = expanded.has(parent.id)
+
+                const ppct = parent.percentage === Infinity ? 0 : Math.round(parent.percentage)
+                const ppctClass =
+                  ppct === 0 ? "text-green-700 bg-green-100 dark:bg-green-900/40" :
+                  ppct >= 100 ? "text-red-700 bg-red-100 dark:bg-red-900/40" :
+                  "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
+
+                const parentRow = (
+                  <tr key={parent.id} className="border-b hover:bg-muted/30">
                     <td className="py-1 px-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1">
+                        {children.length > 0 ? (
+                          <button onClick={() => toggle(parent.id)} className="p-0.5 rounded hover:bg-accent text-muted-foreground">
+                            {isExpanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+                          </button>
+                        ) : (
+                          <span className="w-4" />
+                        )}
                         <Circle className={`size-2.5 fill-current shrink-0 ${
-                          cat.status === "green" ? "text-green-500" :
-                          cat.status === "yellow" ? "text-yellow-500" : "text-red-500"
+                          parent.status === "green" ? "text-green-500" :
+                          parent.status === "yellow" ? "text-yellow-500" : "text-red-500"
                         }`} />
-                        <span className="font-medium truncate">{cat.name}</span>
+                        <span className="font-medium truncate">{parent.name}</span>
                       </div>
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums">${fmt(cat.budgeted)}</td>
-                    <td className="py-1 px-2 text-right tabular-nums font-medium">${fmt(cat.spent)}</td>
-                    <td className={`py-1 px-2 text-right tabular-nums ${cat.available <= 0 ? "text-red-600 font-medium" : ""}`}>${fmt(cat.available)}</td>
+                    <td className="py-1 px-2 text-right tabular-nums">{fmt(parent.budgeted)}</td>
+                    <td className="py-1 px-2 text-right tabular-nums font-medium">{fmt(parent.spent)}</td>
+                    <td className={`py-1 px-2 text-right tabular-nums ${parent.available <= 0 ? "text-red-600 font-medium" : ""}`}>{fmt(parent.available)}</td>
                     <td className="py-1 px-2 text-right tabular-nums">
-                      {cat.excess > 0 ? <span className="text-red-600 font-medium">${fmt(cat.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                      {parent.excess > 0 ? <span className="text-red-600 font-medium">{fmt(parent.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
                     </td>
                     <td className="py-1 px-2 text-center">
-                      <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                        cat.status === "green" ? "text-green-700 bg-green-100 dark:bg-green-900/40" :
-                        cat.status === "yellow" ? "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40" :
-                        "text-red-700 bg-red-100 dark:bg-red-900/40"
-                      }`}>
-                        {pct > 0 ? `${pct}%` : d.emDash}
+                      <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${ppctClass}`}>
+                        {ppct > 0 ? `${ppct}%` : d.emDash}
                       </span>
                     </td>
                   </tr>
                 )
+
+                const childRows = isExpanded ? children.map((child) => {
+                  const cpct = child.percentage === Infinity ? 0 : Math.round(child.percentage)
+                  const cpctClass =
+                    cpct === 0 ? "text-green-700 bg-green-100 dark:bg-green-900/40" :
+                    cpct >= 100 ? "text-red-700 bg-red-100 dark:bg-red-900/40" :
+                    "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
+                  return (
+                    <tr key={child.id} className="border-b hover:bg-muted/20 bg-muted/5">
+                      <td className="py-0.5 px-2 pl-8">
+                        <div className="flex items-center gap-1.5">
+                          <Circle className={`size-2 fill-current shrink-0 ${
+                            child.status === "green" ? "text-green-500" :
+                            child.status === "yellow" ? "text-yellow-500" : "text-red-500"
+                          }`} />
+                          <span className="text-muted-foreground">└ {child.name}</span>
+                        </div>
+                      </td>
+                      <td className="py-0.5 px-2 text-right tabular-nums">{fmt(child.budgeted)}</td>
+                      <td className="py-0.5 px-2 text-right tabular-nums font-medium">{fmt(child.spent)}</td>
+                      <td className={`py-0.5 px-2 text-right tabular-nums ${child.available <= 0 ? "text-red-600 font-medium" : ""}`}>{fmt(child.available)}</td>
+                      <td className="py-0.5 px-2 text-right tabular-nums">
+                        {child.excess > 0 ? <span className="text-red-600 font-medium">{fmt(child.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                      </td>
+                      <td className="py-0.5 px-2 text-center">
+                        <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${cpctClass}`}>
+                          {cpct > 0 ? `${cpct}%` : d.emDash}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                }) : []
+
+                return [parentRow, ...childRows]
               })}
             </tbody>
           </table>

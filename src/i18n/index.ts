@@ -1,3 +1,10 @@
+export type Currency = "COP" | "EUR"
+
+export const CURRENCY_CONFIG: Record<Currency, { locale: string; symbol: string }> = {
+  COP: { locale: "es-CO", symbol: "$" },
+  EUR: { locale: "es-ES", symbol: "€" },
+}
+
 export interface Dictionary {
   app: { name: string; tagline: string; version: string }
   nav: {
@@ -147,6 +154,9 @@ export interface Dictionary {
     kellycaribe: string
     standardDesc: string
     caribeDesc: string
+    moneda: string
+    copDesc: string
+    eurDesc: string
     savedMessage: string
   }
   common: {

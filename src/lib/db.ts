@@ -163,12 +163,12 @@ export async function updateExpense(id: string, data: { person_id: string; amoun
 
 /* ---- Dashboard totals ---- */
 
-export async function getDashboardData() {
-  const now = new Date()
+export async function getDashboardData(monthStr?: string) {
+  const now = monthStr ? new Date(monthStr + "-01") : new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 
-  const [incomeResult, expenseResult, recentIncomes, recentExpenses] = await Promise.all([
+  const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase
       .from("income")
       .select("amount")
@@ -181,6 +181,11 @@ export async function getDashboardData() {
       .lte("date", endOfMonth),
     getIncomes({ limit: 5 }),
     getExpenses({ limit: 5 }),
+    supabase
+      .from("monthly_budgets")
+      .select("template_id")
+      .eq("month", startOfMonth)
+      .maybeSingle(),
   ])
 
   const totalIngresos =
@@ -188,9 +193,28 @@ export async function getDashboardData() {
   const totalGastos =
     expenseResult.data?.reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
 
+  let totalBudgeted = 0
+  try {
+    if (mbResult.data) {
+      const { data: cats } = await supabase
+        .from("budget_categories")
+        .select("id, budgeted, parent_id")
+        .eq("template_id", mbResult.data.template_id)
+      if (cats && cats.length > 0) {
+        const parentIds = new Set(cats.filter(c => c.parent_id).map(c => c.parent_id))
+        totalBudgeted = cats
+          .filter(c => !parentIds.has(c.id))
+          .reduce((s, c) => s + Number(c.budgeted), 0)
+      }
+    }
+  } catch {
+    totalBudgeted = 0
+  }
+
   return {
     totalIngresos,
     totalGastos,
+    totalBudgeted,
     balance: totalIngresos - totalGastos,
     recentIncomes,
     recentExpenses,
@@ -242,9 +266,30 @@ export async function getBudgetCategories(templateId: string) {
       .eq("template_id", templateId)
       .order("name")
     if (error) throw error
-    return data as BudgetCategory[]
+    const cats = data as any[]
+    const parents = cats.filter(c => !c.parent_id)
+    const children = cats.filter(c => c.parent_id)
+    return [...parents, ...children] as BudgetCategory[]
   } catch {
-    return []
+    try {
+      const { data, error } = await supabase
+        .from("budget_categories")
+        .select("id, name, template_id, budgeted, parent_id")
+        .eq("template_id", templateId)
+        .order("name")
+      if (error) {
+        const { data: d2, error: e2 } = await supabase
+          .from("budget_categories")
+          .select("id, name, template_id, budgeted")
+          .eq("template_id", templateId)
+          .order("name")
+        if (e2) return []
+        return (d2 ?? []).map(c => ({ ...c, parent_id: null })) as BudgetCategory[]
+      }
+      return (data ?? []).map(c => ({ ...c, parent_id: c.parent_id ?? null })) as BudgetCategory[]
+    } catch {
+      return []
+    }
   }
 }
 
@@ -265,6 +310,7 @@ export async function createBudgetCategory(category: {
   template_id: string
   name: string
   budgeted: number
+  parent_id?: string | null
 }) {
   const { data, error } = await supabase
     .from("budget_categories")
@@ -280,7 +326,7 @@ export async function deleteBudgetCategory(id: string) {
   if (error) throw error
 }
 
-export async function updateBudgetCategory(id: string, data: { name: string; budgeted: number }) {
+export async function updateBudgetCategory(id: string, data: { name: string; budgeted: number; parent_id?: string | null }) {
   const { error } = await supabase.from("budget_categories").update(data).eq("id", id)
   if (error) throw error
 }
@@ -331,6 +377,7 @@ export interface DashboardCategory {
   excess: number
   percentage: number
   status: CategoryStatus
+  parent_id: string | null
 }
 
 export interface MonthlyBudgetDashboard {
@@ -343,6 +390,28 @@ export interface MonthlyBudgetDashboard {
   categories: DashboardCategory[]
 }
 
+export type CategoryTreeNode = BudgetCategory & { children: CategoryTreeNode[] }
+
+export function buildCategoryTree(categories: BudgetCategory[]): CategoryTreeNode[] {
+  const map = new Map<string, CategoryTreeNode>()
+  const roots: CategoryTreeNode[] = []
+
+  for (const cat of categories) {
+    map.set(cat.id, { ...cat, children: [] })
+  }
+
+  for (const cat of categories) {
+    const node = map.get(cat.id)!
+    if (cat.parent_id && map.has(cat.parent_id)) {
+      map.get(cat.parent_id)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  return roots
+}
+
 export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudgetDashboard> {
   const { data: mb, error: mbError } = await supabase
     .from("monthly_budgets")
@@ -351,12 +420,24 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
     .single()
   if (mbError) throw mbError
 
-  const { data: categories, error: catError } = await supabase
-    .from("budget_categories")
-    .select("*")
-    .eq("template_id", mb.template_id)
-    .order("name")
-  if (catError) throw catError
+  let categories: any[]
+  try {
+    const { data, error } = await supabase
+      .from("budget_categories")
+      .select("*, parent_id")
+      .eq("template_id", mb.template_id)
+      .order("name")
+    if (error) throw error
+    categories = (data ?? []).map((c: any) => ({ ...c, parent_id: c.parent_id ?? null }))
+  } catch {
+    const { data, error } = await supabase
+      .from("budget_categories")
+      .select("id, name, template_id, budgeted")
+      .eq("template_id", mb.template_id)
+      .order("name")
+    if (error) throw error
+    categories = (data ?? []).map((c: any) => ({ ...c, parent_id: null }))
+  }
 
   const monthDate = new Date(mb.month + "T00:00:00")
   const year = monthDate.getFullYear()
@@ -387,14 +468,34 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
     }
   }
 
-  const totalIngresos = incomes.reduce((s, i) => s + Number(i.amount), 0)
-  const totalBudgeted = categories.reduce((s, c) => s + Number(c.budgeted), 0)
-  let totalGastos = 0
+  // Build tree
+  const treeMap = new Map<string, BudgetCategory & { children: (BudgetCategory & { children: any[] })[] }>()
+  for (const cat of categories) {
+    treeMap.set(cat.id, { ...cat, children: [] })
+  }
+  const roots: (BudgetCategory & { children: any[] })[] = []
+  for (const cat of categories) {
+    const node = treeMap.get(cat.id)!
+    if (cat.parent_id && treeMap.has(cat.parent_id)) {
+      treeMap.get(cat.parent_id)!.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
 
-  const categoryData: DashboardCategory[] = categories.map((cat) => {
-    const spent = categorySpent[cat.id] ?? 0
-    totalGastos += spent
-    const budgeted = Number(cat.budgeted)
+  function nodeBudgeted(node: { budgeted: number, children: any[] }): number {
+    if (node.children.length === 0) return Number(node.budgeted)
+    return node.children.reduce((s: number, c: any) => s + nodeBudgeted(c), 0)
+  }
+
+  function nodeSpent(node: { id: string, children: any[] }): number {
+    if (node.children.length === 0) return categorySpent[node.id] ?? 0
+    return node.children.reduce((s: number, c: any) => s + nodeSpent(c), 0)
+  }
+
+  function flattenTree(node: any): DashboardCategory[] {
+    const budgeted = nodeBudgeted(node)
+    const spent = nodeSpent(node)
     const available = Math.max(0, budgeted - spent)
     const excess = Math.max(0, spent - budgeted)
     const percentage = budgeted > 0 ? (spent / budgeted) * 100 : spent > 0 ? Infinity : 0
@@ -403,8 +504,20 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
     if (percentage > 100) status = "red"
     else if (percentage >= 80) status = "yellow"
 
-    return { id: cat.id, name: cat.name, budgeted, spent, available, excess, percentage, status }
-  })
+    const result: DashboardCategory = {
+      id: node.id, name: node.name, budgeted, spent,
+      available, excess, percentage, status, parent_id: node.parent_id ?? null,
+    }
+
+    const children = node.children.flatMap(flattenTree)
+    return [result, ...children]
+  }
+
+  const categoryData = roots.flatMap(flattenTree)
+
+  const totalBudgeted = roots.reduce((s, r) => s + nodeBudgeted(r), 0)
+  const totalGastos = roots.reduce((s, r) => s + nodeSpent(r), 0)
+  const totalIngresos = incomes.reduce((s, i) => s + Number(i.amount), 0)
 
   return {
     month: mb.month,

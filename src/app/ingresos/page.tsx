@@ -24,7 +24,7 @@ export default function IngresosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Income | null>(null)
   const [loading, setLoading] = useState(true)
-  const { t } = useLanguage()
+  const { t, fmt } = useLanguage()
   const inc = t.ingresos
 
   const [personId, setPersonId] = useState("")
@@ -137,7 +137,7 @@ export default function IngresosPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">{inc.total} ${total.toLocaleString("es-CO", { minimumFractionDigits: 2 })}</CardTitle>
+          <CardTitle className="text-sm font-medium">{inc.total} {fmt(total)}</CardTitle>
         </CardHeader>
         <CardContent>
           {incomes.length === 0 ? (
@@ -151,7 +151,7 @@ export default function IngresosPage() {
                     <p className="text-xs text-muted-foreground">{inc.people?.name} · {new Date(inc.date).toLocaleDateString("es-CO")}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className="text-sm font-semibold text-green-600">+${Number(inc.amount).toLocaleString("es-CO", { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-semibold text-green-600">+ {fmt(Number(inc.amount))}</span>
                     <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(inc)}>
                       <Pencil className="size-4" />
                     </Button>

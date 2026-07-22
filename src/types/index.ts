@@ -34,6 +34,7 @@ export interface BudgetCategory {
   template_id: string
   name: string
   budgeted: number
+  parent_id: string | null
 }
 
 export interface MonthlyBudget {
