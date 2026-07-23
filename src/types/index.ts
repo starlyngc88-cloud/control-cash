@@ -97,6 +97,20 @@ export interface Commitment {
   created_at: string
 }
 
+export interface AllowedUser {
+  id: string
+  email: string
+  active: boolean
+  created_at: string
+}
+
+export interface UserRole {
+  id: string
+  user_id: string
+  role: "admin" | "user"
+  created_at: string
+}
+
 export interface CommitmentPayment {
   id: string
   commitment_id: string

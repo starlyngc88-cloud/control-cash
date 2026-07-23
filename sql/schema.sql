@@ -117,3 +117,20 @@ create table commitment_payments (
   notes text default '',
   created_at timestamptz default now()
 );
+
+-- Auth / Authorization
+
+create table allowed_users (
+  id uuid default gen_random_uuid() primary key,
+  email text not null unique,
+  active boolean not null default true,
+  created_at timestamptz default now()
+);
+
+create table user_roles (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid not null references allowed_users(id) on delete cascade,
+  role text not null check (role in ('admin', 'user')),
+  created_at timestamptz default now(),
+  unique(user_id)
+);

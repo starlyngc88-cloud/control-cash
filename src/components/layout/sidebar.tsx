@@ -4,8 +4,9 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Wallet, PanelLeftClose, PanelLeft } from "lucide-react"
+import { Wallet, PanelLeftClose, PanelLeft, LogOut } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { useAuth } from "@/components/auth/AuthProvider"
 
 const emojiMap: Record<string, string> = {
   dashboard: "📊",
@@ -34,8 +35,11 @@ const links = [
 export function Sidebar() {
   const pathname = usePathname()
   const { t } = useLanguage()
+  const { user, signOut } = useAuth()
   const nav = t.nav
   const [collapsed, setCollapsed] = useState(false)
+
+  if (pathname === "/login") return null
 
   if (collapsed) {
     return (
@@ -104,6 +108,18 @@ export function Sidebar() {
       <div className="flex-1" />
 
       <div className="px-3 pb-3 space-y-1">
+        {user && (
+          <div className="px-3 py-2 text-xs text-muted-foreground truncate border-b border-border mb-2">
+            {user.email}
+          </div>
+        )}
+        <button
+          onClick={signOut}
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
+        >
+          <LogOut className="size-4 shrink-0" />
+          <span>Cerrar sesión</span>
+        </button>
         <Link
           href="/guia"
           className={cn(
