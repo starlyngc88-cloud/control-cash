@@ -71,6 +71,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error.message.includes("Invalid email")) return "⚠️ Revisa el correo."
       return "⚠️ Epa, algo salió mal."
     }
+
+    // Asegurar que tenga rol asignado
+    const { data: allowed } = await supabase
+      .from("allowed_users")
+      .select("id")
+      .eq("email", email.toLowerCase().trim())
+      .maybeSingle()
+
+    if (allowed) {
+      const { data: existing } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", allowed.id)
+        .maybeSingle()
+      if (!existing) {
+        await supabase.from("user_roles").insert({
+          user_id: allowed.id,
+          role: "user",
+        })
+      }
+    }
+
     router.refresh()
     return null
   }, [router])

@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [error, setError] = useState("")
+  const [successMsg, setSuccessMsg] = useState("")
   const [busy, setBusy] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,12 +51,21 @@ export default function LoginPage() {
       return
     }
 
+    if (mode === "register") {
+      setMode("login")
+      setPassword("")
+      setError("")
+      setSuccessMsg("✅ Cuenta creada. Ahora inicia sesión.")
+      return
+    }
+
     router.push("/")
   }
 
   const toggleMode = () => {
     setMode(mode === "login" ? "register" : "login")
     setError("")
+    setSuccessMsg("")
   }
 
   return (
@@ -109,6 +119,11 @@ export default function LoginPage() {
             </div>
           )}
 
+          {successMsg && (
+            <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+              {successMsg}
+            </div>
+          )}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
               {error}
