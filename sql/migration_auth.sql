@@ -44,10 +44,10 @@ ALTER TABLE allowed_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 
 -- 7. Políticas RLS para allowed_users
--- Usuarios autenticados pueden leer allowed_users (para registro/login)
-CREATE POLICY "Autenticados pueden leer allowed_users"
+-- Cualquiera puede leer allowed_users (necesario para verificar registro)
+CREATE POLICY "Cualquiera puede leer allowed_users"
   ON allowed_users FOR SELECT
-  TO authenticated
+  TO anon, authenticated
   USING (true);
 
 -- Solo admins pueden insertar/actualizar/eliminar allowed_users
