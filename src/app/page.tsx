@@ -56,7 +56,7 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-primary/10 text-primary">
+          <div className="flex items-center justify-center size-10 rounded-xl bg-sky-100 text-sky-600 dark:bg-sky-900/30">
             <LayoutDashboard className="size-5" />
           </div>
           <div>

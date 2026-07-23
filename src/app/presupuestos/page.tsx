@@ -193,11 +193,14 @@ export default function PresupuestosPage() {
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
       <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center size-8 rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-900/30">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center size-10 rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30">
             <PiggyBank className="size-5" />
           </div>
-          <h2 className="text-xl font-bold">{template.name}</h2>
+          <div>
+            <h2 className="text-2xl font-bold tracking-tight">{template.name}</h2>
+            <p className="text-sm text-muted-foreground">Administrá tus rubros y meses</p>
+          </div>
         </div>
       </div>
 
