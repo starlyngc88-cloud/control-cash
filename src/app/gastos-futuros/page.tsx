@@ -54,19 +54,19 @@ export default function GastosFuturosPage() {
   const [expenses, setExpenses] = useState<(FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]>([])
   const [categories, setCategories] = useState<FutureExpenseCategory[]>([])
   const [dashboard, setDashboard] = useState<{
-    next30: FutureExpense[]
-    next90: FutureExpense[]
     totalPrevisto: number
     numPendientes: number
+    next30: number
+    next90: number
   } | null>(null)
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<FutureExpense | null>(null)
   const [loading, setLoading] = useState(true)
   const [successMsg, setSuccessMsg] = useState(false)
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.gastosFuturos
 
-  const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<FutureExpense | null>(null)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [categoryId, setCategoryId] = useState("")
@@ -78,32 +78,40 @@ export default function GastosFuturosPage() {
   const [catName, setCatName] = useState("")
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
 
+  const [planCuota, setPlanCuota] = useState("")
+
   const load = async () => {
-    const [d, cats] = await Promise.all([getFutureExpensesDashboard(), getFutureExpenseCategories()])
-    setExpenses(d.expenses)
-    setDashboard({ next30: d.next30, next90: d.next90, totalPrevisto: d.totalPrevisto, numPendientes: d.numPendientes })
+    const [e, cats, dash] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard()])
+    setExpenses(e)
     setCategories(cats)
+    const { totalPrevisto, numPendientes, next30, next90 } = dash
+    setDashboard({ totalPrevisto, numPendientes, next30: next30.length, next90: next90.length })
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  const displayExpenses = useMemo(() => expenses.filter((e) => e.status !== "cancelled"), [expenses])
+  const getAllExpenses = async () => {
+    const { data } = await (await import("@/lib/supabase")).supabase
+      .from("future_expenses")
+      .select("*, future_expense_categories(name)")
+      .order("expected_date", { ascending: true })
+    return (data ?? []) as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+  }
 
   const grouped = useMemo(() => {
-    type Item = FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null }
-    const map = new Map<string, { id: string | null; name: string; items: Item[] }>()
+    const map = new Map<string, { id: string | null; name: string; items: typeof expenses }>()
     for (const c of categories) {
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
-    for (const e of displayExpenses) {
+    for (const e of expenses) {
       const catId = e.category_id ?? "__none__"
-      const catName = e.future_expense_categories?.name || e.category || "Sin categoría"
+      const catName = e.future_expense_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: e.category_id, name: catName, items: [] })
       map.get(catId)!.items.push(e)
     }
     return map
-  }, [displayExpenses, categories])
+  }, [expenses, categories])
 
   const openNew = () => {
     setEditing(null)
@@ -129,11 +137,11 @@ export default function GastosFuturosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !expectedAmount || !expectedDate) return
-    const cat = categories.find((c) => c.id === categoryId)
+    const catName = categories.find((c) => c.id === categoryId)?.name ?? ""
     const data = {
       title,
       description,
-      category: cat?.name ?? categoryId,
+      category: catName,
       category_id: categoryId || null,
       expected_amount: parseFloat(expectedAmount),
       expected_date: expectedDate,
@@ -145,8 +153,12 @@ export default function GastosFuturosPage() {
     }
     setOpen(false)
     setEditing(null)
-    setSuccessMsg(true)
-    setTimeout(() => setSuccessMsg(false), 3000)
+    setTitle("")
+    setDescription("")
+    setCategoryId("")
+    setExpectedAmount("")
+    setExpectedDate("")
+    setPlanCuota("")
     load()
   }
 
@@ -183,7 +195,6 @@ export default function GastosFuturosPage() {
     }
     setOpenCat(false)
     setEditingCat(null)
-    setCatName("")
     load()
   }
 
@@ -198,14 +209,12 @@ export default function GastosFuturosPage() {
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    const ids = expenses.filter((e) => e.category_id === catToDelete.id).map((e) => e.id)
+    const ids = catDeleteExpenses.map((e) => e.id)
     await Promise.all(ids.map((id) => deleteFutureExpense(id)))
     await deleteFutureExpenseCategory(catToDelete.id)
     setCatToDelete(null)
     load()
   }
-
-  const [planCuota, setPlanCuota] = useState("")
 
   const planCalc = useMemo(() => {
     if (!expectedAmount) return null
@@ -232,9 +241,12 @@ export default function GastosFuturosPage() {
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
+  const hasItems = expenses.length > 0 || categories.length > 0
+  const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30">
             <Crosshair className="size-5" />
@@ -341,158 +353,138 @@ export default function GastosFuturosPage() {
         </div>
       </div>
 
-      {successMsg && (
-        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
-          {dict.successMessage}
-        </div>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{dict.proximos30}</CardTitle>
-            <span className="size-2.5 rounded-full bg-red-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{dashboard?.next30.length ?? 0}</p>
-            <p className="text-xs text-muted-foreground">
-              {fmt(dashboard?.next30.reduce((s, e) => s + Number(e.expected_amount), 0) ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{dict.proximos90}</CardTitle>
-            <span className="size-2.5 rounded-full bg-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-yellow-600">{dashboard?.next90.length ?? 0}</p>
-            <p className="text-xs text-muted-foreground">
-              {fmt(dashboard?.next90.reduce((s, e) => s + Number(e.expected_amount), 0) ?? 0)}
-            </p>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.totalPrevisto}</CardTitle>
-            <div className="flex items-center justify-center size-8 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30">
-              <Crosshair className="size-4" />
-            </div>
+            <Crosshair className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-orange-600">{fmt(dashboard?.totalPrevisto ?? 0)}</p>
+            <div className="text-2xl font-bold text-orange-600">{fmt(dashboard?.totalPrevisto ?? 0)}</div>
           </CardContent>
         </Card>
-
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.pendientes}</CardTitle>
-            <div className="flex items-center justify-center size-8 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30">
-              <Crosshair className="size-4" />
-            </div>
+            <List className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-orange-600">{dashboard?.numPendientes ?? 0}</p>
+            <div className="text-2xl font-bold">{dashboard?.numPendientes ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">{dict.proximos30}</CardTitle>
+            <Crosshair className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{dashboard?.next30 ?? 0}</div>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">{dict.proximos90}</CardTitle>
+            <Crosshair className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{dashboard?.next90 ?? 0}</div>
           </CardContent>
         </Card>
       </div>
 
-      {displayExpenses.length === 0 && categories.length === 0 ? (
-        <Card>
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{dict.empty}</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {Array.from(grouped.entries()).map(([key, { id: catId, name: catName, items }]) => {
-            const isExpanded = expandedCats.has(key)
-            const catTotal = items.reduce((s, e) => s + Number(e.expected_amount), 0)
-            const cat = categories.find((c) => c.id === catId)
-            return (
-              <Card key={key} className="overflow-hidden">
-                <div
-                  className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b cursor-pointer select-none hover:bg-muted/40 transition-colors"
-                  onClick={() => setExpandedCats((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(key)) next.delete(key)
-                    else next.add(key)
-                    return next
-                  })}
-                >
-                  <div className="flex items-center gap-2">
-                    {isExpanded ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
-                    <span className="text-sm font-semibold">{catName}</span>
-                    <span className="text-xs text-muted-foreground">({items.length})</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {cat && (
-                      <>
-                        <Button variant="ghost" size="icon" className="size-6 text-blue-500 hover:text-blue-700" onClick={(e) => { e.stopPropagation(); openEditCat(cat) }}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="size-6 text-red-500 hover:text-red-700" onClick={(e) => { e.stopPropagation(); handleDeleteCat(cat.id) }}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </>
-                    )}
-                    <span className="text-sm font-semibold text-orange-600">{fmt(catTotal)}</span>
-                  </div>
-                </div>
-                {isExpanded && (
-                  <CardContent className="p-2">
-                    <div className="space-y-1">
-                      {items.map((fe) => (
-                        <div
-                          key={fe.id}
-                          className={`flex items-center justify-between rounded-lg border p-2.5 transition-all duration-200 hover:shadow-sm ${getUrgencyClass(fe.expected_date)}`}
-                        >
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <span className={`size-2 rounded-full shrink-0 ${getUrgencyDot(fe.expected_date)}`} />
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-sm font-medium">{fe.title}</p>
-                                {fe.status === "completed" && (
-                                  <span className="text-xs text-green-600 font-medium">{dict.statusCompleted}</span>
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                {fe.description || "\u00a0"}
-                                {fe.description ? " · " : ""}
-                                {new Date(fe.expected_date).toLocaleDateString("es-CO")}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-2">
-                            <span className="text-sm font-semibold text-orange-600">{fmt(Number(fe.expected_amount))}</span>
-                            {fe.status === "planned" && (
-                              <>
-                                <Button variant="ghost" size="icon" className="size-7 text-emerald-500 hover:text-emerald-700" title={dict.markCompleted} onClick={() => handleMarkCompleted(fe.id)}>
-                                  <CheckCircle2 className="size-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="size-7 text-blue-500 hover:text-blue-700" onClick={() => openEdit(fe)}>
-                                  <Pencil className="size-3.5" />
-                                </Button>
-                              </>
-                            )}
-                            <Button variant="ghost" size="icon" className="size-7 text-red-400 hover:text-red-600" onClick={() => handleDelete(fe.id)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            )
-          })}
+      {successMsg && (
+        <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300 mb-4">
+          {dict.successMessage}
         </div>
       )}
 
+      {!hasItems ? (
+        <div className="border rounded-lg bg-background p-6 text-center">
+          <p className="text-sm text-muted-foreground">{dict.empty}</p>
+        </div>
+      ) : (
+        <div className="border rounded-lg overflow-hidden bg-background">
+          <div className="flex items-center justify-between px-3 py-1 border-b bg-muted/10">
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Gastos por categoría</span>
+            <button
+              onClick={() => {
+                if (allExpanded) setExpandedCats(new Set())
+                else setExpandedCats(new Set([...grouped.keys()]))
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+            >
+              {allExpanded ? "Contraer todo" : "Expandir todo"}
+            </button>
+          </div>
+          <div className="text-sm">
+            {Array.from(grouped.entries()).map(([key, { id: catId, name: catName, items }]) => {
+              const isExpanded = expandedCats.has(key)
+              const catTotal = items.reduce((s, e) => s + Number(e.expected_amount), 0)
+              const cat = categories.find((c) => c.id === catId)
+              return (
+                <div key={key}>
+                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-orange-100/50" : "hover:bg-orange-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
+                    <button onClick={() => setExpandedCats((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(key)) next.delete(key)
+                      else next.add(key)
+                      return next
+                    })} className="p-0.5 rounded hover:bg-accent text-gray-400 hover:text-gray-600 shrink-0">
+                      {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                    </button>
+                    {cat && (
+                      <>
+                        <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-0.5" onClick={() => openEditCat(cat)}>
+                          <Pencil className="size-3.5" />
+                        </button>
+                        <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDeleteCat(cat.id)}>
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      </>
+                    )}
+                    <span className="font-medium truncate min-w-0">{catName}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">({items.length})</span>
+                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-orange-600">{fmt(catTotal)}</span>
+                  </div>
 
+                  {isExpanded && items.map((fe) => (
+                    <div key={fe.id} className={`flex items-center py-0.5 pl-8 pr-1.5 hover:bg-orange-50/70 border-t border-dashed border-border/30 ${getUrgencyClass(fe.expected_date)}`}>
+                      <span className={`size-2 rounded-full shrink-0 ${getUrgencyDot(fe.expected_date)}`} />
+                      <span className="truncate min-w-0 text-muted-foreground ml-1">{fe.title}</span>
+                      {fe.status === "completed" && <span className="text-[10px] text-green-600 font-medium shrink-0 ml-1">{dict.statusCompleted}</span>}
+                      <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{new Date(fe.expected_date).toLocaleDateString("es-CO")}</span>
+                      <span className="tabular-nums shrink-0 text-orange-600 ml-auto font-semibold">{fmt(Number(fe.expected_amount))}</span>
+                      {fe.status === "planned" && (
+                        <>
+                          <button className="text-emerald-500 hover:text-emerald-700 shrink-0 ml-1" title={dict.markCompleted} onClick={() => handleMarkCompleted(fe.id)}>
+                            <CheckCircle2 className="size-3" />
+                          </button>
+                          <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-0.5" onClick={() => openEdit(fe)}>
+                            <Pencil className="size-3" />
+                          </button>
+                        </>
+                      )}
+                      <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDelete(fe.id)}>
+                        <Trash2 className="size-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-orange-100/30 text-sm">
+            <span className="font-semibold">{dict.totalPrevisto}</span>
+            <span className="tabular-nums font-semibold text-orange-600">{fmt(dashboard?.totalPrevisto ?? 0)}</span>
+          </div>
+          <div className="border-t border-border/50">
+            <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={openNew}>
+              <Plus className="size-3.5" /> {dict.newTitle}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

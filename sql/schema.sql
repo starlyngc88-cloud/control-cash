@@ -6,12 +6,19 @@ create table people (
   created_at timestamptz default now()
 );
 
+create table income_categories (
+  id uuid default gen_random_uuid() primary key,
+  name text not null,
+  created_at timestamptz default now()
+);
+
 create table income (
   id uuid default gen_random_uuid() primary key,
   person_id uuid not null references people(id) on delete cascade,
   amount numeric(12,2) not null check (amount > 0),
   description text not null,
   date date not null default current_date,
+  category_id uuid references income_categories(id),
   created_at timestamptz default now()
 );
 

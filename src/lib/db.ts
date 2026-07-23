@@ -1,5 +1,5 @@
 import { supabase } from "./supabase"
-import type { Person, Income, Expense, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
+import type { Person, Income, IncomeCategory, Expense, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
 
 /* ---- People ---- */
 
@@ -37,7 +37,7 @@ export async function updatePerson(id: string, data: { name: string }) {
 export async function getIncomes(options?: { person_id?: string; limit?: number }) {
   let query = supabase
     .from("income")
-    .select("*")
+    .select("*, income_categories(name)")
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
 
@@ -51,18 +51,18 @@ export async function getIncomes(options?: { person_id?: string; limit?: number 
   const { data, error } = await query
   if (error) throw error
 
-  const incomes = data as Income[]
-  const personIds = [...new Set(incomes.map((inc) => inc.person_id))]
+  const raw = data as (Income & { income_categories: Pick<IncomeCategory, "name"> | null })[]
+  const personIds = [...new Set(raw.map((inc) => inc.person_id))]
   const { data: people } = await supabase
     .from("people")
     .select("id, name")
     .in("id", personIds)
   const peopleMap = new Map((people ?? []).map((p) => [p.id, { name: p.name }]))
 
-  return incomes.map((inc) => ({
+  return raw.map((inc) => ({
     ...inc,
     people: peopleMap.get(inc.person_id) ?? null,
-  })) as (Income & { people: Pick<Person, "name"> | null })[]
+  })) as (Income & { people: Pick<Person, "name"> | null; income_categories: Pick<IncomeCategory, "name"> | null })[]
 }
 
 export async function createIncome(income: {
@@ -70,14 +70,15 @@ export async function createIncome(income: {
   amount: number
   description: string
   date: string
+  category_id?: string | null
 }) {
   const { data, error } = await supabase
     .from("income")
     .insert(income)
-    .select()
+    .select("*, income_categories(name)")
     .single()
   if (error) throw error
-  return data as Income
+  return data as Income & { income_categories: Pick<IncomeCategory, "name"> | null }
 }
 
 export async function deleteIncome(id: string) {
@@ -85,8 +86,40 @@ export async function deleteIncome(id: string) {
   if (error) throw error
 }
 
-export async function updateIncome(id: string, data: { person_id: string; amount: number; description: string; date: string }) {
+export async function updateIncome(id: string, data: { person_id: string; amount: number; description: string; date: string; category_id?: string | null }) {
   const { error } = await supabase.from("income").update(data).eq("id", id)
+  if (error) throw error
+}
+
+/* ---- Income Categories ---- */
+
+export async function getIncomeCategories() {
+  const { data, error } = await supabase
+    .from("income_categories")
+    .select("*")
+    .order("name")
+  if (error) throw error
+  return data as IncomeCategory[]
+}
+
+export async function createIncomeCategory(cat: { name: string }) {
+  const { data, error } = await supabase
+    .from("income_categories")
+    .insert(cat)
+    .select()
+    .single()
+  if (error) throw error
+  return data as IncomeCategory
+}
+
+export async function updateIncomeCategory(id: string, data: { name: string }) {
+  const { error } = await supabase.from("income_categories").update(data).eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteIncomeCategory(id: string) {
+  await supabase.from("income").update({ category_id: null }).eq("category_id", id)
+  const { error } = await supabase.from("income_categories").delete().eq("id", id)
   if (error) throw error
 }
 
@@ -325,6 +358,7 @@ export async function createBudgetCategory(category: {
 
 export async function deleteBudgetCategory(id: string) {
   await supabase.from("expenses").update({ budget_category_id: null }).eq("budget_category_id", id)
+  await supabase.from("commitments").update({ category_id: null }).eq("category_id", id)
   const { error } = await supabase.from("budget_categories").delete().eq("id", id)
   if (error) throw error
 }
@@ -854,13 +888,16 @@ export async function deleteCommitment(id: string) {
   if (error) throw error
 }
 
-export async function getCommitmentPayments(commitmentId: string) {
-  const { data, error } = await supabase
+export async function getCommitmentPayments(commitmentId?: string) {
+  let query = supabase
     .from("commitment_payments")
     .select("*")
-    .eq("commitment_id", commitmentId)
     .order("date", { ascending: false })
     .order("created_at", { ascending: false })
+  if (commitmentId) {
+    query = query.eq("commitment_id", commitmentId)
+  }
+  const { data, error } = await query
   if (error) throw error
   return data as CommitmentPayment[]
 }
