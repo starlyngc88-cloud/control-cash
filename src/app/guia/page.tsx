@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, ArrowDownCircle, ArrowUpCircle, Users, PiggyBank, Target, CheckCircle2, Wallet, BookOpen } from "lucide-react"
+import { ArrowRight, ArrowDownCircle, ArrowUpCircle, Users, PiggyBank, Target, CheckCircle2, Wallet, BookOpen, Goal, Crosshair, ShieldCheck, Settings2 } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
 export default function GuiaPage() {
@@ -57,6 +57,54 @@ export default function GuiaPage() {
       href: "/",
       color: "from-rose-500/20 to-rose-600/10 border-rose-500/30",
       iconColor: "text-rose-500",
+    },
+    {
+      id: 6,
+      titleKey: "step6Title" as const,
+      descKey: "step6Desc" as const,
+      icon: Goal,
+      href: "/ahorros",
+      color: "from-amber-500/20 to-amber-600/10 border-amber-500/30",
+      iconColor: "text-amber-500",
+      extraLinks: [
+        { labelKey: "irAAhorros" as const, href: "/ahorros", icon: Goal },
+      ],
+    },
+    {
+      id: 7,
+      titleKey: "step7Title" as const,
+      descKey: "step7Desc" as const,
+      icon: Crosshair,
+      href: "/gastos-futuros",
+      color: "from-orange-500/20 to-orange-600/10 border-orange-500/30",
+      iconColor: "text-orange-500",
+      extraLinks: [
+        { labelKey: "irAGastosFuturos" as const, href: "/gastos-futuros", icon: Crosshair },
+      ],
+    },
+    {
+      id: 8,
+      titleKey: "step8Title" as const,
+      descKey: "step8Desc" as const,
+      icon: ShieldCheck,
+      href: "/compromisos",
+      color: "from-indigo-500/20 to-indigo-600/10 border-indigo-500/30",
+      iconColor: "text-indigo-500",
+      extraLinks: [
+        { labelKey: "irACompromisos" as const, href: "/compromisos", icon: ShieldCheck },
+      ],
+    },
+    {
+      id: 9,
+      titleKey: "step9Title" as const,
+      descKey: "step9Desc" as const,
+      icon: Settings2,
+      href: "/personalizacion",
+      color: "from-slate-500/20 to-slate-600/10 border-slate-500/30",
+      iconColor: "text-slate-500",
+      extraLinks: [
+        { labelKey: "irAPersonalizacion" as const, href: "/personalizacion", icon: Settings2 },
+      ],
     },
   ]
 

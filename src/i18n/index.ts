@@ -140,15 +140,31 @@ export interface Dictionary {
     step4Desc: string
     step5Title: string
     step5Desc: string
+    step6Title: string
+    step6Desc: string
+    step7Title: string
+    step7Desc: string
+    step8Title: string
+    step8Desc: string
+    step9Title: string
+    step9Desc: string
     irAPrefix: string
     irAIngresos: string
     irAGastos: string
+    irAAhorros: string
+    irAGastosFuturos: string
+    irACompromisos: string
+    irAPersonalizacion: string
     consejos: string
     tip1: string
     tip2: string
     tip3: string
     tip4: string
     tip5: string
+    tip6: string
+    tip7: string
+    tip8: string
+    tip9: string
   }
   personalizacion: {
     title: string
