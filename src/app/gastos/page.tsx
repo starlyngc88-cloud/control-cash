@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -187,6 +188,27 @@ export default function GastosPage() {
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
+  const sinCategoria = expenses.filter((e) => !e.budget_category_id).length
+  const masAlto = expenses.reduce((max, e) => Number(e.amount) > Number(max.amount) ? e : max, expenses[0] ?? null)
+
+  const catGastos = new Map<string, number>()
+  const catGastosId = new Map<string, number>()
+  for (const e of expenses) {
+    const key = e.budget_category_id ?? "__none__"
+    catGastosId.set(key, (catGastosId.get(key) ?? 0) + Number(e.amount))
+  }
+
+  const topCatEntry = [...catGastosId.entries()]
+    .filter(([id]) => id !== "__none__")
+    .map(([id, amount]) => {
+      const cat = budgetCategories.find((c) => c.id === id)
+      return { id, name: cat?.name ?? "?", amount, budgeted: cat?.budgeted ?? 0 }
+    })
+    .sort((a, b) => b.amount - a.amount)
+
+  const topCat = topCatEntry[0] ?? null
+  const sobre = topCatEntry.filter((c) => c.amount > c.budgeted && c.budgeted > 0)
+  const totalPresupuestado = budgetCategories.reduce((s, c) => s + Number(c.budgeted), 0)
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
@@ -278,12 +300,101 @@ export default function GastosPage() {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border rounded-lg px-3 py-2 bg-muted/30 mb-4">
-        <span><span className="text-muted-foreground">Total gastado</span> <b className="text-red-600">{fmt(total)}</b></span>
-        <span className="text-muted-foreground">·</span>
-        <span><span className="text-muted-foreground">Cantidad</span> <b>{expenses.length}</b></span>
-        <span className="text-muted-foreground">·</span>
-        <span><span className="text-muted-foreground">Categorías</span> <b>{budgetCategories.filter(c => !c.parent_id).length}</b></span>
+      <div className="grid gap-4 md:grid-cols-4 mb-6">
+        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total gastado</CardTitle>
+            <ArrowUpCircle className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{fmt(total)}</div>
+            {totalPresupuestado > 0 && (
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                {total > totalPresupuestado ? (
+                  <span className="text-red-500 font-medium">{(total / totalPresupuestado * 100 - 100).toFixed(0)}% sobre presupuesto</span>
+                ) : (
+                  <span className="text-green-600">{(100 - total / totalPresupuestado * 100).toFixed(0)}% disponible</span>
+                )}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {masAlto && (
+          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium truncate">Gasto récord</CardTitle>
+              <ArrowUpCircle className="size-4 text-muted-foreground shrink-0" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{fmt(Number(masAlto.amount))}</div>
+              <p className="text-[10px] text-muted-foreground truncate mt-0.5">{masAlto.description || "Sin concepto"}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {topCat ? (
+          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium truncate">Categoría top</CardTitle>
+              <ArrowUpCircle className="size-4 text-muted-foreground shrink-0" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-red-600">{fmt(topCat.amount)}</div>
+              <p className="text-[10px] text-muted-foreground truncate mt-0.5">{topCat.name}</p>
+              {topCat.budgeted > 0 && (
+                <p className={`text-[10px] mt-0.5 ${topCat.amount > topCat.budgeted ? "text-red-500 font-medium" : "text-green-600"}`}>
+                  {topCat.amount > topCat.budgeted
+                    ? `${(topCat.amount / topCat.budgeted * 100 - 100).toFixed(0)}% sobre presupuesto`
+                    : `Usado ${(topCat.amount / topCat.budgeted * 100).toFixed(0)}% del presupuesto`
+                  }
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {sobre.length > 0 ? (
+          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 border-red-300">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-red-600">¡Sobre presupuesto!</CardTitle>
+              <ArrowUpCircle className="size-4 text-red-500" />
+            </CardHeader>
+            <CardContent className="space-y-0.5">
+              {sobre.slice(0, 3).map((c) => (
+                <div key={c.id} className="flex items-center justify-between text-[11px]">
+                  <span className="truncate text-muted-foreground">{c.name}</span>
+                  <span className="tabular-nums shrink-0 ml-1 font-medium text-red-500">+{fmt(c.amount - c.budgeted)}</span>
+                </div>
+              ))}
+              {sobre.length > 3 && (
+                <p className="text-[10px] text-muted-foreground mt-0.5">+{sobre.length - 3} más</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : sinCategoria > 0 ? (
+          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-orange-500">Sin categoría</CardTitle>
+              <ArrowUpCircle className="size-4 text-orange-400" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-orange-500">{sinCategoria}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">gastos sin clasificar</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">Categorizado</CardTitle>
+              <ArrowUpCircle className="size-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">100%</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">todo clasificado</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {grouped.length === 0 ? (
