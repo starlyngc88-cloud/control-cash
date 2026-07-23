@@ -206,6 +206,22 @@ export default function PresupuestosPage() {
         <div className="lg:col-span-2 space-y-4">
           <div className="border rounded-lg overflow-hidden bg-background">
             {allCats.length > 0 && (
+              <>
+              <div className="flex items-center justify-between px-3 py-1 border-b bg-muted/10">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rubros</span>
+                <button
+                  onClick={() => {
+                    if (expandedParents.size === parents.filter(p => p.children.length > 0).length) {
+                      setExpandedParents(new Set())
+                    } else {
+                      setExpandedParents(new Set(parents.filter(p => p.children.length > 0).map(p => p.id)))
+                    }
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  {expandedParents.size === parents.filter(p => p.children.length > 0).length ? "Contraer todo" : "Expandir todo"}
+                </button>
+              </div>
               <div className="text-sm">
                 {parents.map((parent) => {
                   const isExpanded = expandedParents.has(parent.id)
@@ -275,6 +291,7 @@ export default function PresupuestosPage() {
                   )
                 })}
               </div>
+              </>
             )}
 
             {allCats.length > 0 && (
