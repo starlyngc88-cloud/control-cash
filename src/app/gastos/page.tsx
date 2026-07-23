@@ -301,7 +301,7 @@ export default function GastosPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Suma de todos los gastos registrados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total gastado</CardTitle>
             <ArrowUpCircle className="size-4 text-muted-foreground" />
@@ -321,7 +321,7 @@ export default function GastosPage() {
         </Card>
 
         {masAlto && (
-          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <Card title="El gasto individual más alto registrado" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium truncate">Gasto récord</CardTitle>
               <ArrowUpCircle className="size-4 text-muted-foreground shrink-0" />
@@ -334,7 +334,7 @@ export default function GastosPage() {
         )}
 
         {topCat ? (
-          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <Card title="Categoría con mayor gasto acumulado" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium truncate">Categoría top</CardTitle>
               <ArrowUpCircle className="size-4 text-muted-foreground shrink-0" />
@@ -355,7 +355,7 @@ export default function GastosPage() {
         ) : null}
 
         {sobre.length > 0 ? (
-          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 border-red-300">
+          <Card title="Categorías que excedieron su presupuesto" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 border-red-300">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-red-600">¡Sobre presupuesto!</CardTitle>
               <ArrowUpCircle className="size-4 text-red-500" />
@@ -373,7 +373,7 @@ export default function GastosPage() {
             </CardContent>
           </Card>
         ) : sinCategoria > 0 ? (
-          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <Card title="Gastos sin categoría asignada" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-orange-500">Sin categoría</CardTitle>
               <ArrowUpCircle className="size-4 text-orange-400" />
@@ -384,7 +384,7 @@ export default function GastosPage() {
             </CardContent>
           </Card>
         ) : (
-          <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <Card title="Todos los gastos tienen categoría" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Categorizado</CardTitle>
               <ArrowUpCircle className="size-4 text-muted-foreground" />

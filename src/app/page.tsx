@@ -76,7 +76,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Ingresos del mes actual" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{d.ingresos}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -88,7 +88,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Gastos del mes actual" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{d.gastos}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30">
@@ -100,7 +100,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Diferencia entre ingresos y gastos" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{d.balance}</CardTitle>
             <div className="flex items-center justify-center size-8 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30">
@@ -114,7 +114,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Presupuesto mensual y progreso" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Presupuesto</CardTitle>
             {monthlyBudgetId ? (

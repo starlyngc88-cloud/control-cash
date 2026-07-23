@@ -317,7 +317,7 @@ export default function CompromisosPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Cantidad de compromisos financieros activos" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.totalCompromisos}</CardTitle>
             <ShieldCheck className="size-4 text-muted-foreground" />
@@ -326,7 +326,7 @@ export default function CompromisosPage() {
             <div className="text-2xl font-bold text-indigo-600">{commitments.length}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Suma del saldo pendiente de todos los compromisos" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.totalDeuda}</CardTitle>
             <ArrowDownCircle className="size-4 text-muted-foreground" />
@@ -335,7 +335,7 @@ export default function CompromisosPage() {
             <div className="text-2xl font-bold text-red-600">{fmt(totalDeuda)}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Porcentaje total de deuda pagada" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.progreso}</CardTitle>
             <ShieldCheck className="size-4 text-muted-foreground" />
@@ -344,7 +344,7 @@ export default function CompromisosPage() {
             <div className="text-2xl font-bold">{totalOriginal > 0 ? Math.round((1 - totalDeuda / totalOriginal) * 100) : 0}%</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Total de pagos registrados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.pagosRecientes}</CardTitle>
             <ArrowDownCircle className="size-4 text-muted-foreground" />

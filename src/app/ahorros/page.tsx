@@ -295,7 +295,7 @@ export default function AhorrosPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Suma de todas tus huchas de ahorro" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.totalAhorrado}</CardTitle>
             <Goal className="size-4 text-muted-foreground" />
@@ -304,7 +304,7 @@ export default function AhorrosPage() {
             <div className="text-2xl font-bold text-amber-600">{fmt(totalAhorrado)}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Cantidad de metas de ahorro activas" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.numHuchas}</CardTitle>
             <PiggyBank className="size-4 text-muted-foreground" />
@@ -313,7 +313,7 @@ export default function AhorrosPage() {
             <div className="text-2xl font-bold">{numHuchas}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Total de movimientos recientes registrados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Movimientos</CardTitle>
             <ArrowDownCircle className="size-4 text-muted-foreground" />

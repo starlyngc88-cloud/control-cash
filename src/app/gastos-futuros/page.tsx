@@ -354,7 +354,7 @@ export default function GastosFuturosPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Suma de todos los gastos futuros planeados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.totalPrevisto}</CardTitle>
             <Crosshair className="size-4 text-muted-foreground" />
@@ -363,7 +363,7 @@ export default function GastosFuturosPage() {
             <div className="text-2xl font-bold text-orange-600">{fmt(dashboard?.totalPrevisto ?? 0)}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Gastos futuros aún no realizados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.pendientes}</CardTitle>
             <List className="size-4 text-muted-foreground" />
@@ -372,7 +372,7 @@ export default function GastosFuturosPage() {
             <div className="text-2xl font-bold">{dashboard?.numPendientes ?? 0}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Gastos que vencen en los próximos 30 días" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.proximos30}</CardTitle>
             <Crosshair className="size-4 text-muted-foreground" />
@@ -381,7 +381,7 @@ export default function GastosFuturosPage() {
             <div className="text-2xl font-bold text-red-600">{dashboard?.next30 ?? 0}</div>
           </CardContent>
         </Card>
-        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+        <Card title="Gastos que vencen entre 30 y 90 días" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">{dict.proximos90}</CardTitle>
             <Crosshair className="size-4 text-muted-foreground" />
