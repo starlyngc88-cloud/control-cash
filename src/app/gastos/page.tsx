@@ -214,7 +214,7 @@ export default function GastosPage() {
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-red-100 text-red-600 dark:bg-red-900/30">
+          <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
             <ArrowUpCircle className="size-5" />
           </div>
           <div>
@@ -424,7 +424,7 @@ export default function GastosPage() {
               const catTotal = items.reduce((s, e) => s + Number(e.amount), 0)
               return (
                 <div key={key}>
-                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-red-100/50" : "hover:bg-red-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
+                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-green-100/50" : "hover:bg-green-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
                     <button onClick={() => setExpandedCats((prev) => {
                       const next = new Set(prev)
                       if (next.has(key)) next.delete(key)
@@ -444,19 +444,19 @@ export default function GastosPage() {
                       </>
                     )}
                     <span className="font-medium truncate min-w-0">{name}</span>
-                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-red-600">
+                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-green-600">
                       {fmt(catTotal)}
                     </span>
                   </div>
 
                   {isExpanded && items.map((exp) => (
-                    <div key={exp.id} className="flex items-center py-0.5 pl-8 pr-1.5 hover:bg-red-50/70 border-t border-dashed border-border/30">
+                    <div key={exp.id} className="flex items-center py-0.5 pl-8 pr-1.5 hover:bg-green-50/70 border-t border-dashed border-border/30">
                       <span className="truncate min-w-0 text-muted-foreground">{exp.description || exp.budget_categories?.name || "Sin concepto"}</span>
                       <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{exp.people?.name}</span>
                       <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{new Date(exp.date).toLocaleDateString("es-CO")}</span>
-                      <span className="tabular-nums shrink-0 text-red-600 ml-auto font-medium">- {fmt(Number(exp.amount))}</span>
+                      <span className="tabular-nums shrink-0 text-green-600 ml-auto font-medium">- {fmt(Number(exp.amount))}</span>
                       <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-1" onClick={() => openEdit(exp)}>
                         <Pencil className="size-3" />
                       </button>
@@ -470,9 +470,9 @@ export default function GastosPage() {
             })}
           </div>
           {grouped.length > 0 && (
-            <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-red-100/30 text-sm">
+            <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-green-100/30 text-sm">
               <span className="font-semibold">Total general</span>
-              <span className="tabular-nums font-semibold text-red-600">{fmt(total)}</span>
+              <span className="tabular-nums font-semibold text-green-600">{fmt(total)}</span>
             </div>
           )}
           <div className="border-t border-border/50">
@@ -497,7 +497,7 @@ export default function GastosPage() {
                 {catDeleteExpenses.map((exp) => (
                   <div key={exp.id} className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/30">
                     <span className="truncate mr-2">{exp.description || "Sin concepto"}</span>
-                    <span className="font-semibold text-red-600 shrink-0">{fmt(Number(exp.amount))}</span>
+                    <span className="font-semibold text-green-600 shrink-0">{fmt(Number(exp.amount))}</span>
                   </div>
                 ))}
               </div>

@@ -248,7 +248,7 @@ export default function GastosFuturosPage() {
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-orange-100 text-orange-600 dark:bg-orange-900/30">
+          <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
             <Crosshair className="size-5" />
           </div>
           <div>
@@ -284,7 +284,7 @@ export default function GastosFuturosPage() {
                     {catDeleteExpenses.map((fe) => (
                       <div key={fe.id} className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/30">
                         <span>{fe.title}</span>
-                        <span className="font-semibold text-orange-600">{fmt(Number(fe.expected_amount))}</span>
+                        <span className="font-semibold text-green-600">{fmt(Number(fe.expected_amount))}</span>
                       </div>
                     ))}
                   </div>
@@ -423,7 +423,7 @@ export default function GastosFuturosPage() {
               const cat = categories.find((c) => c.id === catId)
               return (
                 <div key={key}>
-                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-orange-100/50" : "hover:bg-orange-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
+                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-green-100/50" : "hover:bg-green-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
                     <button onClick={() => setExpandedCats((prev) => {
                       const next = new Set(prev)
                       if (next.has(key)) next.delete(key)
@@ -444,17 +444,17 @@ export default function GastosFuturosPage() {
                     )}
                     <span className="font-medium truncate min-w-0">{catName}</span>
                     <span className="text-[10px] text-muted-foreground shrink-0 ml-1">({items.length})</span>
-                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-orange-600">{fmt(catTotal)}</span>
+                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-green-600">{fmt(catTotal)}</span>
                   </div>
 
                   {isExpanded && items.map((fe) => (
-                    <div key={fe.id} className={`flex items-center py-0.5 pl-8 pr-1.5 hover:bg-orange-50/70 border-t border-dashed border-border/30 ${getUrgencyClass(fe.expected_date)}`}>
+                    <div key={fe.id} className={`flex items-center py-0.5 pl-8 pr-1.5 hover:bg-green-50/70 border-t border-dashed border-border/30 ${getUrgencyClass(fe.expected_date)}`}>
                       <span className={`size-2 rounded-full shrink-0 ${getUrgencyDot(fe.expected_date)}`} />
                       <span className="truncate min-w-0 text-muted-foreground ml-1">{fe.title}</span>
                       {fe.status === "completed" && <span className="text-[10px] text-green-600 font-medium shrink-0 ml-1">{dict.statusCompleted}</span>}
                       <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{new Date(fe.expected_date).toLocaleDateString("es-CO")}</span>
-                      <span className="tabular-nums shrink-0 text-orange-600 ml-auto font-semibold">{fmt(Number(fe.expected_amount))}</span>
+                      <span className="tabular-nums shrink-0 text-green-600 ml-auto font-semibold">{fmt(Number(fe.expected_amount))}</span>
                       {fe.status === "planned" && (
                         <>
                           <button className="text-emerald-500 hover:text-emerald-700 shrink-0 ml-1" title={dict.markCompleted} onClick={() => handleMarkCompleted(fe.id)}>
@@ -474,9 +474,9 @@ export default function GastosFuturosPage() {
               )
             })}
           </div>
-          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-orange-100/30 text-sm">
+          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-green-100/30 text-sm">
             <span className="font-semibold">{dict.totalPrevisto}</span>
-            <span className="tabular-nums font-semibold text-orange-600">{fmt(dashboard?.totalPrevisto ?? 0)}</span>
+            <span className="tabular-nums font-semibold text-green-600">{fmt(dashboard?.totalPrevisto ?? 0)}</span>
           </div>
           <div className="border-t border-border/50">
             <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={openNew}>

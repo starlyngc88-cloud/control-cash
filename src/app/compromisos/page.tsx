@@ -224,7 +224,7 @@ export default function CompromisosPage() {
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30">
+          <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
             <ShieldCheck className="size-5" />
           </div>
           <div>
@@ -262,7 +262,7 @@ export default function CompromisosPage() {
                     {catDeleteExpenses.map((c) => (
                       <div key={c.id} className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/30">
                         <span>{c.name}</span>
-                        <span className="font-semibold text-indigo-600">{fmt(Number(c.total_amount))}</span>
+                        <span className="font-semibold text-green-600">{fmt(Number(c.total_amount))}</span>
                       </div>
                     ))}
                   </div>
@@ -380,7 +380,7 @@ export default function CompromisosPage() {
               const progress = comm.total_amount > 0 ? Math.round((1 - Number(comm.current_balance) / Number(comm.total_amount)) * 100) : 0
               return (
                 <div key={comm.id}>
-                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-indigo-100/50" : "hover:bg-indigo-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
+                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-green-100/50" : "hover:bg-green-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
                     <button onClick={() => toggleComm(comm.id)} className="p-0.5 rounded hover:bg-accent text-gray-400 hover:text-gray-600 shrink-0">
                       {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                     </button>
@@ -394,9 +394,9 @@ export default function CompromisosPage() {
                     {comm.budget_categories && (
                       <span className="text-[10px] text-muted-foreground shrink-0 ml-1">· {comm.budget_categories.name}</span>
                     )}
-                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-indigo-600">{fmt(Number(comm.current_balance))}</span>
+                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-green-600">{fmt(Number(comm.current_balance))}</span>
                     <div className="w-12 h-1.5 rounded-full bg-muted overflow-hidden ml-2">
-                      <div className="h-full rounded-full bg-indigo-500 transition-all" style={{ width: `${progress}%` }} />
+                      <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
                     </div>
                     <span className="text-[10px] text-muted-foreground ml-1 shrink-0">{progress}%</span>
                   </div>
@@ -432,9 +432,9 @@ export default function CompromisosPage() {
               )
             })}
           </div>
-          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-indigo-100/30 text-sm">
+          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-green-100/30 text-sm">
             <span className="font-semibold">{dict.totalDeuda}</span>
-            <span className="tabular-nums font-semibold text-indigo-600">{fmt(totalDeuda)}</span>
+            <span className="tabular-nums font-semibold text-green-600">{fmt(totalDeuda)}</span>
           </div>
           <div className="border-t border-border/50">
             <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={openNew}>
