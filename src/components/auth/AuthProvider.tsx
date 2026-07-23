@@ -92,6 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
     if (error) {
       if (error.message.includes("already registered")) return "⚠️ Este correo ya está registrado. Inicia sesión."
+      if (error.message.includes("assword")) return "⚠️ La contraseña debe tener al menos 6 caracteres."
       return "⚠️ Epa, algo salió mal."
     }
 
