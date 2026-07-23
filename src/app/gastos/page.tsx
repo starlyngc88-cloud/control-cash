@@ -340,7 +340,7 @@ export default function GastosPage() {
 
                   {isExpanded && items.map((exp) => (
                     <div key={exp.id} className="flex items-center py-0.5 pl-8 pr-1.5 hover:bg-red-50/70 border-t border-dashed border-border/30">
-                      <span className="truncate min-w-0 text-muted-foreground">{exp.description || "Sin concepto"}</span>
+                      <span className="truncate min-w-0 text-muted-foreground">{exp.description || exp.budget_categories?.name || "Sin concepto"}</span>
                       <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">{exp.people?.name}</span>
                       <span className="text-[10px] text-muted-foreground mx-1 shrink-0">·</span>
