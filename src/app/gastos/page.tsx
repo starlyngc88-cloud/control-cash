@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -12,10 +12,10 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getBudgetTemplates, getBudgetCategories, buildCategoryTree } from "@/lib/db"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getBudgetTemplates, getBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, buildCategoryTree } from "@/lib/db"
 import type { CategoryTreeNode } from "@/lib/db"
 import type { Person, Expense, BudgetCategory } from "@/types"
-import { Plus, Trash2, Pencil, ArrowUpCircle } from "lucide-react"
+import { Plus, Trash2, Pencil, ArrowUpCircle, ChevronDown, ChevronRight, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
 export default function GastosPage() {
@@ -34,6 +34,14 @@ export default function GastosPage() {
   const [budgetCatId, setBudgetCatId] = useState("")
 
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
+
+  const [openCat, setOpenCat] = useState(false)
+  const [editingCat, setEditingCat] = useState<BudgetCategory | null>(null)
+  const [catName, setCatName] = useState("")
+
+  const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [catDeleteExpenses, setCatDeleteExpenses] = useState<Expense[]>([])
 
   const load = async () => {
     const [e, p, templates] = await Promise.all([getExpenses(), getPeople(), getBudgetTemplates()])
@@ -98,6 +106,83 @@ export default function GastosPage() {
     load()
   }
 
+  const openNewCat = () => {
+    setEditingCat(null)
+    setCatName("")
+    setOpenCat(true)
+  }
+
+  const openEditCat = (cat: BudgetCategory) => {
+    setEditingCat(cat)
+    setCatName(cat.name)
+    setOpenCat(true)
+  }
+
+  const handleCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!catName.trim()) return
+    const templates = await getBudgetTemplates()
+    const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
+    if (!base) return
+    if (editingCat) {
+      await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: editingCat.budgeted })
+    } else {
+      await createBudgetCategory({ template_id: base.id, name: catName.trim(), budgeted: 0, parent_id: null })
+    }
+    setOpenCat(false)
+    setEditingCat(null)
+    load()
+  }
+
+  const handleDeleteCat = async (catId: string, catName: string) => {
+    const related = expenses.filter((e) => e.budget_category_id === catId)
+    if (related.length > 0) {
+      setCatDeleteExpenses(related)
+      setCatToDelete({ id: catId, name: catName })
+    } else {
+      await deleteBudgetCategory(catId)
+      load()
+    }
+  }
+
+  const confirmDeleteCat = async () => {
+    if (!catToDelete) return
+    for (const exp of catDeleteExpenses) {
+      await deleteExpense(exp.id)
+    }
+    await deleteBudgetCategory(catToDelete.id)
+    setCatToDelete(null)
+    setCatDeleteExpenses([])
+    load()
+  }
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; items: typeof expenses }>()
+    for (const cat of budgetCategories.filter((c) => !c.parent_id)) {
+      map.set(cat.id, { id: cat.id, name: cat.name, items: [] })
+    }
+    map.set("__none__", { id: "__none__", name: "Sin categoría", items: [] })
+    for (const exp of expenses) {
+      const key = exp.budget_category_id ?? "__none__"
+      const group = map.get(key)
+      if (group) {
+        group.items.push(exp)
+      } else {
+        const cat = budgetCategories.find((c) => c.id === key)
+        if (cat) {
+          const parent = budgetCategories.find((c) => c.id === cat.parent_id)
+          const parentKey = parent?.id ?? "__none__"
+          const parentGroup = map.get(parentKey)
+          if (parentGroup) parentGroup.items.push(exp)
+          else map.get("__none__")?.items.push(exp)
+        } else {
+          map.get("__none__")?.items.push(exp)
+        }
+      }
+    }
+    return Array.from(map.entries()).filter(([, v]) => v.items.length > 0 || v.id === "__none__")
+  }, [expenses, budgetCategories])
+
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
@@ -114,102 +199,209 @@ export default function GastosPage() {
             <p className="text-sm text-muted-foreground">{g.subtitle}</p>
           </div>
         </div>
-        <Dialog key={editing?.id ?? 'new'} open={open} onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v) }}>
-          <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{g.newGasto}</Button>} />
-          <DialogContent>
-            <DialogHeader><DialogTitle>{editing ? g.editTitle : g.newTitle}</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="persona">{g.persona}</Label>
-                <select
-                  id="persona"
-                  value={personId}
-                  onChange={(e) => setPersonId(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                  required
-                >
-                  <option value="" disabled>{g.selectPersona}</option>
-                  {people.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="amount">{g.monto}</Label>
-                <Input id="amount" type="number" step="0.01" min="0.01" placeholder={g.montoPlaceholder} value={amount} onChange={(e) => setAmount(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">{g.concepto}</Label>
-                <Input id="description" placeholder={g.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date">{g.fecha}</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">{g.rubro}</Label>
-                <select
-                  id="category"
-                  value={budgetCatId}
-                  onChange={(e) => setBudgetCatId(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                >
-                  <option value="">{g.sinRubro}</option>
+        <div className="flex items-center gap-2">
+          <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
+            <DialogTrigger render={(props) => <Button {...props} variant="outline" onClick={openNewCat}><List className="size-4 mr-2" />Categoría</Button>} />
+            <DialogContent>
+              <DialogHeader><DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle></DialogHeader>
+              <form onSubmit={handleCatSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="catName">Nombre</Label>
+                  <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
+                </div>
+                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+          <Dialog key={editing?.id ?? 'new'} open={open} onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v) }}>
+            <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{g.newGasto}</Button>} />
+            <DialogContent>
+              <DialogHeader><DialogTitle>{editing ? g.editTitle : g.newTitle}</DialogTitle></DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="persona">{g.persona}</Label>
+                  <select
+                    id="persona"
+                    value={personId}
+                    onChange={(e) => setPersonId(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    required
+                  >
+                    <option value="" disabled>{g.selectPersona}</option>
+                    {people.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="amount">{g.monto}</Label>
+                  <Input id="amount" type="number" step="0.01" min="0.01" placeholder={g.montoPlaceholder} value={amount} onChange={(e) => setAmount(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="description">{g.concepto}</Label>
+                  <Input id="description" placeholder={g.conceptoPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="date">{g.fecha}</Label>
+                  <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">{g.rubro}</Label>
+                  <select
+                    id="category"
+                    value={budgetCatId}
+                    onChange={(e) => setBudgetCatId(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  >
+                    <option value="">{g.sinRubro}</option>
                     {(() => {
-                    const tree = buildCategoryTree(budgetCategories)
-                    const flat: { id: string; name: string; depth: number }[] = []
-                    const walk = (nodes: CategoryTreeNode[], depth: number) => {
-                      for (const n of nodes) {
-                        flat.push({ id: n.id, name: n.name, depth })
-                        walk(n.children, depth + 1)
+                      const tree = buildCategoryTree(budgetCategories)
+                      const flat: { id: string; name: string; depth: number }[] = []
+                      const walk = (nodes: CategoryTreeNode[], depth: number) => {
+                        for (const n of nodes) {
+                          flat.push({ id: n.id, name: n.name, depth })
+                          walk(n.children, depth + 1)
+                        }
                       }
-                    }
-                    walk(tree, 0)
-                    return flat.map((cat) => (
-                      <option key={cat.id} value={cat.id}>
-                        {"\u00A0".repeat(cat.depth * 4)}{cat.depth > 0 ? "— " : ""}{cat.name}
-                      </option>
-                    ))
-                  })()}
-                </select>
-              </div>
-              <Button type="submit" className="w-full">{editing ? g.guardarCambios : g.guardar}</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+                      walk(tree, 0)
+                      return flat.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {"\u00A0".repeat(cat.depth * 4)}{cat.depth > 0 ? "— " : ""}{cat.name}
+                        </option>
+                      ))
+                    })()}
+                  </select>
+                </div>
+                <Button type="submit" className="w-full">{editing ? g.guardarCambios : g.guardar}</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">{g.total} {fmt(total)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {expenses.length === 0 ? (
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">{g.total}</CardTitle>
+            <div className="flex items-center justify-center size-8 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30">
+              <ArrowUpCircle className="size-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-600">{fmt(total)}</p>
+          </CardContent>
+        </Card>
+        <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Cantidad de gastos</CardTitle>
+            <div className="flex items-center justify-center size-8 rounded-full bg-red-100 text-red-600 dark:bg-red-900/30">
+              <List className="size-4" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{expenses.length}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {grouped.length === 0 ? (
+        <Card>
+          <CardContent className="pt-6">
             <p className="text-sm text-muted-foreground">{g.empty}</p>
-          ) : (
-            <div className="space-y-2">
-              {expenses.map((exp) => (
-                <div key={exp.id} className="flex items-center justify-between rounded-lg border p-3 transition-all duration-200 hover:shadow-sm hover:border-border/80">
-                  <div>
-                    <p className="text-sm font-medium">{exp.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {exp.people?.name} · {new Date(exp.date).toLocaleDateString("es-CO")}
-                      {exp.budget_categories && <> · <span className="text-violet-500">{exp.budget_categories.name}</span></>}
-                    </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {grouped.map(([key, { id, name, items }]) => {
+            const isExpanded = expandedCats.has(key)
+            const catTotal = items.reduce((s, e) => s + Number(e.amount), 0)
+            return (
+              <Card key={key} className="overflow-hidden">
+                <div
+                  className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b cursor-pointer select-none hover:bg-muted/40 transition-colors"
+                  onClick={() => setExpandedCats((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(key)) next.delete(key)
+                    else next.add(key)
+                    return next
+                  })}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isExpanded ? <ChevronDown className="size-4 text-muted-foreground shrink-0" /> : <ChevronRight className="size-4 text-muted-foreground shrink-0" />}
+                    <span className="text-sm font-semibold truncate">{name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">({items.length})</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-sm font-semibold text-red-600">- {fmt(Number(exp.amount))}</span>
-                    <Button variant="ghost" size="icon" className="size-8 text-blue-500 hover:text-blue-700" onClick={() => openEdit(exp)}>
-                      <Pencil className="size-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="size-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(exp.id)}>
-                      <Trash2 className="size-4" />
-                    </Button>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {id !== "__none__" && (
+                      <>
+                        <Button variant="ghost" size="icon" className="size-6 text-blue-500 hover:text-blue-700" onClick={(e) => { e.stopPropagation(); const cat = budgetCategories.find((c) => c.id === id); if (cat) openEditCat(cat) }}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="size-6 text-red-500 hover:text-red-700" onClick={(e) => { e.stopPropagation(); handleDeleteCat(id, name) }}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </>
+                    )}
+                    <span className="text-sm font-semibold text-red-600">{fmt(catTotal)}</span>
                   </div>
                 </div>
-              ))}
+                {isExpanded && (
+                  <CardContent className="p-2">
+                    <div className="space-y-1">
+                      {items.map((exp) => (
+                        <div key={exp.id} className="flex items-center justify-between rounded-lg border p-2.5 transition-all duration-200 hover:shadow-sm">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium">{exp.description}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {exp.people?.name} · {new Date(exp.date).toLocaleDateString("es-CO")}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-3">
+                            <span className="text-sm font-semibold text-red-600">- {fmt(Number(exp.amount))}</span>
+                            <Button variant="ghost" size="icon" className="size-7 text-blue-500 hover:text-blue-700" onClick={(e) => { e.stopPropagation(); openEdit(exp) }}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="size-7 text-red-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); handleDelete(exp.id) }}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Eliminar categoría</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              ¿Eliminar la categoría <strong>{catToDelete?.name}</strong>? Se eliminarán también los siguientes gastos:
+            </p>
+            {catDeleteExpenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay gastos asociados.</p>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-1 border rounded-lg p-2">
+                {catDeleteExpenses.map((exp) => (
+                  <div key={exp.id} className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/30">
+                    <span className="truncate mr-2">{exp.description || "Sin concepto"}</span>
+                    <span className="font-semibold text-red-600 shrink-0">{fmt(Number(exp.amount))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
+              <Button variant="destructive" onClick={confirmDeleteCat}>
+                Eliminar {catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
