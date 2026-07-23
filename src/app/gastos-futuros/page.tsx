@@ -112,6 +112,7 @@ export default function GastosFuturosPage() {
     setCategoryId("")
     setExpectedAmount("")
     setExpectedDate("")
+    setPlanCuota("")
     setOpen(true)
   }
 
@@ -204,6 +205,31 @@ export default function GastosFuturosPage() {
     load()
   }
 
+  const [planCuota, setPlanCuota] = useState("")
+
+  const planCalc = useMemo(() => {
+    if (!expectedAmount) return null
+    const target = parseFloat(expectedAmount)
+    if (!target) return null
+    if (expectedDate) {
+      const now = new Date()
+      const end = new Date(expectedDate)
+      const diff = end.getTime() - now.getTime()
+      if (diff <= 0) return null
+      const months = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24 * 30.44)))
+      return { cuota: fmt(target / months), meses: months, type: "fecha" as const }
+    }
+    if (planCuota) {
+      const cuota = parseFloat(planCuota)
+      if (!cuota) return null
+      const meses = Math.ceil(target / cuota)
+      const end = new Date()
+      end.setMonth(end.getMonth() + meses)
+      return { meses, type: "cuota" as const, fechaEst: end.toLocaleDateString("es-DO") }
+    }
+    return null
+  }, [expectedAmount, expectedDate, planCuota])
+
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   return (
@@ -295,6 +321,19 @@ export default function GastosFuturosPage() {
                   <Label htmlFor="date">{dict.fecha}</Label>
                   <Input id="date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} required />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="planCuota">Ahorro mensual (opcional)</Label>
+                  <Input id="planCuota" type="number" step="0.01" min="0.01" placeholder="0.00" value={planCuota} onChange={(e) => setPlanCuota(e.target.value)} />
+                </div>
+                {planCalc && (
+                  <div className="rounded-lg border bg-orange-50 dark:bg-orange-900/20 p-3 space-y-1 text-sm">
+                    {planCalc.type === "fecha" ? (
+                      <p>Necesitas ahorrar <strong>{planCalc.cuota}</strong> por mes durante <strong>{planCalc.meses} meses</strong></p>
+                    ) : (
+                      <p>Ahorrando <strong>{fmt(parseFloat(planCuota || "0"))}</strong> por mes, alcanzas la meta en <strong>{planCalc.meses} meses</strong> (~{planCalc.fechaEst})</p>
+                    )}
+                  </div>
+                )}
                 <Button type="submit" className="w-full">{editing ? dict.guardarCambios : dict.guardar}</Button>
               </form>
             </DialogContent>
