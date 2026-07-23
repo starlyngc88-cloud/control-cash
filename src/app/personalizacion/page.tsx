@@ -69,7 +69,7 @@ export default function PersonalizacionPage() {
 
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <DollarSign className="size-4 text-muted-foreground" />
+            <DollarSign className="size-4 text-emerald-500" />
             <h3 className="text-sm font-semibold">{p.moneda}</h3>
           </div>
           <div className="space-y-2">

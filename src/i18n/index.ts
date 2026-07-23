@@ -10,6 +10,9 @@ export interface Dictionary {
   nav: {
     dashboard: string
     presupuestos: string
+    ahorros: string
+    gastosFuturos: string
+    compromisos: string
     ingresos: string
     gastos: string
     personas: string
@@ -176,6 +179,95 @@ export interface Dictionary {
     registroActualizado: string
     registroEliminado: string
     sinMovimientos: string
+  }
+  ahorros: {
+    title: string
+    subtitle: string
+    totalAhorrado: string
+    numHuchas: string
+    ultimosMovimientos: string
+    newHucha: string
+    newTitle: string
+    editTitle: string
+    nombre: string
+    nombrePlaceholder: string
+    descripcion: string
+    descripcionPlaceholder: string
+    guardar: string
+    guardarCambios: string
+    empty: string
+    deleteConfirm: string
+    addMoney: string
+    withdrawMoney: string
+    movementTitle: string
+    movementType: string
+    ingreso: string
+    retirada: string
+    monto: string
+    montoPlaceholder: string
+    notas: string
+    notasPlaceholder: string
+    fecha: string
+    successMessage: string
+    noMovements: string
+  }
+  gastosFuturos: {
+    title: string
+    subtitle: string
+    newTitle: string
+    editTitle: string
+    proximos30: string
+    proximos90: string
+    totalPrevisto: string
+    pendientes: string
+    titleLabel: string
+    titlePlaceholder: string
+    descripcion: string
+    descripcionPlaceholder: string
+    categoria: string
+    categoriaPlaceholder: string
+    monto: string
+    montoPlaceholder: string
+    fecha: string
+    guardar: string
+    guardarCambios: string
+    empty: string
+    deleteConfirm: string
+    statusPlanned: string
+    statusCompleted: string
+    statusCancelled: string
+    markCompleted: string
+    successMessage: string
+    noNext30: string
+    noNext90: string
+  }
+  compromisos: {
+    title: string
+    subtitle: string
+    newTitle: string
+    editTitle: string
+    nombre: string
+    nombrePlaceholder: string
+    descripcion: string
+    descripcionPlaceholder: string
+    montoTotal: string
+    saldoActual: string
+    rubro: string
+    sinRubro: string
+    guardar: string
+    guardarCambios: string
+    empty: string
+    deleteConfirm: string
+    pagar: string
+    pagoMonto: string
+    pagoCapital: string
+    pagoNotas: string
+    pagoFecha: string
+    totalCompromisos: string
+    totalDeuda: string
+    pagosRecientes: string
+    progreso: string
+    sinPagos: string
   }
   errors: {
     generic: string

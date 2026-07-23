@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getAllBudgetCategories, buildCategoryTree } from "@/lib/db"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getBudgetTemplates, getBudgetCategories, buildCategoryTree } from "@/lib/db"
 import type { CategoryTreeNode } from "@/lib/db"
-import type { Person, Expense, BudgetCategory, BudgetTemplate } from "@/types"
+import type { Person, Expense, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
@@ -33,10 +33,12 @@ export default function GastosPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [budgetCatId, setBudgetCatId] = useState("")
 
-  const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([])
 
   const load = async () => {
-    const [e, p, bc] = await Promise.all([getExpenses(), getPeople(), getAllBudgetCategories()])
+    const [e, p, templates] = await Promise.all([getExpenses(), getPeople(), getBudgetTemplates()])
+    const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
+    const bc = base ? await getBudgetCategories(base.id) : []
     setExpenses(e)
     setPeople(p)
     setBudgetCategories(bc)
@@ -151,7 +153,7 @@ export default function GastosPage() {
                   className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                 >
                   <option value="">{g.sinRubro}</option>
-                  {(() => {
+                    {(() => {
                     const tree = buildCategoryTree(budgetCategories)
                     const flat: { id: string; name: string; depth: number }[] = []
                     const walk = (nodes: CategoryTreeNode[], depth: number) => {
@@ -163,7 +165,7 @@ export default function GastosPage() {
                     walk(tree, 0)
                     return flat.map((cat) => (
                       <option key={cat.id} value={cat.id}>
-                        {"\u00A0".repeat(cat.depth * 4)}{cat.depth > 0 ? "— " : ""}{cat.name} ({budgetCategories.find(c => c.id === cat.id)?.budget_templates?.name ?? ""})
+                        {"\u00A0".repeat(cat.depth * 4)}{cat.depth > 0 ? "— " : ""}{cat.name}
                       </option>
                     ))
                   })()}
@@ -195,10 +197,10 @@ export default function GastosPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-red-600">- {fmt(Number(exp.amount))}</span>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(exp)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-blue-500 hover:text-blue-700" onClick={() => openEdit(exp)}>
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" onClick={() => handleDelete(exp.id)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(exp.id)}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>

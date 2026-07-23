@@ -4,15 +4,31 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, ArrowDownCircle, ArrowUpCircle, Users, Wallet, PiggyBank, BookOpen, Palette, PanelLeftClose, PanelLeft } from "lucide-react"
+import { Wallet, PanelLeftClose, PanelLeft } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
+const emojiMap: Record<string, string> = {
+  dashboard: "📊",
+  presupuestos: "📋",
+  ahorros: "🐷",
+  gastosFuturos: "🎯",
+  compromisos: "🔒",
+  ingresos: "💰",
+  gastos: "💸",
+  personas: "👥",
+  personalizacion: "⚙️",
+  guia: "📖",
+}
+
 const links = [
-  { href: "/", key: "dashboard" as const, icon: LayoutDashboard },
-  { href: "/presupuestos", key: "presupuestos" as const, icon: PiggyBank },
-  { href: "/ingresos", key: "ingresos" as const, icon: ArrowDownCircle },
-  { href: "/gastos", key: "gastos" as const, icon: ArrowUpCircle },
-  { href: "/personas", key: "personas" as const, icon: Users },
+  { href: "/", key: "dashboard" as const },
+  { href: "/presupuestos", key: "presupuestos" as const },
+  { href: "/ahorros", key: "ahorros" as const },
+  { href: "/gastos-futuros", key: "gastosFuturos" as const },
+  { href: "/compromisos", key: "compromisos" as const },
+  { href: "/ingresos", key: "ingresos" as const },
+  { href: "/gastos", key: "gastos" as const },
+  { href: "/personas", key: "personas" as const },
 ]
 
 export function Sidebar() {
@@ -36,7 +52,7 @@ export function Sidebar() {
       <div className="p-5 border-b bg-gradient-to-br from-primary/10 to-primary/5">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
-            <div className="flex items-center justify-center size-8 rounded-lg bg-primary text-primary-foreground">
+            <div className="flex items-center justify-center size-8 rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-sm">
               <Wallet className="size-4" />
             </div>
             <h1 className="font-bold text-lg tracking-tight">{t.app.name}</h1>
@@ -50,7 +66,6 @@ export function Sidebar() {
 
       <nav className="p-3 space-y-1">
         {links.map((link) => {
-          const Icon = link.icon
           const isActive = pathname === link.href
           return (
             <Link
@@ -63,8 +78,8 @@ export function Sidebar() {
                   : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:translate-x-0.5"
               )}
             >
-              <Icon className={cn("size-4", isActive && "text-primary")} />
-              {nav[link.key]}
+              <span className="text-base shrink-0">{emojiMap[link.key]}</span>
+              <span>{nav[link.key]}</span>
             </Link>
           )
         })}
@@ -81,15 +96,14 @@ export function Sidebar() {
               : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:translate-x-0.5"
           )}
         >
-          <Palette className={cn("size-4", pathname === "/personalizacion" && "text-primary")} />
-          {nav.personalizacion}
+          <span className="text-base shrink-0">{emojiMap.personalizacion}</span>
+          <span>{nav.personalizacion}</span>
         </Link>
       </div>
 
       <div className="flex-1" />
 
       <div className="px-3 pb-3 space-y-1">
-        <div className="h-px bg-border" />
         <Link
           href="/guia"
           className={cn(
@@ -99,8 +113,8 @@ export function Sidebar() {
               : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:translate-x-0.5"
           )}
         >
-          <BookOpen className={cn("size-4", pathname === "/guia" && "text-primary")} />
-          {nav.guia}
+          <span className="text-base shrink-0">{emojiMap.guia}</span>
+          <span>{nav.guia}</span>
         </Link>
       </div>
 

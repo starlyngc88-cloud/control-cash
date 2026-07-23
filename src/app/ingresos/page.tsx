@@ -152,10 +152,10 @@ export default function IngresosPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-sm font-semibold text-green-600">+ {fmt(Number(inc.amount))}</span>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(inc)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-blue-500 hover:text-blue-700" onClick={() => openEdit(inc)}>
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" onClick={() => handleDelete(inc.id)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(inc.id)}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>

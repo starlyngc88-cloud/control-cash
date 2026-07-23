@@ -110,10 +110,10 @@ export default function PersonasPage() {
                 <div key={person.id} className="flex items-center justify-between rounded-lg border p-3 transition-all duration-200 hover:shadow-sm hover:border-border/80">
                   <span className="text-sm font-medium">{person.name}</span>
                   <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-primary" onClick={() => openEdit(person)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-blue-500 hover:text-blue-700" onClick={() => openEdit(person)}>
                       <Pencil className="size-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-red-600" onClick={() => handleDelete(person.id)}>
+                    <Button variant="ghost" size="icon" className="size-8 text-red-400 hover:text-red-600" onClick={() => handleDelete(person.id)}>
                       <Trash2 className="size-4" />
                     </Button>
                   </div>

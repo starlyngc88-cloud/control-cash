@@ -1,10 +1,11 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { MonthPicker } from "@/components/ui/month-picker"
-import { getDashboardData } from "@/lib/db"
+import { getDashboardData, getMonthlyBudgets } from "@/lib/db"
 import { ArrowDownCircle, ArrowUpCircle, LayoutDashboard, Wallet, PiggyBank, Calendar } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const [month, setMonth] = useState(defaultMonth)
   const [openCal, setOpenCal] = useState(false)
   const [data, setData] = useState<DashboardData | null>(null)
+  const [monthlyBudgetId, setMonthlyBudgetId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const { t, fmt } = useLanguage()
   const d = t.dashboard
@@ -34,8 +36,11 @@ export default function DashboardPage() {
   const load = useCallback(async (m: string) => {
     setLoading(true)
     try {
-      const res = await getDashboardData(m)
+      const [res, budgets] = await Promise.all([getDashboardData(m), getMonthlyBudgets()])
       setData(res)
+      const firstDay = m + "-01"
+      const mb = budgets.find((b) => b.month === firstDay)
+      setMonthlyBudgetId(mb?.id ?? null)
     } catch (e) {
       console.error(e)
     } finally {
@@ -112,9 +117,15 @@ export default function DashboardPage() {
         <Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Presupuesto</CardTitle>
-            <div className="flex items-center justify-center size-8 rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/30">
-              <PiggyBank className="size-4" />
-            </div>
+            {monthlyBudgetId ? (
+              <Link href={`/presupuestos/${monthlyBudgetId}`} className="flex items-center justify-center size-8 rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/30 hover:bg-violet-200 dark:hover:bg-violet-800/40 transition-colors">
+                <PiggyBank className="size-4" />
+              </Link>
+            ) : (
+              <div className="flex items-center justify-center size-8 rounded-full bg-violet-100 text-violet-600 dark:bg-violet-900/30">
+                <PiggyBank className="size-4" />
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-violet-600">{fmt(data?.totalBudgeted ?? 0)}</p>

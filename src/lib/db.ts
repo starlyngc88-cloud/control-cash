@@ -1,5 +1,5 @@
 import { supabase } from "./supabase"
-import type { Person, Income, Expense, BudgetTemplate, BudgetCategory, MonthlyBudget } from "@/types"
+import type { Person, Income, Expense, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
 
 /* ---- People ---- */
 
@@ -415,6 +415,290 @@ export function buildCategoryTree(categories: BudgetCategory[]): CategoryTreeNod
   return roots
 }
 
+/* ---- Saving Categories ---- */
+
+export async function getSavingCategories() {
+  const { data, error } = await supabase
+    .from("saving_categories")
+    .select("*")
+    .order("name")
+  if (error) throw error
+  return data as SavingCategory[]
+}
+
+export async function createSavingCategory(cat: { name: string }) {
+  const { data, error } = await supabase
+    .from("saving_categories")
+    .insert(cat)
+    .select()
+    .single()
+  if (error) throw error
+  return data as SavingCategory
+}
+
+export async function updateSavingCategory(id: string, data: { name: string }) {
+  const { error } = await supabase
+    .from("saving_categories")
+    .update(data)
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteSavingCategory(id: string) {
+  const { error } = await supabase
+    .from("savings")
+    .delete()
+    .eq("category_id", id)
+  if (error) throw error
+  const { error: delErr } = await supabase
+    .from("saving_categories")
+    .delete()
+    .eq("id", id)
+  if (delErr) throw delErr
+}
+
+/* ---- Savings ---- */
+
+export async function getSavings() {
+  const { data, error } = await supabase
+    .from("savings")
+    .select("*, saving_categories(name)")
+    .order("name")
+  if (error) throw error
+  return data as (Saving & { saving_categories: Pick<SavingCategory, "name"> | null })[]
+}
+
+export async function createSaving(saving: { name: string; description: string; category_id?: string | null }) {
+  const { data, error } = await supabase
+    .from("savings")
+    .insert(saving)
+    .select("*, saving_categories(name)")
+    .single()
+  if (error) throw error
+  return data as Saving & { saving_categories: Pick<SavingCategory, "name"> | null }
+}
+
+export async function updateSaving(id: string, data: { name: string; description: string; category_id?: string | null }) {
+  const { error } = await supabase
+    .from("savings")
+    .update(data)
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteSaving(id: string) {
+  const { error } = await supabase
+    .from("savings")
+    .delete()
+    .eq("id", id)
+  if (error) throw error
+}
+
+/* ---- Saving Movements ---- */
+
+export async function getSavingMovements(savingId: string) {
+  const { data, error } = await supabase
+    .from("saving_movements")
+    .select("*")
+    .eq("saving_id", savingId)
+    .order("movement_date", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) throw error
+  return data as SavingMovement[]
+}
+
+export async function createSavingMovement(movement: {
+  saving_id: string
+  type: "income" | "withdrawal"
+  amount: number
+  notes: string
+  movement_date: string
+}) {
+  const { data: mov, error: movError } = await supabase
+    .from("saving_movements")
+    .insert(movement)
+    .select()
+    .single()
+  if (movError) throw movError
+
+  const { data: saving } = await supabase
+    .from("savings")
+    .select("current_amount")
+    .eq("id", movement.saving_id)
+    .single()
+
+  const amountChange = movement.type === "income" ? movement.amount : -movement.amount
+  const newAmount = Math.max(0, Number(saving?.current_amount ?? 0) + amountChange)
+
+  const { error: updateError } = await supabase
+    .from("savings")
+    .update({ current_amount: newAmount })
+    .eq("id", movement.saving_id)
+  if (updateError) throw updateError
+
+  return mov as SavingMovement
+}
+
+export async function getRecentSavingMovements(limit = 5) {
+  const { data, error } = await supabase
+    .from("saving_movements")
+    .select("*, savings(name)")
+    .order("movement_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return data as (SavingMovement & { savings: Pick<Saving, "name"> })[]
+}
+
+export async function getSavingsDashboard() {
+  const [savingsResult, recentMovements] = await Promise.all([
+    supabase.from("savings").select("current_amount"),
+    getRecentSavingMovements(5),
+  ])
+
+  const savings = savingsResult.data as Saving[] | null
+  const totalAhorrado = savings?.reduce((sum, s) => sum + Number(s.current_amount), 0) ?? 0
+  const numHuchas = savings?.length ?? 0
+
+  return {
+    totalAhorrado,
+    numHuchas,
+    recentMovements,
+  }
+}
+
+/* ---- Future Expense Categories ---- */
+
+export async function getFutureExpenseCategories() {
+  const { data, error } = await supabase
+    .from("future_expense_categories")
+    .select("*")
+    .order("name")
+  if (error) throw error
+  return data as FutureExpenseCategory[]
+}
+
+export async function createFutureExpenseCategory(cat: { name: string }) {
+  const { data, error } = await supabase
+    .from("future_expense_categories")
+    .insert(cat)
+    .select()
+    .single()
+  if (error) throw error
+  return data as FutureExpenseCategory
+}
+
+export async function updateFutureExpenseCategory(id: string, data: { name: string }) {
+  const { error } = await supabase
+    .from("future_expense_categories")
+    .update(data)
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteFutureExpenseCategory(id: string) {
+  const { error } = await supabase
+    .from("future_expenses")
+    .update({ category_id: null })
+    .eq("category_id", id)
+  if (error) throw error
+  const { error: delErr } = await supabase
+    .from("future_expense_categories")
+    .delete()
+    .eq("id", id)
+  if (delErr) throw delErr
+}
+
+/* ---- Future Expenses ---- */
+
+export async function getFutureExpenses() {
+  const { data, error } = await supabase
+    .from("future_expenses")
+    .select("*, future_expense_categories(name)")
+    .order("expected_date", { ascending: true })
+  if (error) throw error
+  return data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+}
+
+export async function createFutureExpense(fe: {
+  title: string
+  description: string
+  category: string
+  category_id?: string | null
+  expected_amount: number
+  expected_date: string
+}) {
+  const { data, error } = await supabase
+    .from("future_expenses")
+    .insert(fe)
+    .select("*, future_expense_categories(name)")
+    .single()
+  if (error) throw error
+  return data as FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null }
+}
+
+export async function updateFutureExpense(id: string, data: {
+  title: string
+  description: string
+  category: string
+  category_id?: string | null
+  expected_amount: number
+  expected_date: string
+}) {
+  const { error } = await supabase
+    .from("future_expenses")
+    .update(data)
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteFutureExpense(id: string) {
+  const { error } = await supabase
+    .from("future_expenses")
+    .delete()
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function updateFutureExpenseStatus(id: string, status: "planned" | "completed" | "cancelled") {
+  const { error } = await supabase
+    .from("future_expenses")
+    .update({ status })
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function getFutureExpensesDashboard() {
+  const { data, error } = await supabase
+    .from("future_expenses")
+    .select("*, future_expense_categories(name)")
+    .order("expected_date", { ascending: true })
+  if (error) throw error
+
+  const expenses = data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+  const now = new Date()
+  const planned = expenses.filter((e) => e.status === "planned")
+
+  const next30 = planned.filter((e) => {
+    const d = new Date(e.expected_date)
+    const diff = d.getTime() - now.getTime()
+    return diff >= 0 && diff <= 30 * 24 * 60 * 60 * 1000
+  })
+
+  const next90 = planned.filter((e) => {
+    const d = new Date(e.expected_date)
+    const diff = d.getTime() - now.getTime()
+    return diff > 30 * 24 * 60 * 60 * 1000 && diff <= 90 * 24 * 60 * 60 * 1000
+  })
+
+  const totalPrevisto = planned.reduce((sum, e) => sum + Number(e.expected_amount), 0)
+  const numPendientes = planned.length
+
+  return { expenses, next30, next90, totalPrevisto, numPendientes }
+}
+
+/* ---- Monthly Budget Dashboard ---- */
+
 export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudgetDashboard> {
   const { data: mb, error: mbError } = await supabase
     .from("monthly_budgets")
@@ -531,4 +815,76 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
     balance: totalIngresos - totalGastos,
     categories: categoryData,
   }
+}
+
+/* ---- Commitments ---- */
+
+export async function getCommitments() {
+  const { data, error } = await supabase
+    .from("commitments")
+    .select("*, budget_categories(name)")
+    .order("name")
+  if (error) throw error
+  return data as (Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null })[]
+}
+
+export async function createCommitment(comm: { name: string; description: string; total_amount: number; current_balance: number; category_id?: string | null }) {
+  const { data, error } = await supabase
+    .from("commitments")
+    .insert(comm)
+    .select("*, budget_categories(name)")
+    .single()
+  if (error) throw error
+  return data as Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null }
+}
+
+export async function updateCommitment(id: string, data: { name: string; description: string; total_amount: number; current_balance: number; category_id?: string | null }) {
+  const { error } = await supabase
+    .from("commitments")
+    .update(data)
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteCommitment(id: string) {
+  const { error } = await supabase
+    .from("commitments")
+    .delete()
+    .eq("id", id)
+  if (error) throw error
+}
+
+export async function getCommitmentPayments(commitmentId: string) {
+  const { data, error } = await supabase
+    .from("commitment_payments")
+    .select("*")
+    .eq("commitment_id", commitmentId)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false })
+  if (error) throw error
+  return data as CommitmentPayment[]
+}
+
+export async function createCommitmentPayment(payment: { commitment_id: string; amount: number; capital_amount: number; date: string; notes: string }) {
+  const { data: pay, error: payError } = await supabase
+    .from("commitment_payments")
+    .insert(payment)
+    .select()
+    .single()
+  if (payError) throw payError
+
+  const { data: comm } = await supabase
+    .from("commitments")
+    .select("current_balance")
+    .eq("id", payment.commitment_id)
+    .single()
+
+  const newBalance = Math.max(0, Number(comm?.current_balance ?? 0) - payment.capital_amount)
+  const { error: updateError } = await supabase
+    .from("commitments")
+    .update({ current_balance: newBalance })
+    .eq("id", payment.commitment_id)
+  if (updateError) throw updateError
+
+  return pay as CommitmentPayment
 }
