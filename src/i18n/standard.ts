@@ -16,7 +16,7 @@ const standard: Dictionary = {
     gastos: "Gastos",
     personas: "Personas",
     guia: "Guía",
-    personalizacion: "Personalización",
+    personalizacion: "Configuración",
   },
   dashboard: {
     title: "Dashboard",

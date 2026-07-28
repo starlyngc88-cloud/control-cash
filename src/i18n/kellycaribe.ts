@@ -16,7 +16,7 @@ const kellycaribe: Dictionary = {
     gastos: "La Plata que Sale",
     personas: "El Bonche",
     guia: "Guía",
-    personalizacion: "Ponlo a Tu Gusto",
+    personalizacion: "Configuración",
   },
   dashboard: {
     title: "El Gráfico Pa' Ver Too",

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -17,6 +17,8 @@ import type { CategoryTreeNode } from "@/lib/db"
 import type { Person, Expense, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle, ChevronDown, ChevronRight, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { DateFilter } from "@/components/DateFilter"
+import { useMonthFilter } from "@/components/MonthFilterContext"
 
 export default function GastosPage() {
   const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; budget_categories: Pick<BudgetCategory, "id" | "name" | "template_id" | "budgeted"> | null })[]>([])
@@ -26,6 +28,13 @@ export default function GastosPage() {
   const [loading, setLoading] = useState(true)
   const { t, fmt } = useLanguage()
   const g = t.gastos
+  const { months } = useMonthFilter()
+
+  const sorted = [...months].sort()
+  const startDate = months.length > 0 ? sorted[0] + "-01" : ""
+  const endDate = months.length > 0
+    ? new Date(parseInt(sorted[sorted.length - 1].split("-")[0]), parseInt(sorted[sorted.length - 1].split("-")[1]), 0).toISOString().split("T")[0]
+    : ""
 
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
@@ -43,17 +52,17 @@ export default function GastosPage() {
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
   const [catDeleteExpenses, setCatDeleteExpenses] = useState<Expense[]>([])
 
-  const load = async () => {
-    const [e, p, templates] = await Promise.all([getExpenses(), getPeople(), getBudgetTemplates()])
+  const load = useCallback(async () => {
+    const [e, p, templates] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getBudgetTemplates()])
     const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
     const bc = base ? await getBudgetCategories(base.id) : []
     setExpenses(e)
     setPeople(p)
     setBudgetCategories(bc)
     setLoading(false)
-  }
+  }, [startDate, endDate])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const openNew = () => {
     setEditing(null)
@@ -222,6 +231,7 @@ export default function GastosPage() {
             <p className="text-sm text-muted-foreground">{g.subtitle}</p>
           </div>
         </div>
+        <DateFilter />
         <div className="flex items-center gap-2">
           <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
             <DialogTrigger render={(props) => <Button {...props} variant="outline" onClick={openNewCat}><List className="size-4 mr-2" />Categoría</Button>} />

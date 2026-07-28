@@ -4,6 +4,7 @@ import "./globals.css"
 import { Sidebar } from "@/components/layout/sidebar"
 import { LanguageProvider } from "@/i18n/useLanguage"
 import { AuthProvider } from "@/components/auth/AuthProvider"
+import { MonthFilterProvider } from "@/components/MonthFilterContext"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,10 +29,12 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="flex min-h-screen">
-        <AuthProvider>
+<AuthProvider>
           <LanguageProvider>
-            <Sidebar />
-            <main className="flex-1 p-6 overflow-auto">{children}</main>
+            <MonthFilterProvider>
+              <Sidebar />
+              <main className="flex-1 p-6 overflow-auto">{children}</main>
+            </MonthFilterProvider>
           </LanguageProvider>
         </AuthProvider>
       </body>

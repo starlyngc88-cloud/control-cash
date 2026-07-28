@@ -34,7 +34,7 @@ export async function updatePerson(id: string, data: { name: string }) {
 
 /* ---- Income ---- */
 
-export async function getIncomes(options?: { person_id?: string; limit?: number }) {
+export async function getIncomes(options?: { person_id?: string; limit?: number; startDate?: string; endDate?: string }) {
   let query = supabase
     .from("income")
     .select("*, income_categories(name)")
@@ -43,6 +43,12 @@ export async function getIncomes(options?: { person_id?: string; limit?: number 
 
   if (options?.person_id) {
     query = query.eq("person_id", options.person_id)
+  }
+  if (options?.startDate) {
+    query = query.gte("date", options.startDate)
+  }
+  if (options?.endDate) {
+    query = query.lte("date", options.endDate)
   }
   if (options?.limit) {
     query = query.limit(options.limit)
@@ -125,7 +131,7 @@ export async function deleteIncomeCategory(id: string) {
 
 /* ---- Expenses ---- */
 
-export async function getExpenses(options?: { person_id?: string; limit?: number }) {
+export async function getExpenses(options?: { person_id?: string; limit?: number; startDate?: string; endDate?: string }) {
   let query = supabase
     .from("expenses")
     .select("*")
@@ -134,6 +140,12 @@ export async function getExpenses(options?: { person_id?: string; limit?: number
 
   if (options?.person_id) {
     query = query.eq("person_id", options.person_id)
+  }
+  if (options?.startDate) {
+    query = query.gte("date", options.startDate)
+  }
+  if (options?.endDate) {
+    query = query.lte("date", options.endDate)
   }
   if (options?.limit) {
     query = query.limit(options.limit)
@@ -196,12 +208,22 @@ export async function updateExpense(id: string, data: { person_id: string; amoun
 
 /* ---- Dashboard totals ---- */
 
-export async function getDashboardData(monthStr?: string) {
-  const now = monthStr ? new Date(monthStr + "-01") : new Date()
-  const startOfMonth = monthStr ? monthStr + "-01" : new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const endOfMonth = monthStr
-    ? new Date(parseInt(monthStr.split("-")[0]), parseInt(monthStr.split("-")[1]), 0).toISOString().split("T")[0]
-    : new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+export async function getDashboardData(months: string[]) {
+  if (months.length === 0) {
+    return {
+      totalIngresos: 0,
+      totalGastos: 0,
+      totalBudgeted: 0,
+      balance: 0,
+      recentIncomes: [],
+      recentExpenses: [],
+    }
+  }
+
+  const sorted = [...months].sort()
+  const startOfMonth = sorted[0] + "-01"
+  const lastMonth = sorted[sorted.length - 1]
+  const endOfMonth = new Date(parseInt(lastMonth.split("-")[0]), parseInt(lastMonth.split("-")[1]), 0).toISOString().split("T")[0]
 
   const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase
@@ -214,8 +236,8 @@ export async function getDashboardData(monthStr?: string) {
       .select("amount")
       .gte("date", startOfMonth)
       .lte("date", endOfMonth),
-    getIncomes({ limit: 5 }),
-    getExpenses({ limit: 5 }),
+    getIncomes({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
+    getExpenses({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     supabase
       .from("monthly_budgets")
       .select("template_id")

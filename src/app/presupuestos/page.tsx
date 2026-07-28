@@ -28,6 +28,7 @@ import { supabase } from "@/lib/supabase"
 import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/types"
 import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, PiggyBank, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { DateFilter } from "@/components/DateFilter"
 
 export default function PresupuestosPage() {
   const [template, setTemplate] = useState<BudgetTemplate | null>(null)
@@ -202,6 +203,7 @@ export default function PresupuestosPage() {
             <p className="text-sm text-muted-foreground">Administrá tus rubros y meses</p>
           </div>
         </div>
+        <DateFilter />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -331,6 +333,12 @@ export default function PresupuestosPage() {
                   <div key={mb.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/20">
                     <div className="min-w-0">
                       <span className="text-base font-medium capitalize block leading-tight">{formatMonth(mb.month)}</span>
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {fmt(parents.reduce((s, p) => {
+                          const children = categories.filter(ch => ch.parent_id === p.id)
+                          return s + (children.length > 0 ? children.reduce((cs, ch) => cs + ch.budgeted, 0) : p.budgeted)
+                        }, 0))} presupuestado
+                      </span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <Link href={`/presupuestos/${mb.id}`} className="inline-flex items-center gap-1 text-sm font-medium px-2 py-1 rounded border border-input hover:bg-accent transition-colors">

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -26,6 +26,8 @@ import {
 import type { Person, Income, IncomeCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowDownCircle, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { DateFilter } from "@/components/DateFilter"
+import { useMonthFilter } from "@/components/MonthFilterContext"
 
 export default function IngresosPage() {
   const [incomes, setIncomes] = useState<(Income & { people: Pick<Person, "name"> | null; income_categories: Pick<IncomeCategory, "name"> | null })[]>([])
@@ -36,6 +38,13 @@ export default function IngresosPage() {
   const [loading, setLoading] = useState(true)
   const { t, fmt } = useLanguage()
   const inc = t.ingresos
+  const { months } = useMonthFilter()
+
+  const sorted = [...months].sort()
+  const startDate = months.length > 0 ? sorted[0] + "-01" : ""
+  const endDate = months.length > 0
+    ? new Date(parseInt(sorted[sorted.length - 1].split("-")[0]), parseInt(sorted[sorted.length - 1].split("-")[1]), 0).toISOString().split("T")[0]
+    : ""
 
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
@@ -48,15 +57,19 @@ export default function IngresosPage() {
   const [catName, setCatName] = useState("")
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
 
-  const load = async () => {
-    const [i, p, cats] = await Promise.all([getIncomes(), getPeople(), getIncomeCategories()])
+  const load = useCallback(async () => {
+    const [i, p, cats] = await Promise.all([
+      getIncomes({ startDate, endDate }),
+      getPeople(),
+      getIncomeCategories(),
+    ])
     setIncomes(i)
     setPeople(p)
     setCategories(cats)
     setLoading(false)
-  }
+  }, [startDate, endDate])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
 
   const openNew = () => {
     setEditing(null)
@@ -160,6 +173,7 @@ export default function IngresosPage() {
             <p className="text-sm text-muted-foreground">{inc.subtitle}</p>
           </div>
         </div>
+        <DateFilter />
         <div className="flex items-center gap-2">
           <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
             <DialogTrigger render={(props) => <Button {...props} variant="outline" onClick={() => openNewCat()}><List className="size-4 mr-2" />Categorías</Button>} />
