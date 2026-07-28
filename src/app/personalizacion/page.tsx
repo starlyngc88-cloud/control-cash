@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useLanguage } from "@/i18n/useLanguage"
-import { Palette, DollarSign, Key, Users, Loader2, Shield, ShieldCheck } from "lucide-react"
+import { Palette, DollarSign, Key, Users, Shield, ShieldCheck, Loader2, Languages, Lock } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { supabase } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
@@ -22,7 +22,7 @@ export default function PersonalizacionPage() {
   const p = t.personalizacion
 
   return (
-    <div className="max-w-xl mx-auto py-8 px-6">
+    <div className="max-w-2xl mx-auto py-8 px-6">
       <div className="flex items-center gap-3 mb-8">
         <div className="flex items-center justify-center size-10 rounded-xl bg-pink-100 text-pink-600 dark:bg-pink-900/30">
           <Palette className="size-5" />
@@ -33,101 +33,66 @@ export default function PersonalizacionPage() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="text-sm font-semibold mb-2">Idioma</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border bg-background p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Languages className="size-4 text-sky-500" />
+            <h3 className="text-sm font-semibold">Idioma</h3>
+          </div>
           <div className="space-y-2">
-            <label
-              className={`flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                language === "standard"
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="language"
-                value="standard"
-                checked={language === "standard"}
-                onChange={() => setLanguage("standard")}
-                className="size-4 accent-primary"
-              />
-              <div>
-                <p className="font-medium text-sm">{p.estandar}</p>
-                <p className="text-xs text-muted-foreground">{p.standardDesc}</p>
-              </div>
-            </label>
-
-            <label
-              className={`flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                language === "kellycaribe"
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="language"
-                value="kellycaribe"
-                checked={language === "kellycaribe"}
-                onChange={() => setLanguage("kellycaribe")}
-                className="size-4 accent-primary"
-              />
-              <div>
-                <p className="font-medium text-sm">{p.kellycaribe}</p>
-                <p className="text-xs text-muted-foreground">{p.caribeDesc}</p>
-              </div>
-            </label>
+            {[
+              { value: "standard", label: p.estandar, desc: p.standardDesc },
+              { value: "kellycaribe", label: p.kellycaribe, desc: p.caribeDesc },
+            ].map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-all ${
+                  language === opt.value ? "border-primary bg-primary/5" : "hover:bg-muted/30"
+                }`}
+              >
+                <input
+                  type="radio" name="language" value={opt.value}
+                  checked={language === opt.value}
+                  onChange={() => setLanguage(opt.value as any)}
+                  className="size-3.5 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-[11px] text-muted-foreground">{opt.desc}</p>
+                </div>
+              </label>
+            ))}
           </div>
         </div>
 
-        <div>
-          <div className="flex items-center gap-2 mb-2">
+        <div className="rounded-xl border bg-background p-4 space-y-3">
+          <div className="flex items-center gap-2">
             <DollarSign className="size-4 text-emerald-500" />
             <h3 className="text-sm font-semibold">{p.moneda}</h3>
           </div>
           <div className="space-y-2">
-            <label
-              className={`flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                currency === "COP"
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="currency"
-                value="COP"
-                checked={currency === "COP"}
-                onChange={() => setCurrency("COP")}
-                className="size-4 accent-primary"
-              />
-              <div>
-                <p className="font-medium text-sm">{p.copDesc}</p>
-                <p className="text-xs text-muted-foreground">$1.234,56</p>
-              </div>
-            </label>
-
-            <label
-              className={`flex items-center gap-4 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                currency === "EUR"
-                  ? "border-primary bg-primary/5 shadow-sm"
-                  : "hover:bg-muted/50"
-              }`}
-            >
-              <input
-                type="radio"
-                name="currency"
-                value="EUR"
-                checked={currency === "EUR"}
-                onChange={() => setCurrency("EUR")}
-                className="size-4 accent-primary"
-              />
-              <div>
-                <p className="font-medium text-sm">{p.eurDesc}</p>
-                <p className="text-xs text-muted-foreground">1.234,56 €</p>
-              </div>
-            </label>
+            {[
+              { value: "COP", label: p.copDesc, sample: "$1.234,56" },
+              { value: "EUR", label: p.eurDesc, sample: "1.234,56 €" },
+            ].map((opt) => (
+              <label
+                key={opt.value}
+                className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-all ${
+                  currency === opt.value ? "border-primary bg-primary/5" : "hover:bg-muted/30"
+                }`}
+              >
+                <input
+                  type="radio" name="currency" value={opt.value}
+                  checked={currency === opt.value}
+                  onChange={() => setCurrency(opt.value as any)}
+                  className="size-3.5 accent-primary"
+                />
+                <div>
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-[11px] text-muted-foreground tabular-nums">{opt.sample}</p>
+                </div>
+              </label>
+            ))}
           </div>
         </div>
 
@@ -194,12 +159,12 @@ function SecuritySection() {
   }
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
-        <Key className="size-4 text-yellow-500" />
-        <h3 className="text-sm font-semibold">🔑 Seguridad</h3>
+    <div className="rounded-xl border bg-background p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <Lock className="size-4 text-yellow-500" />
+        <h3 className="text-sm font-semibold">Seguridad</h3>
       </div>
-      <form onSubmit={handleChangePassword} className="space-y-3 rounded-xl border p-4">
+      <form onSubmit={handleChangePassword} className="space-y-2">
         <div className="space-y-2">
           <Label htmlFor="currentPassword">Contraseña actual</Label>
           <Input
@@ -346,22 +311,23 @@ function UserManagementSection() {
   if (loading) return <p className="text-sm text-muted-foreground">Cargando...</p>
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-2">
+    <div className="rounded-xl border bg-background p-4 space-y-3">
+      <div className="flex items-center gap-2">
         <Users className="size-4 text-blue-500" />
-        <h3 className="text-sm font-semibold">👥 Usuarios Autorizados</h3>
+        <h3 className="text-sm font-semibold">Usuarios Autorizados</h3>
       </div>
 
-      <form onSubmit={handleAdd} className="flex gap-2 mb-3">
+      <form onSubmit={handleAdd} className="flex gap-1.5 mb-3">
         <Input
           type="email"
           placeholder="correo@ejemplo.com"
           value={newEmail}
           onChange={(e) => setNewEmail(e.target.value)}
           required
+          className="min-w-0 flex-1 text-xs h-8"
         />
-        <Button type="submit" disabled={busy}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : "Autorizar"}
+        <Button type="submit" disabled={busy} size="sm" className="h-8 text-xs shrink-0">
+          {busy ? <Loader2 className="size-3 animate-spin" /> : "Agregar"}
         </Button>
       </form>
 
@@ -381,41 +347,41 @@ function UserManagementSection() {
           <p className="text-sm text-muted-foreground">No hay usuarios autorizados.</p>
         )}
         {allowedUsers.map((u) => (
-          <div key={u.id} className="flex items-center justify-between rounded-xl border p-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <span className={`size-2 rounded-full shrink-0 ${u.active ? "bg-green-500" : "bg-red-400"}`} />
-              <div className="min-w-0">
+          <div key={u.id} className="rounded-lg border px-3 py-2 space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`size-1.5 rounded-full shrink-0 ${u.active ? "bg-green-500" : "bg-red-400"}`} />
                 <p className="text-sm font-medium truncate">{u.email}</p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{u.role === "admin" ? "Administrador" : "Usuario"}</span>
-                  <span>·</span>
-                  <span>{u.active ? "Activo" : "Inactivo"}</span>
-                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <select
+                  value={u.role ?? "user"}
+                  onChange={(e) => changeRole(u, e.target.value)}
+                  className="h-6 text-[10px] rounded border border-input bg-transparent px-1"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button
+                  onClick={() => toggleActive(u)}
+                  className="p-1 rounded hover:bg-muted/50"
+                  title={u.active ? "Desactivar" : "Activar"}
+                >
+                  {u.active ? <ShieldCheck className="size-3 text-green-500" /> : <Shield className="size-3 text-muted-foreground" />}
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(u)}
+                  className="p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-muted-foreground hover:text-red-500 text-xs"
+                  title="Eliminar"
+                >
+                  ✕
+                </button>
               </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <select
-                value={u.role ?? "user"}
-                onChange={(e) => changeRole(u, e.target.value)}
-                className="h-7 text-xs rounded-md border border-input bg-transparent px-2"
-              >
-                <option value="user">Usuario</option>
-                <option value="admin">Admin</option>
-              </select>
-              <button
-                onClick={() => toggleActive(u)}
-                className="p-1.5 rounded hover:bg-muted/50 text-xs"
-                title={u.active ? "Desactivar" : "Activar"}
-              >
-                {u.active ? <ShieldCheck className="size-3.5 text-green-500" /> : <Shield className="size-3.5 text-muted-foreground" />}
-              </button>
-              <button
-                onClick={() => setDeleteTarget(u)}
-                className="p-1.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-xs text-muted-foreground hover:text-red-500"
-                title="Eliminar"
-              >
-                ✕
-              </button>
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground pl-3.5">
+              <span>{u.role === "admin" ? "Administrador" : "Usuario"}</span>
+              <span>·</span>
+              <span>{u.active ? "Activo" : "Inactivo"}</span>
             </div>
           </div>
         ))}

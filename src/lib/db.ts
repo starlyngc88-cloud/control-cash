@@ -278,6 +278,52 @@ export async function getDashboardData(months: string[]) {
   }
 }
 
+export type YearlyMonth = {
+  month: string
+  ingresos: number
+  gastos: number
+  presupuesto: number
+  balance: number
+}
+
+export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
+  const months: YearlyMonth[] = []
+  for (let m = 1; m <= 12; m++) {
+    const monthStr = `${year}-${String(m).padStart(2, "0")}`
+    const startOfMonth = monthStr + "-01"
+    const endOfMonth = new Date(year, m, 0).toISOString().split("T")[0]
+
+    const [incomeResult, expenseResult] = await Promise.all([
+      supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
+      supabase.from("expenses").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
+    ])
+
+    const ingresos = incomeResult.data?.reduce((s, i) => s + Number(i.amount), 0) ?? 0
+    const gastos = expenseResult.data?.reduce((s, e) => s + Number(e.amount), 0) ?? 0
+
+    const { data: mb } = await supabase
+      .from("monthly_budgets")
+      .select("template_id")
+      .eq("month", startOfMonth)
+      .maybeSingle()
+
+    let presupuesto = 0
+    if (mb) {
+      const { data: cats } = await supabase
+        .from("budget_categories")
+        .select("id, budgeted, parent_id")
+        .eq("template_id", mb.template_id)
+      if (cats && cats.length > 0) {
+        const parentIds = new Set(cats.filter(c => c.parent_id).map(c => c.parent_id))
+        presupuesto = cats.filter(c => !parentIds.has(c.id)).reduce((s, c) => s + Number(c.budgeted), 0)
+      }
+    }
+
+    months.push({ month: monthStr, ingresos, gastos, presupuesto, balance: ingresos - gastos })
+  }
+  return months
+}
+
 /* ---- Budget Templates ---- */
 
 export async function getBudgetTemplates() {

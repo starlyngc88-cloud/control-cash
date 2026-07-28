@@ -113,7 +113,7 @@ export function Sidebar() {
                 )}
               >
                 <span className="text-base shrink-0">{emojiMap.personalizacion}</span>
-                <span>{nav.personalizacion}</span>
+                <span>Personalización</span>
               </Link>
               <Link
                 href="/personas"
