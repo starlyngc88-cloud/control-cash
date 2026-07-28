@@ -16,6 +16,7 @@ import { getPeople, createPerson, updatePerson, deletePerson } from "@/lib/db"
 import type { Person } from "@/types"
 import { Plus, Trash2, Pencil, Users } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { friendlyError } from "@/lib/errors"
 
 export default function PersonasPage() {
   const [people, setPeople] = useState<Person[]>([])
@@ -23,6 +24,8 @@ export default function PersonasPage() {
   const [editing, setEditing] = useState<Person | null>(null)
   const [loading, setLoading] = useState(true)
   const [name, setName] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t } = useLanguage()
   const p = t.personas
 
@@ -49,21 +52,35 @@ export default function PersonasPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    if (editing) {
-      await updatePerson(editing.id, { name: name.trim() })
-    } else {
-      await createPerson({ name: name.trim() })
+    setSubmitting(true)
+    try {
+      if (editing) {
+        await updatePerson(editing.id, { name: name.trim() })
+      } else {
+        await createPerson({ name: name.trim() })
+      }
+      setOpen(false)
+      setName("")
+      setEditing(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpen(false)
-    setName("")
-    setEditing(null)
-    load()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm(p.deleteConfirm)) return
-    await deletePerson(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deletePerson(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
@@ -72,6 +89,7 @@ export default function PersonasPage() {
 
   return (
     <div className="space-y-6">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30">
@@ -91,7 +109,7 @@ export default function PersonasPage() {
                 <Label htmlFor="name">{p.nombre}</Label>
                 <Input id="name" placeholder={p.nombrePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
-              <Button type="submit" className="w-full">{editing ? p.guardarCambios : p.crearPersona}</Button>
+              <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? p.guardarCambios : p.crearPersona}</Button>
             </form>
           </DialogContent>
         </Dialog>

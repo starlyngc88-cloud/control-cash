@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Circle, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { friendlyError } from "@/lib/errors"
 
 export default function MonthlyBudgetPage() {
   const params = useParams()
@@ -25,6 +26,8 @@ export default function MonthlyBudgetPage() {
   const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const d = t.presupuestoDetail
 
@@ -38,13 +41,17 @@ export default function MonthlyBudgetPage() {
 
   useEffect(() => {
     if (!id) return
-    Promise.all([getMonthlyBudgetDashboard(id), getPeople()])
-      .then(([res, p]) => {
+    ;(async () => {
+      try {
+        const [res, p] = await Promise.all([getMonthlyBudgetDashboard(id), getPeople()])
         setData(res)
         setPeople(p)
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false))
+      } catch (err) {
+        setError(friendlyError(err))
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [id])
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
@@ -78,16 +85,23 @@ export default function MonthlyBudgetPage() {
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!expAmount || !expPerson) return
-    await createExpense({
-      person_id: expPerson,
-      amount: parseFloat(expAmount),
-      description: expDesc || expCatName,
-      date: expDate,
-      budget_category_id: expCatId,
-    })
-    setOpenExpense(false)
-    const res = await getMonthlyBudgetDashboard(id)
-    setData(res)
+    setSubmitting(true)
+    try {
+      await createExpense({
+        person_id: expPerson,
+        amount: parseFloat(expAmount),
+        description: expDesc || expCatName,
+        date: expDate,
+        budget_category_id: expCatId,
+      })
+      setOpenExpense(false)
+      const res = await getMonthlyBudgetDashboard(id)
+      setData(res)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const toggle = (id: string) => {
@@ -101,6 +115,7 @@ export default function MonthlyBudgetPage() {
 
   return (
     <div className="space-y-3">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
       <div className="flex items-center gap-2">
         <Link href="/presupuestos" className="flex items-center justify-center size-7 rounded hover:bg-muted">
           <ArrowLeft className="size-4" />
@@ -268,7 +283,7 @@ export default function MonthlyBudgetPage() {
               <Label htmlFor="expDate">Fecha</Label>
               <Input id="expDate" type="date" value={expDate} onChange={(e) => setExpDate(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full">Guardar gasto</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : "Guardar gasto"}</Button>
           </form>
         </DialogContent>
       </Dialog>

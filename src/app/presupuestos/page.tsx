@@ -29,12 +29,15 @@ import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/t
 import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, PiggyBank, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { DateFilter } from "@/components/DateFilter"
+import { friendlyError } from "@/lib/errors"
 
 export default function PresupuestosPage() {
   const [template, setTemplate] = useState<BudgetTemplate | null>(null)
   const [categories, setCategories] = useState<BudgetCategory[]>([])
   const [monthlyBudgets, setMonthlyBudgets] = useState<(MonthlyBudget & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const p = t.presupuestos
 
@@ -100,43 +103,64 @@ export default function PresupuestosPage() {
 
   const handleAddCategory = async (name: string, budgeted: string, parentId: string | null) => {
     if (!template || !name.trim() || !budgeted) return
-    await createBudgetCategory({
-      template_id: template.id,
-      name: name.trim(),
-      budgeted: parseFloat(budgeted),
-      parent_id: parentId,
-    })
-    setAddingSub(null)
-    setSubCatName("")
-    setSubCatBudgeted("")
-    load()
+    setSubmitting(true)
+    try {
+      await createBudgetCategory({
+        template_id: template.id,
+        name: name.trim(),
+        budgeted: parseFloat(budgeted),
+        parent_id: parentId,
+      })
+      setAddingSub(null)
+      setSubCatName("")
+      setSubCatBudgeted("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleSubmitNewParentCat = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!template || !newCatName.trim()) return
     if (!newCatHasSub && !newCatBudgeted) return
-    await createBudgetCategory({
-      template_id: template.id,
-      name: newCatName.trim(),
-      budgeted: newCatHasSub ? 0 : parseFloat(newCatBudgeted),
-      parent_id: null,
-    })
-    setOpenNewCat(false)
-    load()
+    setSubmitting(true)
+    try {
+      await createBudgetCategory({
+        template_id: template.id,
+        name: newCatName.trim(),
+        budgeted: newCatHasSub ? 0 : parseFloat(newCatBudgeted),
+        parent_id: null,
+      })
+      setOpenNewCat(false)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleEditCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editingCat || !editCatName.trim()) return
-    if (editCatHasChildren || editCatHasSub) {
-      await updateBudgetCategory(editingCat.id, { name: editCatName.trim(), budgeted: 0 })
-    } else {
-      await updateBudgetCategory(editingCat.id, { name: editCatName.trim(), budgeted: parseFloat(editCatBudgeted || "0") })
+    setSubmitting(true)
+    try {
+      if (editCatHasChildren || editCatHasSub) {
+        await updateBudgetCategory(editingCat.id, { name: editCatName.trim(), budgeted: 0 })
+      } else {
+        await updateBudgetCategory(editingCat.id, { name: editCatName.trim(), budgeted: parseFloat(editCatBudgeted || "0") })
+      }
+      setOpenCatEdit(false)
+      setEditingCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCatEdit(false)
-    setEditingCat(null)
-    load()
   }
 
   const handleDeleteCategory = async (id: string, name: string) => {
@@ -147,36 +171,64 @@ export default function PresupuestosPage() {
       setDeleteCatExpenses(expenses)
       setOpenDeleteCat(true)
     } else {
-      await deleteBudgetCategory(id)
-      load()
+      setSubmitting(true)
+      try {
+        await deleteBudgetCategory(id)
+        load()
+      } catch (err) {
+        setError(friendlyError(err))
+      } finally {
+        setSubmitting(false)
+      }
     }
   }
 
   const confirmDeleteCategory = async () => {
-    for (const exp of deleteCatExpenses) {
-      await supabase.from("expenses").delete().eq("id", exp.id)
+    setSubmitting(true)
+    try {
+      for (const exp of deleteCatExpenses) {
+        await supabase.from("expenses").delete().eq("id", exp.id)
+      }
+      await deleteBudgetCategory(deleteCatId)
+      setOpenDeleteCat(false)
+      setDeleteCatExpenses([])
+      setDeleteCatId("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    await deleteBudgetCategory(deleteCatId)
-    setOpenDeleteCat(false)
-    setDeleteCatExpenses([])
-    setDeleteCatId("")
-    load()
   }
 
   const handleCreateMonth = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!template || !selectedMonth) return
-    const firstDay = selectedMonth + "-01"
-    await createMonthlyBudget({ template_id: template.id, month: firstDay })
-    setOpenMonth(false)
-    setSelectedMonth("")
-    load()
+    setSubmitting(true)
+    try {
+      const firstDay = selectedMonth + "-01"
+      await createMonthlyBudget({ template_id: template.id, month: firstDay })
+      setOpenMonth(false)
+      setSelectedMonth("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleDeleteMonth = async (id: string) => {
     if (!confirm(p.deleteMonthConfirm)) return
-    await deleteMonthlyBudget(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteMonthlyBudget(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const formatMonth = (dateStr: string) => {
@@ -193,6 +245,7 @@ export default function PresupuestosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30">
@@ -395,7 +448,7 @@ export default function PresupuestosPage() {
                 )}
               </>
             )}
-            <Button type="submit" className="w-full">{p.catGuardarCambios}</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : p.catGuardarCambios}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -431,7 +484,7 @@ export default function PresupuestosPage() {
                 })}
               </div>
             )}
-            <Button type="submit" size="sm" className="w-full text-xs h-7">{p.crearMes}</Button>
+            <Button type="submit" size="sm" className="w-full text-xs h-7" disabled={submitting}>{submitting ? "Creando..." : p.crearMes}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -461,7 +514,7 @@ export default function PresupuestosPage() {
                 <Input id="addCatBudgeted" type="number" step="0.01" min="0" value={newCatBudgeted} onChange={(e) => setNewCatBudgeted(e.target.value)} required />
               </div>
             )}
-            <Button type="submit" className="w-full">{p.agregarRubro}</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Agregando..." : p.agregarRubro}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -489,7 +542,7 @@ export default function PresupuestosPage() {
             )}
             <div className="flex gap-2 pt-1">
               <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => setOpenDeleteCat(false)}>Cancelar</Button>
-              <Button variant="destructive" size="sm" className="flex-1 text-xs" onClick={confirmDeleteCategory}>Eliminar todo</Button>
+              <Button variant="destructive" size="sm" className="flex-1 text-xs" onClick={confirmDeleteCategory} disabled={submitting}>{submitting ? "Eliminando..." : "Eliminar todo"}</Button>
             </div>
           </div>
         </DialogContent>

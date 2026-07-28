@@ -27,6 +27,7 @@ import {
 import type { FutureExpense, FutureExpenseCategory } from "@/types"
 import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRight, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { friendlyError } from "@/lib/errors"
 
 function getUrgencyClass(expectedDate: string): string {
   const now = new Date()
@@ -63,6 +64,8 @@ export default function GastosFuturosPage() {
   const [editing, setEditing] = useState<FutureExpense | null>(null)
   const [loading, setLoading] = useState(true)
   const [successMsg, setSuccessMsg] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.gastosFuturos
@@ -137,40 +140,61 @@ export default function GastosFuturosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!title || !expectedAmount || !expectedDate) return
-    const catName = categories.find((c) => c.id === categoryId)?.name ?? ""
-    const data = {
-      title,
-      description,
-      category: catName,
-      category_id: categoryId || null,
-      expected_amount: parseFloat(expectedAmount),
-      expected_date: expectedDate,
+    setSubmitting(true)
+    try {
+      const catName = categories.find((c) => c.id === categoryId)?.name ?? ""
+      const data = {
+        title,
+        description,
+        category: catName,
+        category_id: categoryId || null,
+        expected_amount: parseFloat(expectedAmount),
+        expected_date: expectedDate,
+      }
+      if (editing) {
+        await updateFutureExpense(editing.id, data)
+      } else {
+        await createFutureExpense(data)
+      }
+      setOpen(false)
+      setEditing(null)
+      setTitle("")
+      setDescription("")
+      setCategoryId("")
+      setExpectedAmount("")
+      setExpectedDate("")
+      setPlanCuota("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    if (editing) {
-      await updateFutureExpense(editing.id, data)
-    } else {
-      await createFutureExpense(data)
-    }
-    setOpen(false)
-    setEditing(null)
-    setTitle("")
-    setDescription("")
-    setCategoryId("")
-    setExpectedAmount("")
-    setExpectedDate("")
-    setPlanCuota("")
-    load()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm(dict.deleteConfirm)) return
-    await deleteFutureExpense(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteFutureExpense(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleMarkCompleted = async (id: string) => {
-    await updateFutureExpenseStatus(id, "completed")
-    load()
+    setSubmitting(true)
+    try {
+      await updateFutureExpenseStatus(id, "completed")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewCat = () => {
@@ -188,14 +212,21 @@ export default function GastosFuturosPage() {
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim()) return
-    if (editingCat) {
-      await updateFutureExpenseCategory(editingCat.id, { name: catName.trim() })
-    } else {
-      await createFutureExpenseCategory({ name: catName.trim() })
+    setSubmitting(true)
+    try {
+      if (editingCat) {
+        await updateFutureExpenseCategory(editingCat.id, { name: catName.trim() })
+      } else {
+        await createFutureExpenseCategory({ name: catName.trim() })
+      }
+      setOpenCat(false)
+      setEditingCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCat(false)
-    setEditingCat(null)
-    load()
   }
 
   const catDeleteExpenses = catToDelete
@@ -209,11 +240,18 @@ export default function GastosFuturosPage() {
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    const ids = catDeleteExpenses.map((e) => e.id)
-    await Promise.all(ids.map((id) => deleteFutureExpense(id)))
-    await deleteFutureExpenseCategory(catToDelete.id)
-    setCatToDelete(null)
-    load()
+    setSubmitting(true)
+    try {
+      const ids = catDeleteExpenses.map((e) => e.id)
+      await Promise.all(ids.map((id) => deleteFutureExpense(id)))
+      await deleteFutureExpenseCategory(catToDelete.id)
+      setCatToDelete(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const planCalc = useMemo(() => {
@@ -246,6 +284,7 @@ export default function GastosFuturosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -266,7 +305,7 @@ export default function GastosFuturosPage() {
                   <Label htmlFor="catName">Nombre</Label>
                   <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -291,9 +330,9 @@ export default function GastosFuturosPage() {
                 )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={confirmDeleteCat}>
-                    Eliminar {catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}
-                  </Button>
+              <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
+                {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}`}
+              </Button>
                 </div>
               </div>
             </DialogContent>
@@ -346,7 +385,7 @@ export default function GastosFuturosPage() {
                     )}
                   </div>
                 )}
-                <Button type="submit" className="w-full">{editing ? dict.guardarCambios : dict.guardar}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>

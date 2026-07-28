@@ -27,6 +27,7 @@ import type { Person, Income, IncomeCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowDownCircle, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { DateFilter } from "@/components/DateFilter"
+import { friendlyError } from "@/lib/errors"
 import { useMonthFilter } from "@/components/MonthFilterContext"
 
 export default function IngresosPage() {
@@ -36,6 +37,8 @@ export default function IngresosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Income | null>(null)
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const inc = t.ingresos
   const { months } = useMonthFilter()
@@ -94,26 +97,40 @@ export default function IngresosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!personId || !amount) return
-    const data = { person_id: personId, amount: parseFloat(amount), description, date, category_id: categoryId || null }
-    if (editing) {
-      await updateIncome(editing.id, data)
-    } else {
-      await createIncome(data)
+    setSubmitting(true)
+    try {
+      const data = { person_id: personId, amount: parseFloat(amount), description, date, category_id: categoryId || null }
+      if (editing) {
+        await updateIncome(editing.id, data)
+      } else {
+        await createIncome(data)
+      }
+      setOpen(false)
+      setEditing(null)
+      setPersonId("")
+      setAmount("")
+      setDescription("")
+      setDate(new Date().toISOString().split("T")[0])
+      setCategoryId("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpen(false)
-    setEditing(null)
-    setPersonId("")
-    setAmount("")
-    setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
-    setCategoryId("")
-    load()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm(inc.deleteConfirm)) return
-    await deleteIncome(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteIncome(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewCat = () => {
@@ -131,14 +148,21 @@ export default function IngresosPage() {
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim()) return
-    if (editingCat) {
-      await updateIncomeCategory(editingCat.id, { name: catName.trim() })
-    } else {
-      await createIncomeCategory({ name: catName.trim() })
+    setSubmitting(true)
+    try {
+      if (editingCat) {
+        await updateIncomeCategory(editingCat.id, { name: catName.trim() })
+      } else {
+        await createIncomeCategory({ name: catName.trim() })
+      }
+      setOpenCat(false)
+      setEditingCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCat(false)
-    setEditingCat(null)
-    load()
   }
 
   const catDeleteIncomes = catToDelete
@@ -152,9 +176,16 @@ export default function IngresosPage() {
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    await deleteIncomeCategory(catToDelete.id)
-    setCatToDelete(null)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteIncomeCategory(catToDelete.id)
+      setCatToDelete(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
@@ -163,6 +194,7 @@ export default function IngresosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -184,7 +216,7 @@ export default function IngresosPage() {
                   <Label htmlFor="catName">Nombre</Label>
                   <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -207,7 +239,7 @@ export default function IngresosPage() {
                 )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={confirmDeleteCat}>Eliminar</Button>
+                  <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>{submitting ? "Eliminando..." : "Eliminar"}</Button>
                 </div>
               </div>
             </DialogContent>
@@ -256,7 +288,7 @@ export default function IngresosPage() {
                   <Label htmlFor="date">{inc.fecha}</Label>
                   <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full">{editing ? inc.guardarCambios : inc.guardar}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? inc.guardarCambios : inc.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>

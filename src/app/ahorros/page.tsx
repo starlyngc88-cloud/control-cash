@@ -28,6 +28,7 @@ import {
 import type { Saving, SavingMovement, SavingCategory } from "@/types"
 import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { friendlyError } from "@/lib/errors"
 
 export default function AhorrosPage() {
   const [savings, setSavings] = useState<(Saving & { saving_categories: Pick<SavingCategory, "name"> | null })[]>([])
@@ -43,6 +44,8 @@ export default function AhorrosPage() {
   const [editing, setEditing] = useState<Saving | null>(null)
   const [loading, setLoading] = useState(true)
   const [successMsg, setSuccessMsg] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.ahorros
@@ -103,28 +106,42 @@ export default function AhorrosPage() {
   const handleSavingSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name) return
-    const data = {
-      name,
-      description,
-      category_id: savingCategoryId || null,
+    setSubmitting(true)
+    try {
+      const data = {
+        name,
+        description,
+        category_id: savingCategoryId || null,
+      }
+      if (editing) {
+        await updateSaving(editing.id, data)
+      } else {
+        await createSaving(data)
+      }
+      setOpenSaving(false)
+      setEditing(null)
+      setName("")
+      setDescription("")
+      setSavingCategoryId("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    if (editing) {
-      await updateSaving(editing.id, data)
-    } else {
-      await createSaving(data)
-    }
-    setOpenSaving(false)
-    setEditing(null)
-    setName("")
-    setDescription("")
-    setSavingCategoryId("")
-    load()
   }
 
   const handleDeleteSaving = async (id: string) => {
     if (!confirm(dict.deleteConfirm)) return
-    await deleteSaving(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteSaving(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewMovement = (savingId: string) => {
@@ -139,18 +156,25 @@ export default function AhorrosPage() {
   const handleMovementSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!movementSavingId || !movAmount) return
-    await createSavingMovement({
-      saving_id: movementSavingId,
-      type: movType,
-      amount: parseFloat(movAmount),
-      notes: movNotes,
-      movement_date: movDate,
-    })
-    setOpenMovement(false)
-    setMovementSavingId(null)
-    setSuccessMsg(true)
-    setTimeout(() => setSuccessMsg(false), 3000)
-    load()
+    setSubmitting(true)
+    try {
+      await createSavingMovement({
+        saving_id: movementSavingId,
+        type: movType,
+        amount: parseFloat(movAmount),
+        notes: movNotes,
+        movement_date: movDate,
+      })
+      setOpenMovement(false)
+      setMovementSavingId(null)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewCat = () => {
@@ -168,15 +192,22 @@ export default function AhorrosPage() {
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim()) return
-    if (editingCat) {
-      await updateSavingCategory(editingCat.id, { name: catName.trim() })
-    } else {
-      await createSavingCategory({ name: catName.trim() })
+    setSubmitting(true)
+    try {
+      if (editingCat) {
+        await updateSavingCategory(editingCat.id, { name: catName.trim() })
+      } else {
+        await createSavingCategory({ name: catName.trim() })
+      }
+      setOpenCat(false)
+      setEditingCat(null)
+      setCatName("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCat(false)
-    setEditingCat(null)
-    setCatName("")
-    load()
   }
 
   const catDeleteExpenses = catToDelete
@@ -190,11 +221,18 @@ export default function AhorrosPage() {
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    const ids = savings.filter((s) => s.category_id === catToDelete.id).map((s) => s.id)
-    await Promise.all(ids.map((id) => deleteSaving(id)))
-    await deleteSavingCategory(catToDelete.id)
-    setCatToDelete(null)
-    load()
+    setSubmitting(true)
+    try {
+      const ids = savings.filter((s) => s.category_id === catToDelete.id).map((s) => s.id)
+      await Promise.all(ids.map((id) => deleteSaving(id)))
+      await deleteSavingCategory(catToDelete.id)
+      setCatToDelete(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
@@ -208,6 +246,7 @@ export default function AhorrosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -228,7 +267,7 @@ export default function AhorrosPage() {
                   <Label htmlFor="catName">Nombre</Label>
                   <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -253,8 +292,8 @@ export default function AhorrosPage() {
                 )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={confirmDeleteCat}>
-                    Eliminar {catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} huchas)` : ""}
+                  <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
+                    {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} huchas)` : ""}`}
                   </Button>
                 </div>
               </div>
@@ -287,7 +326,7 @@ export default function AhorrosPage() {
                     ))}
                   </select>
                 </div>
-                <Button type="submit" className="w-full">{editing ? dict.guardarCambios : dict.guardar}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -455,8 +494,8 @@ export default function AhorrosPage() {
               <Label htmlFor="movDate">{dict.fecha}</Label>
               <Input id="movDate" type="date" value={movDate} onChange={(e) => setMovDate(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full">
-              {movType === "income" ? dict.addMoney : dict.withdrawMoney}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "Procesando..." : movType === "income" ? dict.addMoney : dict.withdrawMoney}
             </Button>
           </form>
         </DialogContent>

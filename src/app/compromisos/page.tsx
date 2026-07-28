@@ -29,6 +29,7 @@ import {
 import type { Commitment, CommitmentPayment, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ShieldCheck, ArrowDownCircle, ChevronDown, ChevronRight, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
+import { friendlyError } from "@/lib/errors"
 
 export default function CompromisosPage() {
   const [commitments, setCommitments] = useState<(Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null })[]>([])
@@ -39,6 +40,8 @@ export default function CompromisosPage() {
   const [editing, setEditing] = useState<Commitment | null>(null)
   const [loading, setLoading] = useState(true)
   const [expandedComm, setExpandedComm] = useState<Set<string>>(new Set())
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const dict = t.compromisos
 
@@ -118,32 +121,46 @@ export default function CompromisosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !totalAmount || !currentBalance) return
-    const data = {
-      name,
-      description: descrip,
-      total_amount: parseFloat(totalAmount),
-      current_balance: parseFloat(currentBalance),
-      category_id: commCategoryId || null,
+    setSubmitting(true)
+    try {
+      const data = {
+        name,
+        description: descrip,
+        total_amount: parseFloat(totalAmount),
+        current_balance: parseFloat(currentBalance),
+        category_id: commCategoryId || null,
+      }
+      if (editing) {
+        await updateCommitment(editing.id, data)
+      } else {
+        await createCommitment(data)
+      }
+      setOpen(false)
+      setEditing(null)
+      setName("")
+      setDescrip("")
+      setTotalAmount("")
+      setCurrentBalance("")
+      setCommCategoryId("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    if (editing) {
-      await updateCommitment(editing.id, data)
-    } else {
-      await createCommitment(data)
-    }
-    setOpen(false)
-    setEditing(null)
-    setName("")
-    setDescrip("")
-    setTotalAmount("")
-    setCurrentBalance("")
-    setCommCategoryId("")
-    load()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm(dict.deleteConfirm)) return
-    await deleteCommitment(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteCommitment(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openPayDialog = (comm: Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null }) => {
@@ -159,15 +176,22 @@ export default function CompromisosPage() {
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!payCommId || !payAmount || !payCapital) return
-    await createCommitmentPayment({
-      commitment_id: payCommId,
-      amount: parseFloat(payAmount),
-      capital_amount: parseFloat(payCapital),
-      date: payDate,
-      notes: payNotes,
-    })
-    setOpenPay(false)
-    load()
+    setSubmitting(true)
+    try {
+      await createCommitmentPayment({
+        commitment_id: payCommId,
+        amount: parseFloat(payAmount),
+        capital_amount: parseFloat(payCapital),
+        date: payDate,
+        notes: payNotes,
+      })
+      setOpenPay(false)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewCat = () => {
@@ -187,14 +211,21 @@ export default function CompromisosPage() {
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim() || !templateId) return
-    if (editingCat) {
-      await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: parseFloat(catBudgeted || "0"), parent_id: editingCat.parent_id })
-    } else {
-      await createBudgetCategory({ template_id: templateId, name: catName.trim(), budgeted: parseFloat(catBudgeted || "0") })
+    setSubmitting(true)
+    try {
+      if (editingCat) {
+        await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: parseFloat(catBudgeted || "0"), parent_id: editingCat.parent_id })
+      } else {
+        await createBudgetCategory({ template_id: templateId, name: catName.trim(), budgeted: parseFloat(catBudgeted || "0") })
+      }
+      setOpenCat(false)
+      setEditingCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCat(false)
-    setEditingCat(null)
-    load()
   }
 
   const catDeleteExpenses = catToDelete
@@ -208,9 +239,16 @@ export default function CompromisosPage() {
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    await deleteBudgetCategory(catToDelete.id)
-    setCatToDelete(null)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteBudgetCategory(catToDelete.id)
+      setCatToDelete(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
@@ -222,6 +260,7 @@ export default function CompromisosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -246,7 +285,7 @@ export default function CompromisosPage() {
                   <Label htmlFor="catBudgeted">Presupuestado</Label>
                   <Input id="catBudgeted" type="number" step="0.01" min="0" value={catBudgeted} onChange={(e) => setCatBudgeted(e.target.value)} />
                 </div>
-                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -269,7 +308,7 @@ export default function CompromisosPage() {
                 )}
                 <div className="flex justify-end gap-2 pt-2">
                   <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={confirmDeleteCat}>Eliminar</Button>
+                  <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>{submitting ? "Eliminando..." : "Eliminar"}</Button>
                 </div>
               </div>
             </DialogContent>
@@ -309,7 +348,7 @@ export default function CompromisosPage() {
                     ))}
                   </select>
                 </div>
-                <Button type="submit" className="w-full">{editing ? dict.guardarCambios : dict.guardar}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -464,7 +503,7 @@ export default function CompromisosPage() {
               <Label htmlFor="payDate">{dict.pagoFecha}</Label>
               <Input id="payDate" type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full">{dict.pagar}</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Procesando..." : dict.pagar}</Button>
           </form>
         </DialogContent>
       </Dialog>

@@ -18,6 +18,7 @@ import type { Person, Expense, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle, ChevronDown, ChevronRight, List } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { DateFilter } from "@/components/DateFilter"
+import { friendlyError } from "@/lib/errors"
 import { useMonthFilter } from "@/components/MonthFilterContext"
 
 export default function GastosPage() {
@@ -26,6 +27,8 @@ export default function GastosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const g = t.gastos
   const { months } = useMonthFilter()
@@ -74,7 +77,7 @@ export default function GastosPage() {
     setOpen(true)
   }
 
-  const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; budget_categories: any }) => {
+  const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; budget_categories: Pick<BudgetCategory, "id" | "name" | "template_id" | "budgeted"> | null }) => {
     setEditing(exp)
     setPersonId(exp.person_id)
     setAmount(String(exp.amount))
@@ -87,32 +90,46 @@ export default function GastosPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!personId || !amount) return
-    const data = {
-      person_id: personId,
-      amount: parseFloat(amount),
-      description,
-      date,
-      budget_category_id: budgetCatId || null,
+    setSubmitting(true)
+    try {
+      const data = {
+        person_id: personId,
+        amount: parseFloat(amount),
+        description,
+        date,
+        budget_category_id: budgetCatId || null,
+      }
+      if (editing) {
+        await updateExpense(editing.id, data)
+      } else {
+        await createExpense(data)
+      }
+      setOpen(false)
+      setEditing(null)
+      setPersonId("")
+      setAmount("")
+      setDescription("")
+      setDate(new Date().toISOString().split("T")[0])
+      setBudgetCatId("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    if (editing) {
-      await updateExpense(editing.id, data)
-    } else {
-      await createExpense(data)
-    }
-    setOpen(false)
-    setEditing(null)
-    setPersonId("")
-    setAmount("")
-    setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
-    setBudgetCatId("")
-    load()
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm(g.deleteConfirm)) return
-    await deleteExpense(id)
-    load()
+    setSubmitting(true)
+    try {
+      await deleteExpense(id)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewCat = () => {
@@ -130,17 +147,24 @@ export default function GastosPage() {
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim()) return
-    const templates = await getBudgetTemplates()
-    const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
-    if (!base) return
-    if (editingCat) {
-      await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: editingCat.budgeted })
-    } else {
-      await createBudgetCategory({ template_id: base.id, name: catName.trim(), budgeted: 0, parent_id: null })
+    setSubmitting(true)
+    try {
+      const templates = await getBudgetTemplates()
+      const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
+      if (!base) return
+      if (editingCat) {
+        await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: editingCat.budgeted })
+      } else {
+        await createBudgetCategory({ template_id: base.id, name: catName.trim(), budgeted: 0, parent_id: null })
+      }
+      setOpenCat(false)
+      setEditingCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    setOpenCat(false)
-    setEditingCat(null)
-    load()
   }
 
   const handleDeleteCat = async (catId: string, catName: string) => {
@@ -149,20 +173,34 @@ export default function GastosPage() {
       setCatDeleteExpenses(related)
       setCatToDelete({ id: catId, name: catName })
     } else {
-      await deleteBudgetCategory(catId)
-      load()
+      setSubmitting(true)
+      try {
+        await deleteBudgetCategory(catId)
+        load()
+      } catch (err) {
+        setError(friendlyError(err))
+      } finally {
+        setSubmitting(false)
+      }
     }
   }
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return
-    for (const exp of catDeleteExpenses) {
-      await deleteExpense(exp.id)
+    setSubmitting(true)
+    try {
+      for (const exp of catDeleteExpenses) {
+        await deleteExpense(exp.id)
+      }
+      await deleteBudgetCategory(catToDelete.id)
+      setCatToDelete(null)
+      setCatDeleteExpenses([])
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
     }
-    await deleteBudgetCategory(catToDelete.id)
-    setCatToDelete(null)
-    setCatDeleteExpenses([])
-    load()
   }
 
   const grouped = useMemo(() => {
@@ -221,6 +259,7 @@ export default function GastosPage() {
 
   return (
     <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
           <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
@@ -242,7 +281,7 @@ export default function GastosPage() {
                   <Label htmlFor="catName">Nombre</Label>
                   <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full">{editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -303,7 +342,7 @@ export default function GastosPage() {
                     })()}
                   </select>
                 </div>
-                <Button type="submit" className="w-full">{editing ? g.guardarCambios : g.guardar}</Button>
+                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? g.guardarCambios : g.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -514,8 +553,8 @@ export default function GastosPage() {
             )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-              <Button variant="destructive" onClick={confirmDeleteCat}>
-                Eliminar {catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}
+              <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
+                {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}`}
               </Button>
             </div>
           </div>

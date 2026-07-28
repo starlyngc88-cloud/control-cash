@@ -5,6 +5,7 @@ import { useLanguage } from "@/i18n/useLanguage"
 import { Palette, DollarSign, Key, Users, Shield, ShieldCheck, Loader2, Languages, Lock } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { supabase } from "@/lib/supabase"
+import { friendlyError } from "@/lib/errors"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -133,22 +134,28 @@ function SecuritySection() {
 
     setBusy(true)
 
-    const { error: signInErr } = await supabase.auth.signInWithPassword({
-      email: (await supabase.auth.getUser()).data.user?.email ?? "",
-      password: currentPassword,
-    })
+    try {
+      const { error: signInErr } = await supabase.auth.signInWithPassword({
+        email: (await supabase.auth.getUser()).data.user?.email ?? "",
+        password: currentPassword,
+      })
 
-    if (signInErr) {
-      setError("⚠️ Contraseña actual incorrecta.")
+      if (signInErr) {
+        setError("⚠️ Contraseña actual incorrecta.")
+        setBusy(false)
+        return
+      }
+
+      const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
       setBusy(false)
-      return
-    }
 
-    const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword })
-    setBusy(false)
-
-    if (updateErr) {
-      setError("⚠️ Epa, algo salió mal.")
+      if (updateErr) {
+        setError("⚠️ Epa, algo salió mal.")
+        return
+      }
+    } catch (err) {
+      setError(friendlyError(err))
+      setBusy(false)
       return
     }
 
@@ -250,18 +257,23 @@ function UserManagementSection() {
     if (!newEmail.trim()) return
 
     setBusy(true)
-    const { error: insertErr } = await supabase
-      .from("allowed_users")
-      .insert({ email: newEmail.trim().toLowerCase(), active: true })
-    setBusy(false)
+    try {
+      const { error: insertErr } = await supabase
+        .from("allowed_users")
+        .insert({ email: newEmail.trim().toLowerCase(), active: true })
+      setBusy(false)
 
-    if (insertErr) {
-      setError("⚠️ Epa, algo salió mal. El correo podría ya existir.")
-      return
+      if (insertErr) {
+        setError("⚠️ Epa, algo salió mal. El correo podría ya existir.")
+        return
+      }
+      setMessage("✅ Usuario autorizado agregado.")
+      setNewEmail("")
+      loadUsers()
+    } catch (err) {
+      setError(friendlyError(err))
+      setBusy(false)
     }
-    setMessage("✅ Usuario autorizado agregado.")
-    setNewEmail("")
-    loadUsers()
   }
 
   const toggleActive = async (u: AllowedUser & { role?: string }) => {
@@ -271,8 +283,12 @@ function UserManagementSection() {
       setError("⚠️ No puedes desactivar el último administrador.")
       return
     }
-    await supabase.from("allowed_users").update({ active: !u.active }).eq("id", u.id)
-    loadUsers()
+    try {
+      await supabase.from("allowed_users").update({ active: !u.active }).eq("id", u.id)
+      loadUsers()
+    } catch (err) {
+      setError(friendlyError(err))
+    }
   }
 
   const changeRole = async (u: AllowedUser & { role?: string }, newRole: string) => {
@@ -282,17 +298,21 @@ function UserManagementSection() {
       return
     }
     setError("")
-    const { data: existingRole } = await supabase
-      .from("user_roles")
-      .select("id")
-      .eq("user_id", u.id)
-      .maybeSingle()
-    if (existingRole) {
-      await supabase.from("user_roles").update({ role: newRole }).eq("user_id", u.id)
-    } else {
-      await supabase.from("user_roles").insert({ user_id: u.id, role: newRole })
+    try {
+      const { data: existingRole } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", u.id)
+        .maybeSingle()
+      if (existingRole) {
+        await supabase.from("user_roles").update({ role: newRole }).eq("user_id", u.id)
+      } else {
+        await supabase.from("user_roles").insert({ user_id: u.id, role: newRole })
+      }
+      loadUsers()
+    } catch (err) {
+      setError(friendlyError(err))
     }
-    loadUsers()
   }
 
   const confirmDelete = async () => {
@@ -303,9 +323,13 @@ function UserManagementSection() {
       setDeleteTarget(null)
       return
     }
-    await supabase.from("allowed_users").delete().eq("id", deleteTarget.id)
-    setDeleteTarget(null)
-    loadUsers()
+    try {
+      await supabase.from("allowed_users").delete().eq("id", deleteTarget.id)
+      setDeleteTarget(null)
+      loadUsers()
+    } catch (err) {
+      setError(friendlyError(err))
+    }
   }
 
   if (loading) return <p className="text-sm text-muted-foreground">Cargando...</p>
