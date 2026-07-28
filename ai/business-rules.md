@@ -37,9 +37,12 @@
 
 ## Dashboard
 
-- Filtro de fechas compartido con Ingresos, Gastos y Presupuestos
-- 3 tarjetas superiores: Ingresos/Gastos (barras), Balance, Presupuesto
-- Últimos movimientos: listado unificado ingresos + gastos ordenado por fecha
+- Filtro de meses compartido (MonthFilterContext) con Ingresos, Gastos y Presupuestos
+- Fila compacta de StatBadge: Ingresos/Gastos unificados (barra verde/rojo), Balance, Presupuesto (con link a presupuesto del mes si hay 1 mes seleccionado)
+- Layout 2 columnas: Evolución anual (gráfico vertical barras, 2/3) + Últimos movimientos (1/3)
+- Barra de progreso del presupuesto como banda horizontal al fondo
+- getYearlyData(año): devuelve array mensual con ingresos, gastos, presupuesto, balance
+- Evolución anual filtrada por meses seleccionados (máx 12 meses)
 
 ## Ahorros
 
@@ -59,9 +62,23 @@
 - Pagos parciales (capital + monto)
 - Seguimiento de saldo actual
 
+## Seguridad
+
+- Validación Zod en todas las operaciones create/update (14 schemas en validation.ts)
+- Sanitización XSS en todos los inputs (sanitize.ts)
+- Errores amigables: friendlyError() nunca expone detalles técnicos al usuario
+- RLS (Row Level Security): todas las tablas tienen user_id + política FOR ALL USING (user_id = auth.uid())
+- Security headers en next.config.ts
+- Submit buttons deshabilitados durante operaciones asíncronas
+
 ## Personalización (Configuración)
 
-- Cambio de moneda (COP/EUR)
-- Cambio de dialecto (standard/kellycaribe)
-- Cambio de contraseña
-- Gestión de usuarios permitidos (admin)
+- Grid 2-columnas con 4 cards: Idioma, Moneda, Seguridad, Usuarios
+- Idioma: radio buttons standard/kellycaribe con descripciones
+- Moneda: radio buttons COP/EUR con samples formateados
+- Seguridad: formulario cambio de contraseña (actual, nueva, confirmar) con validaciones
+- Usuarios (solo admin): lista con email + controls (rol, activo/inactivo, eliminar)
+  - Primera fila: email + select rol + toggle activo + botón eliminar
+  - Segunda fila: role/status como texto
+- Submit buttons con `disabled={busy}` + Loader2
+- friendlyError() para mensajes de error amigables

@@ -36,6 +36,7 @@
 | Ingresos | 💰 |
 | Gastos | 💸 |
 | Personas | 👥 |
+| Configuración (expandible) | ⚙️ |
 | Personalización | ⚙️ |
 | Guía | 📖 |
 

@@ -7,3 +7,6 @@ Pasos para revisar código:
 4. Verificar que componentes usen "use client" solo si necesario
 5. Verificar que no haya comentarios en código
 6. Verificar que el filtro de fechas (MonthFilterContext) esté integrado si la página muestra datos temporales
+7. Verificar que submit buttons tengan disabled={busy} + Loader2
+8. Verificar que errores usen friendlyError() en lugar de console.error o mensajes crudos
+9. Verificar que create/update funciones usen Zod validation + sanitize

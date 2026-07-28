@@ -19,7 +19,8 @@ Aplicación de finanzas familiares multi-persona que reemplaza las hojas de Exce
 1. **Simple > Complejo**: una acción por pantalla, mínimos clicks
 2. **Visible > Oculto**: la información importante siempre a la vista
 3. **Rápido > Bonito**: rendimiento sobre animaciones elaboradas
-4. ** Familiar > Formal**: lenguaje cercano, tono relajado
+4. **Familiar > Formal**: lenguaje cercano, tono relajado
+5. **Seguro > Confiado**: validación Zod, sanitización XSS, RLS, errores amigables
 
 ## Mobile (próximo)
 - App nativa (React Native / Flutter)
