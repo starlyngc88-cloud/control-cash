@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KellyCash - Rediseño de Finanzas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        primaryHover: '#4338ca',
+                        sidebar: '#0f172a',
+                        surface: '#ffffff',
+                        background: '#f8fafc'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-background font-sans text-slate-800 h-screen flex overflow-hidden">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-sidebar text-slate-300 flex flex-col transition-all duration-300">
+        <div class="h-16 flex items-center px-6 border-b border-slate-800">
+            <i class="fas fa-wallet text-indigo-500 text-2xl mr-3"></i>
+            <span class="text-white font-bold text-xl tracking-wide">KellyCash</span>
+        </div>
+        
+        <nav class="flex-1 py-6 px-3 space-y-1 overflow-y-auto custom-scrollbar">
+            <a href="#" onclick="switchView('dashboard')" class="nav-item active flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="dashboard">
+                <i class="fas fa-chart-pie w-6 text-center mr-2"></i> Dashboard
+            </a>
+            <a href="#" onclick="switchView('ingresos')" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="ingresos">
+                <i class="fas fa-arrow-down w-6 text-center mr-2 text-emerald-400"></i> Ingresos
+            </a>
+            <a href="#" onclick="switchView('gastos')" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="gastos">
+                <i class="fas fa-arrow-up w-6 text-center mr-2 text-rose-400"></i> Gastos
+            </a>
+            <a href="#" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors">
+                <i class="fas fa-calendar-alt w-6 text-center mr-2 text-orange-400"></i> Gastos Futuros
+            </a>
+            <a href="#" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors">
+                <i class="fas fa-handshake w-6 text-center mr-2 text-blue-400"></i> Compromisos
+            </a>
+            <a href="#" onclick="switchView('hucha')" class="nav-item flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors" data-target="hucha">
+                <i class="fas fa-piggy-bank w-6 text-center mr-2 text-pink-400"></i> Hucha
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800">
+            <a href="#" class="flex items-center px-3 py-2.5 rounded-lg text-sm font-medium hover:bg-slate-800 hover:text-white transition-colors">
+                <i class="fas fa-cog w-6 text-center mr-2"></i> Personalización
+            </a>
+            <div class="mt-4 flex items-center px-3">
+                <img class="h-8 w-8 rounded-full object-cover border-2 border-slate-600" src="https://ui-avatars.com/api/?name=Familia&background=4f46e5&color=fff" alt="Avatar">
+                <div class="ml-3">
+                    <p class="text-sm font-medium text-white">Familia Pérez</p>
+                    <p class="text-xs text-slate-400">Plan Premium</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        
+        <!-- Top Header (Filtros de fechas mejorados) -->
+        <header class="h-20 bg-surface border-b border-slate-200 flex items-center justify-between px-8 z-10 shadow-sm">
+            <h2 id="page-title" class="text-2xl font-semibold text-slate-800">Dashboard General</h2>
+            
+            <!-- Modern Date Filter -->
+            <div class="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                <button class="px-4 py-1.5 text-sm font-medium rounded-md bg-white text-primary shadow-sm ring-1 ring-slate-200 transition-all">Este Mes</button>
+                <button class="px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-700 transition-all">Mes Pasado</button>
+                <button class="px-4 py-1.5 text-sm font-medium rounded-md text-slate-500 hover:text-slate-700 transition-all">Este Año</button>
+                
+                <div class="w-px h-6 bg-slate-300 mx-2"></div>
+                
+                <div class="flex items-center space-x-2 px-2 text-slate-500">
+                    <i class="fas fa-calendar text-sm"></i>
+                    <input type="date" class="bg-transparent text-sm font-medium focus:outline-none cursor-pointer">
+                    <span class="text-slate-300">-</span>
+                    <input type="date" class="bg-transparent text-sm font-medium focus:outline-none cursor-pointer">
+                </div>
+            </div>
+            
+            <button class="bg-primary hover:bg-primaryHover text-white px-5 py-2 rounded-lg text-sm font-medium shadow-sm shadow-indigo-200 transition-colors flex items-center">
+                <i class="fas fa-plus mr-2"></i> Nuevo Registro
+            </button>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="flex-1 overflow-y-auto p-8 custom-scrollbar">
+            
+            <!-- VIEW: DASHBOARD -->
+            <div id="view-dashboard" class="view-section active space-y-6">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-slate-500 mb-1">Balance Total</p>
+                                <h3 class="text-3xl font-bold text-slate-800">€ 4,250.00</h3>
+                            </div>
+                            <div class="p-3 bg-indigo-50 rounded-lg text-indigo-600">
+                                <i class="fas fa-wallet text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex items-center text-sm">
+                            <span class="text-emerald-500 font-medium flex items-center"><i class="fas fa-arrow-up mr-1"></i> 12%</span>
+                            <span class="text-slate-400 ml-2">vs mes anterior</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-slate-500 mb-1">Ingresos</p>
+                                <h3 class="text-3xl font-bold text-slate-800">€ 5,100.00</h3>
+                            </div>
+                            <div class="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+                                <i class="fas fa-arrow-down text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-slate-500 mb-1">Gastos</p>
+                                <h3 class="text-3xl font-bold text-slate-800">€ 2,850.00</h3>
+                            </div>
+                            <div class="p-3 bg-rose-50 rounded-lg text-rose-600">
+                                <i class="fas fa-arrow-up text-xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-4 w-full bg-slate-100 rounded-full h-1.5">
+                            <div class="bg-rose-500 h-1.5 rounded-full" style="width: 55%"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-slate-500 mb-1">Ahorro en Hucha</p>
+                                <h3 class="text-3xl font-bold text-slate-800">€ 1,200.00</h3>
+                            </div>
+                            <div class="p-3 bg-pink-50 rounded-lg text-pink-600">
+                                <i class="fas fa-piggy-bank text-xl"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 bg-surface rounded-xl p-6 border border-slate-100 shadow-sm">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 class="text-lg font-semibold text-slate-800">Flujo de Caja Mensual</h3>
+                            <button class="text-slate-400 hover:text-primary"><i class="fas fa-ellipsis-h"></i></button>
+                        </div>
+                        <div class="relative h-72">
+                            <canvas id="cashflowChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm">
+                        <h3 class="text-lg font-semibold text-slate-800 mb-6">Gastos por Categoría</h3>
+                        <div class="relative h-64 flex justify-center">
+                            <canvas id="categoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: GASTOS (To showcase modern tables/filters) -->
+            <div id="view-gastos" class="view-section hidden space-y-6">
+                
+                <div class="flex justify-between items-center">
+                    <div class="flex space-x-3">
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" placeholder="Buscar gasto..." class="pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent w-64">
+                        </div>
+                        <button class="px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 flex items-center bg-white shadow-sm">
+                            <i class="fas fa-filter mr-2"></i> Filtros
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-surface rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                    <table class="min-w-full divide-y divide-slate-200">
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha</th>
+                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</th>
+                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Categoría</th>
+                                <th scope="col" class="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Monto</th>
+                                <th scope="col" class="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-slate-100">
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">12 Oct, 2023</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="h-10 w-10 flex-shrink-0 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-shopping-cart"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-slate-900">Compra Mercadona</div>
+                                            <div class="text-sm text-slate-500">Tarjeta Visa **45</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-3 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-slate-100 text-slate-600">Alimentación</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">- €124.50</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button class="text-slate-400 hover:text-indigo-600"><i class="fas fa-edit"></i></button>
+                                    <button class="text-slate-400 hover:text-rose-600 ml-3"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                            <!-- More rows for visual mockup -->
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">10 Oct, 2023</td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <div class="h-10 w-10 flex-shrink-0 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-bolt"></i>
+                                        </div>
+                                        <div class="ml-4">
+                                            <div class="text-sm font-medium text-slate-900">Factura Iberdrola</div>
+                                            <div class="text-sm text-slate-500">Domiciliación bancaria</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap">
+                                    <span class="px-3 py-1 inline-flex text-xs leading-5 font-medium rounded-full bg-slate-100 text-slate-600">Servicios</span>
+                                </td>
+                                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-900">- €85.00</td>
+                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                    <button class="text-slate-400 hover:text-indigo-600"><i class="fas fa-edit"></i></button>
+                                    <button class="text-slate-400 hover:text-rose-600 ml-3"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+                        <span class="text-sm text-slate-500">Mostrando 1 a 2 de 24 gastos</span>
+                        <div class="flex space-x-1">
+                            <button class="px-3 py-1 border border-slate-200 rounded text-sm text-slate-400 bg-slate-50 cursor-not-allowed">Anterior</button>
+                            <button class="px-3 py-1 border border-slate-200 rounded text-sm text-slate-600 hover:bg-slate-50">1</button>
+                            <button class="px-3 py-1 border border-slate-200 rounded text-sm bg-primary text-white">2</button>
+                            <button class="px-3 py-1 border border-slate-200 rounded text-sm text-slate-600 hover:bg-slate-50">Siguiente</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: HUCHA (Savings) -->
+            <div id="view-hucha" class="view-section hidden space-y-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-semibold text-slate-800">Mis Metas de Ahorro</h3>
+                    <button class="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm flex items-center">
+                        <i class="fas fa-plus mr-2"></i> Nueva Meta
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Goal Card -->
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-4">
+                            <button class="text-slate-400 hover:text-slate-600"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div class="h-12 w-12 bg-blue-100 text-blue-500 rounded-xl flex items-center justify-center text-2xl">
+                                <i class="fas fa-plane-departure"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-800">Vacaciones Verano</h4>
+                                <p class="text-sm text-slate-500">Vence: Jun 2024</p>
+                            </div>
+                        </div>
+                        <div class="mb-2 flex justify-between text-sm font-medium">
+                            <span class="text-slate-700">€ 1,200</span>
+                            <span class="text-slate-400">Meta: € 3,000</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2 mb-4">
+                            <div class="bg-blue-500 h-2 rounded-full" style="width: 40%"></div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-md">40% Completado</span>
+                            <button class="text-sm text-primary font-medium hover:underline">Añadir fondos</button>
+                        </div>
+                    </div>
+
+                    <!-- Goal Card 2 -->
+                    <div class="bg-surface rounded-xl p-6 border border-slate-100 shadow-sm relative overflow-hidden">
+                        <div class="absolute top-0 right-0 p-4">
+                            <button class="text-slate-400 hover:text-slate-600"><i class="fas fa-ellipsis-v"></i></button>
+                        </div>
+                        <div class="flex items-center space-x-4 mb-4">
+                            <div class="h-12 w-12 bg-emerald-100 text-emerald-500 rounded-xl flex items-center justify-center text-2xl">
+                                <i class="fas fa-car"></i>
+                            </div>
+                            <div>
+                                <h4 class="font-bold text-slate-800">Fondo Coche Nuevo</h4>
+                                <p class="text-sm text-slate-500">Vence: Ene 2025</p>
+                            </div>
+                        </div>
+                        <div class="mb-2 flex justify-between text-sm font-medium">
+                            <span class="text-slate-700">€ 4,500</span>
+                            <span class="text-slate-400">Meta: € 10,000</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-2 mb-4">
+                            <div class="bg-emerald-500 h-2 rounded-full" style="width: 45%"></div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-emerald-600 font-semibold bg-emerald-50 px-2 py-1 rounded-md">45% Completado</span>
+                            <button class="text-sm text-primary font-medium hover:underline">Añadir fondos</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script src="app.js"></script>
+</body>
+</html>

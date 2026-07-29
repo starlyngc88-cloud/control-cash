@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -26,7 +26,7 @@ import {
   deleteSavingCategory,
 } from "@/lib/db"
 import type { Saving, SavingMovement, SavingCategory } from "@/types"
-import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank } from "lucide-react"
+import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 
@@ -49,6 +49,14 @@ export default function AhorrosPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.ahorros
+
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    if (!search) return savings
+    const q = search.toLowerCase()
+    return savings.filter((s) => s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q) || (s.saving_categories?.name ?? "").toLowerCase().includes(q))
+  }, [savings, search])
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
@@ -78,14 +86,14 @@ export default function AhorrosPage() {
     for (const c of categories) {
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
-    for (const s of savings) {
+    for (const s of filtered) {
       const catId = s.category_id ?? "__none__"
       const catName = s.saving_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: s.category_id, name: catName, items: [] })
       map.get(catId)!.items.push(s)
     }
     return map
-  }, [savings, categories])
+  }, [filtered, categories])
 
   const openNewSaving = () => {
     setEditing(null)
@@ -245,122 +253,142 @@ export default function AhorrosPage() {
   const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
 
   return (
-    <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+    <div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-green-100 text-green-600 dark:bg-green-900/30">
-            <Goal className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{dict.title}</h2>
-            <p className="text-sm text-muted-foreground">{dict.subtitle}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-end mb-5">
           <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
             <DialogTrigger render={(props) => <Button {...props} variant="outline" onClick={() => openNewCat()}><List className="size-4 mr-2" />Categoría</Button>} />
-            <DialogContent>
-              <DialogHeader><DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle></DialogHeader>
-              <form onSubmit={handleCatSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="catName">Nombre</Label>
-                  <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">Las categorías agrupan tus metas de ahorro.</p>
+              </DialogHeader>
+              <form onSubmit={handleCatSubmit} className="space-y-5">
+                <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="catName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                    <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
+                  </div>
                 </div>
-                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                <div className="flex justify-end gap-2 pt-1">
+                  <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+                  <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+                </div>
               </form>
             </DialogContent>
           </Dialog>
           <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Eliminar categoría</DialogTitle></DialogHeader>
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  ¿Eliminar la categoría <strong>{catToDelete?.name}</strong>? Se eliminarán también las siguientes huchas:
+            <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Eliminar categoría</DialogTitle>
+              <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="bg-rose-50 rounded-lg p-4 text-sm text-rose-700">
+                <p>
+                  ¿Eliminar la categoría <strong>{catToDelete?.name}</strong>?
                 </p>
-                {catDeleteExpenses.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No hay huchas asociadas.</p>
-                ) : (
-                  <div className="max-h-48 overflow-y-auto space-y-1 border rounded-lg p-2">
-                    {catDeleteExpenses.map((s) => (
-                      <div key={s.id} className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/30">
-                        <span>{s.name}</span>
-                        <span className="font-semibold text-green-600">{fmt(Number(s.current_amount))}</span>
-                      </div>
-                    ))}
-                  </div>
+                {catDeleteExpenses.length > 0 && (
+                  <p className="mt-1 text-xs text-rose-500">Las siguientes huchas también serán eliminadas:</p>
                 )}
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button variant="outline" onClick={() => setCatToDelete(null)}>Cancelar</Button>
-                  <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
-                    {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} huchas)` : ""}`}
-                  </Button>
-                </div>
+                {catDeleteExpenses.length === 0 && (
+                  <p className="mt-1 text-xs text-rose-400">No hay huchas asociadas.</p>
+                )}
               </div>
-            </DialogContent>
+              {catDeleteExpenses.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-slate-200 rounded-lg p-2">
+                  {catDeleteExpenses.map((s) => (
+                    <div key={s.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded hover:bg-slate-50">
+                      <span className="text-slate-700">{s.name}</span>
+                      <span className="font-semibold text-rose-600 tabular-nums">{fmt(Number(s.current_amount))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+                <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
+                  {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} huchas)` : ""}`}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
           </Dialog>
           <Dialog key={editing?.id ?? 'new'} open={openSaving} onOpenChange={(v) => { if (!v) setEditing(null); setOpenSaving(v) }}>
             <DialogTrigger render={(props) => <Button {...props} onClick={openNewSaving}><Plus className="size-4 mr-2" />{dict.newHucha}</Button>} />
-            <DialogContent>
-              <DialogHeader><DialogTitle>{editing ? dict.editTitle : dict.newTitle}</DialogTitle></DialogHeader>
-              <form onSubmit={handleSavingSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">{dict.nombre}</Label>
-                  <Input id="name" placeholder={dict.nombrePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editing ? dict.editTitle : dict.newTitle}</DialogTitle>
+                <p className="text-xs text-slate-500 mt-1">Creá una nueva meta de ahorro.</p>
+              </DialogHeader>
+              <form onSubmit={handleSavingSubmit} className="space-y-5">
+                <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name" className="text-sm font-medium text-slate-700">{dict.nombre}</Label>
+                    <Input id="name" placeholder={dict.nombrePlaceholder} value={name} onChange={(e) => setName(e.target.value)} required />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="description" className="text-sm font-medium text-slate-700">{dict.descripcion}</Label>
+                    <Input id="description" placeholder={dict.descripcionPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="catSelect" className="text-sm font-medium text-slate-700">Categoría</Label>
+                    <select
+                      id="catSelect"
+                      value={savingCategoryId}
+                      onChange={(e) => setSavingCategoryId(e.target.value)}
+                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">— Sin categoría —</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">{dict.descripcion}</Label>
-                  <Input id="description" placeholder={dict.descripcionPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
+                <div className="flex justify-end gap-2">
+                  <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+                  <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="catSelect">Categoría</Label>
-                  <select
-                    id="catSelect"
-                    value={savingCategoryId}
-                    onChange={(e) => setSavingCategoryId(e.target.value)}
-                    className="flex h-9 w-full rounded-lg border border-input bg-transparent px-3 py-1 text-sm shadow-xs transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                  >
-                    <option value="">— Sin categoría —</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
               </form>
             </DialogContent>
           </Dialog>
-        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3 mb-6">
-        <Card title="Suma de todas tus huchas de ahorro" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{dict.totalAhorrado}</CardTitle>
-            <Goal className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">{fmt(totalAhorrado)}</div>
-          </CardContent>
-        </Card>
-        <Card title="Cantidad de metas de ahorro activas" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">{dict.numHuchas}</CardTitle>
-            <PiggyBank className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{numHuchas}</div>
-          </CardContent>
-        </Card>
-        <Card title="Total de movimientos recientes registrados" className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Movimientos</CardTitle>
-            <ArrowDownCircle className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{recentMovements.length}</div>
-          </CardContent>
-        </Card>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">{dict.totalAhorrado}</p>
+              <h3 className="text-3xl font-bold text-emerald-600">{fmt(totalAhorrado)}</h3>
+            </div>
+            <div className="p-3 bg-amber-50 rounded-lg text-amber-600">
+              <Goal className="size-6" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">{dict.numHuchas}</p>
+              <h3 className="text-3xl font-bold text-slate-800">{numHuchas}</h3>
+            </div>
+            <div className="p-3 bg-slate-50 rounded-lg text-slate-600">
+              <PiggyBank className="size-6" />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">Movimientos</p>
+              <h3 className="text-3xl font-bold text-slate-800">{recentMovements.length}</h3>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg text-green-600">
+              <ArrowDownCircle className="size-6" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {successMsg && (
@@ -369,86 +397,103 @@ export default function AhorrosPage() {
         </div>
       )}
 
+      <div className="relative flex-1 max-w-xs mb-4">
+        <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Buscar..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white"
+        />
+      </div>
+
       {!hasItems ? (
-        <div className="border rounded-lg bg-background p-6 text-center">
-          <p className="text-sm text-muted-foreground">{dict.empty}</p>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm text-center">
+          <p className="text-sm text-slate-500">{dict.empty}</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden bg-background">
-          <div className="flex items-center justify-between px-3 py-1 border-b bg-muted/10">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Huchas por categoría</span>
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Huchas por categoría</span>
             <button
               onClick={() => {
                 if (allExpanded) setExpandedCats(new Set())
                 else setExpandedCats(new Set([...grouped.keys()]))
               }}
-              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+              className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
             >
               {allExpanded ? "Contraer todo" : "Expandir todo"}
             </button>
           </div>
-          <div className="text-sm">
+          <div>
             {Array.from(grouped.entries()).map(([key, { id: catId, name: catName, items }]) => {
               const isExpanded = expandedCats.has(key)
               const catTotal = items.reduce((s, e) => s + Number(e.current_amount), 0)
               const cat = categories.find((c) => c.id === catId)
               return (
                 <div key={key}>
-                  <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-green-100/50" : "hover:bg-green-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
+                  <div className="flex items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
                     <button onClick={() => setExpandedCats((prev) => {
                       const next = new Set(prev)
                       if (next.has(key)) next.delete(key)
                       else next.add(key)
                       return next
-                    })} className="p-0.5 rounded hover:bg-accent text-gray-400 hover:text-gray-600 shrink-0">
-                      {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                    })} className="text-slate-400 hover:text-slate-600 mr-2">
+                      {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
                     </button>
                     {cat && (
                       <>
-                        <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-0.5" onClick={() => openEditCat(cat)}>
+                        <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" onClick={() => openEditCat(cat)}>
                           <Pencil className="size-3.5" />
                         </button>
-                        <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDeleteCat(cat.id)}>
+                        <button className="text-slate-400 hover:text-rose-600 transition-colors p-1 mr-0.5" onClick={() => handleDeleteCat(cat.id)}>
                           <Trash2 className="size-3.5" />
                         </button>
                       </>
                     )}
-                    <span className="font-medium truncate min-w-0">{catName}</span>
-                    <span className="text-[10px] text-muted-foreground shrink-0 ml-1">({items.length})</span>
-                    <span className="tabular-nums shrink-0 ml-auto font-semibold text-green-600">{fmt(catTotal)}</span>
+                    <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{catName}</span>
+                    <span className="text-xs text-slate-400 ml-2">({items.length})</span>
+                    <span className="ml-auto text-sm font-semibold text-emerald-600 tabular-nums">{fmt(catTotal)}</span>
                   </div>
 
                   {isExpanded && items.map((s) => (
-                    <div key={s.id} className="flex items-center py-0.5 pl-8 pr-1.5 hover:bg-green-50/70 border-t border-dashed border-border/30">
-                      <span className="truncate min-w-0 text-muted-foreground">{s.name}</span>
-                      {s.description && (
-                        <span className="text-[10px] text-muted-foreground mx-1 shrink-0">· {s.description}</span>
-                      )}
-                      <span className="tabular-nums shrink-0 text-green-600 ml-auto font-semibold">{fmt(Number(s.current_amount))}</span>
-                      <button className="text-green-600 hover:text-green-800 shrink-0 ml-1" title={dict.addMoney} onClick={() => openNewMovement(s.id)}>
-                        <ArrowDownCircle className="size-3" />
-                      </button>
-                      <button className="text-orange-500 hover:text-orange-700 shrink-0 ml-0.5" title={dict.withdrawMoney} onClick={() => { setMovementSavingId(s.id); setMovType("withdrawal"); setMovAmount(""); setMovNotes(""); setMovDate(new Date().toISOString().split("T")[0]); setOpenMovement(true) }}>
-                        <ArrowUpCircle className="size-3" />
-                      </button>
-                      <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-0.5" onClick={() => openEditSaving(s)}>
-                        <Pencil className="size-3" />
-                      </button>
-                      <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDeleteSaving(s.id)}>
-                        <Trash2 className="size-3" />
-                      </button>
+                    <div key={s.id} className="flex items-center px-6 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                      <div className="flex items-center flex-1 min-w-0">
+                        <div className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center bg-amber-100 text-amber-600">
+                          <PiggyBank className="size-3.5" />
+                        </div>
+                        <div className="ml-3 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{s.name}</p>
+                          {s.description && <p className="text-xs text-slate-500">{s.description}</p>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0 ml-4">
+                        <span className="text-sm font-semibold text-emerald-600 tabular-nums">{fmt(Number(s.current_amount))}</span>
+                        <div className="flex items-center gap-1">
+                          <button className="text-slate-400 hover:text-green-600 transition-colors p-1" title={dict.addMoney} onClick={() => openNewMovement(s.id)}>
+                            <ArrowDownCircle className="size-3.5" />
+                          </button>
+                          <button className="text-slate-400 hover:text-amber-600 transition-colors p-1" title={dict.withdrawMoney} onClick={() => { setMovementSavingId(s.id); setMovType("withdrawal"); setMovAmount(""); setMovNotes(""); setMovDate(new Date().toISOString().split("T")[0]); setOpenMovement(true) }}>
+                            <ArrowUpCircle className="size-3.5" />
+                          </button>
+                          <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1" onClick={() => openEditSaving(s)}>
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-1" onClick={() => handleDeleteSaving(s.id)}>
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
               )
             })}
           </div>
-          <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-green-100/30 text-sm">
-            <span className="font-semibold">Total ahorrado</span>
-            <span className="tabular-nums font-semibold text-green-600">{fmt(totalAhorrado)}</span>
-          </div>
-          <div className="border-t border-border/50">
-            <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={openNewSaving}>
+          <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-sm text-emerald-600 font-medium">Total: {fmt(totalAhorrado)}</span>
+            <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors" onClick={openNewSaving}>
               <Plus className="size-3.5" /> {dict.newHucha}
             </button>
           </div>
@@ -456,47 +501,55 @@ export default function AhorrosPage() {
       )}
 
       <Dialog open={openMovement} onOpenChange={(v) => { if (!v) setMovementSavingId(null); setOpenMovement(v) }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{dict.movementTitle}</DialogTitle></DialogHeader>
-          <form onSubmit={handleMovementSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>{dict.movementType}</Label>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant={movType === "income" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setMovType("income")}
-                >
-                  <ArrowDownCircle className="size-4 mr-2" />
-                  {dict.ingreso}
-                </Button>
-                <Button
-                  type="button"
-                  variant={movType === "withdrawal" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setMovType("withdrawal")}
-                >
-                  <ArrowUpCircle className="size-4 mr-2" />
-                  {dict.retirada}
-                </Button>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{dict.movementTitle}</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Registrá un ingreso o retiro de la hucha.</p>
+          </DialogHeader>
+          <form onSubmit={handleMovementSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700">{dict.movementType}</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={movType === "income" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setMovType("income")}
+                  >
+                    <ArrowDownCircle className="size-4 mr-2" />
+                    {dict.ingreso}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={movType === "withdrawal" ? "default" : "outline"}
+                    className="flex-1"
+                    onClick={() => setMovType("withdrawal")}
+                  >
+                    <ArrowUpCircle className="size-4 mr-2" />
+                    {dict.retirada}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movAmount" className="text-sm font-medium text-slate-700">{dict.monto}</Label>
+                <Input id="movAmount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={movAmount} onChange={(e) => setMovAmount(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movNotes" className="text-sm font-medium text-slate-700">{dict.notas}</Label>
+                <Input id="movNotes" placeholder={dict.notasPlaceholder} value={movNotes} onChange={(e) => setMovNotes(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="movDate" className="text-sm font-medium text-slate-700">{dict.fecha}</Label>
+                <Input id="movDate" type="date" value={movDate} onChange={(e) => setMovDate(e.target.value)} required />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="movAmount">{dict.monto}</Label>
-              <Input id="movAmount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={movAmount} onChange={(e) => setMovAmount(e.target.value)} required />
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>
+                {submitting ? "Procesando..." : movType === "income" ? dict.addMoney : dict.withdrawMoney}
+              </Button>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="movNotes">{dict.notas}</Label>
-              <Input id="movNotes" placeholder={dict.notasPlaceholder} value={movNotes} onChange={(e) => setMovNotes(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="movDate">{dict.fecha}</Label>
-              <Input id="movDate" type="date" value={movDate} onChange={(e) => setMovDate(e.target.value)} required />
-            </div>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Procesando..." : movType === "income" ? dict.addMoney : dict.withdrawMoney}
-            </Button>
           </form>
         </DialogContent>
       </Dialog>

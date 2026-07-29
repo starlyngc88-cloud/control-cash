@@ -1,14 +1,26 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import Link from "next/link"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getDashboardData, getMonthlyBudgets, getYearlyData } from "@/lib/db"
 import type { YearlyMonth } from "@/lib/db"
-import { LayoutDashboard, Wallet, PiggyBank } from "lucide-react"
+import { PiggyBank, Wallet, TrendingDown, TrendingUp, MoreHorizontal, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { useMonthFilter } from "@/components/MonthFilterContext"
-import { DateFilter } from "@/components/DateFilter"
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  ArcElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from "chart.js"
+import { Line, Doughnut } from "react-chartjs-2"
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
 
 type DashboardData = {
   totalIngresos: number
@@ -54,160 +66,243 @@ export default function DashboardPage() {
 
   useEffect(() => { load(months) }, [months, load])
 
+  const cashflowChartData = useMemo(() => {
+    if (!filteredYearly.length) return null
+    return {
+      labels: filteredYearly.map((m) =>
+        new Date(m.month + "-01").toLocaleDateString("es-CO", { month: "short" }).replace(".", "")
+      ),
+      datasets: [
+        {
+          label: "Ingresos",
+          data: filteredYearly.map((m) => m.ingresos),
+          borderColor: "#10b981",
+          backgroundColor: "rgba(16, 185, 129, 0.1)",
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 3,
+        },
+        {
+          label: "Gastos",
+          data: filteredYearly.map((m) => m.gastos),
+          borderColor: "#f43f5e",
+          backgroundColor: "transparent",
+          borderWidth: 2,
+          borderDash: [5, 5],
+          tension: 0.4,
+          pointRadius: 3,
+        },
+      ],
+    }
+  }, [filteredYearly])
+
+  const cashflowOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { position: "top" as const, align: "end" as const, labels: { usePointStyle: true, boxWidth: 8 } },
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { borderDash: [2, 4], color: "#f1f5f9" }, border: { display: false } },
+      x: { grid: { display: false }, border: { display: false } },
+    },
+  }
+
+  const spentPct = data && data.totalBudgeted > 0 ? Math.min(100, (data.totalGastos / data.totalBudgeted) * 100) : 0
+
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   return (
-    <div className="h-full overflow-y-auto space-y-2.5 pr-1">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center size-7 rounded-lg bg-sky-100 text-sky-600 dark:bg-sky-900/30">
-            <LayoutDashboard className="size-3.5" />
+    <div className="space-y-6">
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">Presupuesto</p>
+              <h3 className="text-3xl font-bold text-indigo-600">{fmt(data?.totalBudgeted ?? 0)}</h3>
+            </div>
+            <div className="p-3 bg-indigo-50 rounded-lg text-indigo-600">
+              <ClipboardList className="size-6" />
+            </div>
           </div>
-          <div>
-            <h2 className="text-base font-bold tracking-tight">{d.title}</h2>
-            <p className="text-[10px] text-muted-foreground -mt-0.5">{d.subtitle}</p>
+          {data && data.totalBudgeted > 0 && (
+            <div className="mt-4 flex items-center text-sm">
+              <span className="text-slate-500">
+                {data.totalGastos > data.totalBudgeted
+                  ? `Exceso: ${fmt(data.totalGastos - data.totalBudgeted)}`
+                  : `Disponible: ${fmt(data.totalBudgeted - data.totalGastos)}`
+                }
+              </span>
+              {monthlyBudgetId && (
+                <Link href={`/presupuestos/${monthlyBudgetId}`} className="ml-auto text-indigo-600 hover:underline text-xs font-medium">
+                  Ver detalle
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">{d.ingresos}</p>
+              <h3 className="text-3xl font-bold text-emerald-600">{fmt(data?.totalIngresos ?? 0)}</h3>
+            </div>
+            <div className="p-3 bg-emerald-50 rounded-lg text-emerald-600">
+              <TrendingDown className="size-6" />
+            </div>
           </div>
         </div>
-        <DateFilter />
-      </div>
 
-      <div className="grid gap-1.5 grid-cols-3 sm:grid-cols-3">
-        <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 bg-background col-span-1">
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-muted-foreground">{d.ingresos}</p>
-            <p className="text-xs font-bold tabular-nums text-green-600">{fmt(data?.totalIngresos ?? 0)}</p>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">{d.gastos}</p>
+              <h3 className="text-3xl font-bold text-rose-600">{fmt(data?.totalGastos ?? 0)}</h3>
+            </div>
+            <div className="p-3 bg-rose-50 rounded-lg text-rose-600">
+              <TrendingUp className="size-6" />
+            </div>
           </div>
-          <div className="w-px h-8 bg-border" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-muted-foreground">{d.gastos}</p>
-            <p className="text-xs font-bold tabular-nums text-red-600">{fmt(data?.totalGastos ?? 0)}</p>
+          {data && data.totalBudgeted > 0 && (
+            <div className="mt-4 w-full bg-slate-100 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full ${spentPct > 100 ? "bg-rose-500" : spentPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${spentPct}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-sm font-medium text-slate-500 mb-1">Balance</p>
+              <h3 className={`text-3xl font-bold ${(data?.balance ?? 0) >= 0 ? "text-slate-800" : "text-rose-600"}`}>{fmt(data?.balance ?? 0)}</h3>
+            </div>
+            <div className={`p-3 rounded-lg ${(data?.balance ?? 0) >= 0 ? "bg-indigo-50 text-indigo-600" : "bg-rose-50 text-rose-600"}`}>
+              <Wallet className="size-6" />
+            </div>
           </div>
         </div>
-        <StatBadge label={d.balance} value={fmt(data?.balance ?? 0)} color={(data?.balance ?? 0) >= 0 ? "text-green-600" : "text-red-600"} />
-        <StatBadge label="Presupuesto" value={fmt(data?.totalBudgeted ?? 0)} color="text-violet-600" icon={monthlyBudgetId ? <Link href={`/presupuestos/${monthlyBudgetId}`}><PiggyBank className="size-3 text-violet-600" /></Link> : <PiggyBank className="size-3 text-violet-600" />} />
       </div>
 
-      <div className="grid gap-2.5 grid-cols-1 lg:grid-cols-3">
-        <Card className="lg:col-span-2 transition-all duration-200 hover:shadow-md">
-          <CardHeader className="pb-1 pt-2.5 px-3">
-            <CardTitle className="text-xs font-medium">Evolución anual</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-2.5">
-            <div className="overflow-x-auto">
-              <div className="relative min-w-[500px] pt-3 pb-5">
-                <div className="absolute inset-x-0 top-0 bottom-6 pointer-events-none">
-                  {[0, 33, 66, 100].map((p) => (
-                    <div key={p} className="absolute left-0 right-0 border-t border-muted/30" style={{ bottom: `${p}%` }} />
-                  ))}
-                </div>
-                <div className="flex gap-1.5 relative z-10">
-                  {filteredYearly.length ? filteredYearly.map((m, idx) => {
-                    const maxVal = Math.max(m.ingresos, m.gastos, m.presupuesto, Math.abs(m.balance), 1)
-                    const h = 120
-                    const dims = [
-                      { v: m.ingresos, color: "bg-green-400" },
-                      { v: m.gastos, color: "bg-red-400" },
-                      { v: m.presupuesto, color: "bg-violet-400" },
-                      { v: Math.abs(m.balance), color: m.balance >= 0 ? "bg-blue-400" : "bg-red-300" },
-                    ]
-                    const monthName = new Date(m.month + "-01").toLocaleDateString("es-CO", { month: "short" }).replace(".", "")
-                    return (
-                      <div key={m.month} className="flex-1 flex flex-col items-center gap-px">
-                        <div className="flex gap-px items-end rounded-md bg-muted/15 px-1" style={{ height: h }}>
-                          {dims.map((d, i) => {
-                            const pct = Math.max(2, (d.v / maxVal) * h)
-                            return (
-                              <div key={i} className="flex flex-col items-center justify-end" style={{ height: h }}>
-                                <span className="text-[5px] text-muted-foreground/40 leading-none mb-px font-mono">{compact(d.v)}</span>
-                                <div className={`w-1.5 rounded-full ${d.color} transition-all duration-300`} style={{ height: `${pct}px` }} />
-                              </div>
-                            )
-                          })}
-                        </div>
-                        <span className={`text-[9px] font-medium ${idx % 2 === 0 ? "text-foreground" : "text-muted-foreground"}`}>{monthName}</span>
-                      </div>
-                    )
-                  }) : (
-                    <div className="flex items-center justify-center w-full py-8 text-xs text-muted-foreground">Sin datos para el período seleccionado</div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-center text-[10px] text-muted-foreground border-t pt-1.5">
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-green-400" /> Ingresos</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-red-400" /> Gastos</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-violet-400" /> Presupuesto</span>
-              <span className="flex items-center gap-1"><span className="size-2 rounded-full bg-blue-400" /> Balance</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="transition-all duration-200 hover:shadow-md">
-          <CardHeader className="pb-1 pt-2.5 px-3">
-            <CardTitle className="text-xs font-medium">Últimos movimientos</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-2.5">
-            {(!data?.recentIncomes.length && !data?.recentExpenses.length) ? (
-              <p className="text-xs text-muted-foreground">Sin movimientos en este período</p>
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-semibold text-slate-800">Flujo de Caja Mensual</h3>
+            <button className="text-slate-400 hover:text-indigo-600 transition-colors">
+              <MoreHorizontal className="size-5" />
+            </button>
+          </div>
+          <div className="relative h-72">
+            {cashflowChartData ? (
+              <Line data={cashflowChartData} options={cashflowOptions} />
             ) : (
-              <ul className="space-y-px">
+              <div className="flex items-center justify-center h-full text-sm text-slate-400">
+                Sin datos para el período seleccionado
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <h3 className="text-lg font-semibold text-slate-800 mb-6">Gastos por Categoría</h3>
+          <div className="relative h-64 flex justify-center items-center">
+            {/* TODO: Falta dato dinámico para desglose de gastos por categoría */}
+            <div className="text-sm text-slate-400 text-center">
+              <PiggyBank className="size-8 mx-auto mb-2 text-slate-300" />
+              <p>Datos no disponibles</p>
+              <p className="text-xs text-slate-400 mt-1">Próximamente</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Movements */}
+      <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+        <h3 className="text-lg font-semibold text-slate-800 mb-4">Últimos movimientos</h3>
+        {(!data?.recentIncomes.length && !data?.recentExpenses.length) ? (
+          <p className="text-sm text-slate-500">Sin movimientos en este período</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Fecha</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</th>
+                  <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Persona</th>
+                  <th scope="col" className="px-6 py-4 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Monto</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-slate-100">
                 {[...(data?.recentIncomes.map(i => ({ ...i, _tipo: "ingreso" as const })) ?? []),
                    ...(data?.recentExpenses.map(e => ({ ...e, _tipo: "gasto" as const })) ?? [])
-                ]
+                 ]
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .slice(0, 8)
                   .map((mov) => (
-                    <li key={`${mov._tipo}-${mov.id}`} className="flex justify-between text-xs p-1 rounded hover:bg-muted/30 transition-colors">
-                      <span className="truncate min-w-0 mr-1">
-                        {mov.description || "Sin concepto"}
-                        <span className="text-muted-foreground ml-1">· {mov.people?.name}</span>
-                      </span>
-                      <span className="text-[9px] text-muted-foreground shrink-0 mr-1">{new Date(mov.date).toLocaleDateString("es-CO")}</span>
-                      <span className={`font-semibold shrink-0 ${mov._tipo === "ingreso" ? "text-green-600" : "text-red-600"}`}>
+                    <tr key={`${mov._tipo}-${mov.id}`} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
+                        {new Date(mov.date).toLocaleDateString("es-CO", { day: "numeric", month: "short", year: "numeric" })}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className={`h-10 w-10 flex-shrink-0 rounded-full flex items-center justify-center ${mov._tipo === "ingreso" ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>
+                            {mov._tipo === "ingreso" ? <TrendingDown className="size-4" /> : <TrendingUp className="size-4" />}
+                          </div>
+                          <div className="ml-4">
+                            <div className="text-sm font-medium text-slate-900">{mov.description || "Sin concepto"}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">{mov.people?.name}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-right text-sm font-semibold ${mov._tipo === "ingreso" ? "text-emerald-600" : "text-rose-600"}`}>
                         {mov._tipo === "ingreso" ? "+" : "-"}{fmt(mov.amount)}
-                      </span>
-                    </li>
+                      </td>
+                    </tr>
                   ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
+      {/* Budget Progress */}
       {data && data.totalBudgeted > 0 && (
-        <div className="flex items-center gap-3 rounded-lg border px-3 py-2 bg-muted/10">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-muted-foreground">Presupuesto:</span>
-            <span className="text-violet-600 font-semibold">{fmt(data.totalBudgeted)}</span>
-            <span className="text-red-600">-{fmt(data.totalGastos)}</span>
-            <span className="text-green-600">={fmt(Math.max(0, data.totalBudgeted - data.totalGastos))}</span>
+        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">Presupuesto vs Gastos</h3>
+            <span className="text-xs text-slate-500">
+              {fmt(data.totalGastos)} de {fmt(data.totalBudgeted)}
+              {monthlyBudgetId && (
+                <Link href={`/presupuestos/${monthlyBudgetId}`} className="ml-2 text-indigo-600 hover:underline">
+                  Ver detalle
+                </Link>
+              )}
+            </span>
           </div>
-          <div className="flex-1 max-w-[200px]">
-            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-              <div className={`h-full rounded-full transition-all ${data.totalGastos > data.totalBudgeted ? "bg-red-500" : data.totalGastos / data.totalBudgeted > 0.8 ? "bg-yellow-500" : "bg-green-500"}`} style={{ width: `${Math.min(100, (data.totalGastos / data.totalBudgeted) * 100)}%` }} />
-            </div>
+          <div className="w-full bg-slate-100 rounded-full h-2.5">
+            <div
+              className={`h-2.5 rounded-full transition-all duration-300 ${spentPct > 100 ? "bg-rose-500" : spentPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+              style={{ width: `${Math.min(100, spentPct)}%` }}
+            />
           </div>
-          <span className="text-[10px] text-muted-foreground">{Math.round((data.totalGastos / data.totalBudgeted) * 100)}% gastado</span>
+          <div className="flex justify-between mt-2 text-xs text-slate-400">
+            <span>{Math.round(spentPct)}% gastado</span>
+            <span className={spentPct > 100 ? "text-rose-500 font-medium" : "text-emerald-600"}>
+              {spentPct > 100
+                ? `Exceso: ${fmt(data.totalGastos - data.totalBudgeted)}`
+                : `Disponible: ${fmt(data.totalBudgeted - data.totalGastos)}`
+              }
+            </span>
+          </div>
         </div>
       )}
     </div>
   )
-}
-
-function StatBadge({ label, value, color, icon }: { label: string; value: string; color: string; icon?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 bg-background">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-      <p className={`text-xs font-bold tabular-nums ${color}`}>{value}</p>
-      {icon && <div className="ml-auto">{icon}</div>}
-    </div>
-  )
-}
-
-function compact(n: number) {
-  const v = Math.round(n * 100) / 100
-  if (v >= 1_000_000) { const d = v / 1_000_000; return `${Number.isInteger(d) ? d : d.toFixed(1)}M` }
-  if (v >= 1_000) { const d = v / 1_000; return `${Number.isInteger(d) ? d : d.toFixed(1)}k` }
-  if (v > 0) return `${Math.round(v)}`
-  return ""
 }

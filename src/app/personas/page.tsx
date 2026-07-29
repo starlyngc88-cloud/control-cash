@@ -90,16 +90,7 @@ export default function PersonasPage() {
   return (
     <div className="space-y-6">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div>}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-purple-100 text-purple-600 dark:bg-purple-900/30">
-            <Users className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{p.title}</h2>
-            <p className="text-sm text-muted-foreground">{p.subtitle}</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end mb-5">
         <Dialog open={open} onOpenChange={(v) => { if (!v) { setEditing(null); setName("") }; setOpen(v) }}>
           <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{p.newPersona}</Button>} />
           <DialogContent>

@@ -24,15 +24,6 @@ export default function PersonalizacionPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-8 px-6">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="flex items-center justify-center size-10 rounded-xl bg-pink-100 text-pink-600 dark:bg-pink-900/30">
-          <Palette className="size-5" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{p.title}</h2>
-          <p className="text-sm text-muted-foreground">{p.subtitle}</p>
-        </div>
-      </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border bg-background p-4 space-y-3">

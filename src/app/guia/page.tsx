@@ -110,15 +110,6 @@ export default function GuiaPage() {
 
   return (
     <div className="max-w-3xl mx-auto py-4 px-4">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center size-10 rounded-xl bg-teal-100 text-teal-600 dark:bg-teal-900/30">
-          <BookOpen className="size-5" />
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">{g.title}</h2>
-          <p className="text-sm text-muted-foreground">{g.subtitle}</p>
-        </div>
-      </div>
 
       {/* Detailed steps */}
       <div className="space-y-3">

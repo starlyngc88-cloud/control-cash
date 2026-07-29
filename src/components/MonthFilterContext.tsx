@@ -16,15 +16,17 @@ export function MonthFilterProvider({ children }: { children: ReactNode }) {
   const now = new Date()
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
 
-  const [months, setMonths] = useState<string[]>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("dashboard-months")
-      if (saved) {
-        try { return JSON.parse(saved) } catch {}
-      }
+  const [months, setMonths] = useState<string[]>([defaultMonth])
+
+  useEffect(() => {
+    const saved = localStorage.getItem("dashboard-months")
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setMonths(parsed)
+      } catch {}
     }
-    return [defaultMonth]
-  })
+  }, [])
 
   useEffect(() => {
     localStorage.setItem("dashboard-months", JSON.stringify(months))

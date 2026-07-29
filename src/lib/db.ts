@@ -193,7 +193,7 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
 
 export async function getBudgetTemplates() {
   try {
-    const { data, error } = await supabase.from("budget_templates").select("*").order("created_at", { ascending: false })
+    const { data, error } = await supabase.from("budget_templates").select("*").order("created_at", { ascending: true })
     if (error) throw error
     return data as BudgetTemplate[]
   } catch { return [] }
@@ -259,7 +259,7 @@ export async function deleteBudgetCategory(id: string) {
 }
 
 export async function updateBudgetCategory(id: string, input: { name: string; budgeted: number; parent_id?: string | null }) {
-  const parsed = budgetCategorySchema.parse(sanitizeInput(input))
+  const parsed = budgetCategorySchema.partial().parse(sanitizeInput(input))
   const { error } = await supabase.from("budget_categories").update(parsed).eq("id", id)
   if (error) throw error
 }

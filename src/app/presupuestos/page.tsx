@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -28,8 +29,8 @@ import { supabase } from "@/lib/supabase"
 import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/types"
 import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, PiggyBank, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
-import { DateFilter } from "@/components/DateFilter"
 import { friendlyError } from "@/lib/errors"
+import { useHeaderActions } from "@/components/HeaderActionsContext"
 
 export default function PresupuestosPage() {
   const [template, setTemplate] = useState<BudgetTemplate | null>(null)
@@ -66,6 +67,84 @@ export default function PresupuestosPage() {
   const [newCatName, setNewCatName] = useState("")
   const [newCatBudgeted, setNewCatBudgeted] = useState("")
   const [newCatHasSub, setNewCatHasSub] = useState(false)
+
+  const [openSubCat, setOpenSubCat] = useState(false)
+  const [subParentId, setSubParentId] = useState("")
+  const [subCreateName, setSubCreateName] = useState("")
+  const [subCreateBudgeted, setSubCreateBudgeted] = useState("")
+
+  const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
+  const headerDropdownRef = useRef<HTMLDivElement>(null)
+
+  const { setActions } = useHeaderActions()
+
+  const handleSubCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!subParentId || !subCreateName.trim()) return
+    setSubmitting(true)
+    try {
+      await createBudgetCategory({
+        template_id: template!.id,
+        name: subCreateName.trim(),
+        budgeted: parseFloat(subCreateBudgeted || "0"),
+        parent_id: subParentId,
+      })
+      setOpenSubCat(false)
+      setSubParentId("")
+      setSubCreateName("")
+      setSubCreateBudgeted("")
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  useEffect(() => {
+    setActions(
+      <div className="relative" ref={headerDropdownRef}>
+        <button
+          onClick={() => setHeaderDropdownOpen((v) => !v)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-sm shadow-indigo-200 transition-colors flex items-center gap-2"
+        >
+          <Plus className="size-4" />
+          Nuevo
+          <ChevronDown className={`size-3.5 transition-transform ${headerDropdownOpen ? "rotate-180" : ""}`} />
+        </button>
+        {headerDropdownOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setHeaderDropdownOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-white rounded-xl border border-slate-200 shadow-lg py-1.5 overflow-hidden">
+              <button
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => { setOpenNewCat(true); setHeaderDropdownOpen(false) }}
+              >
+                <FolderDown className="size-4 text-indigo-500" />
+                Nuevo rubro
+              </button>
+              <button
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => { setOpenMonth(true); setHeaderDropdownOpen(false) }}
+              >
+                <Calendar className="size-4 text-indigo-500" />
+                Abrir mes
+              </button>
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => { setOpenSubCat(true); setHeaderDropdownOpen(false) }}
+              >
+                <FolderDown className="size-4 text-indigo-500" />
+                Nueva subcategoría
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    )
+    return () => setActions(null)
+  }, [headerDropdownOpen, setOpenNewCat, setOpenMonth, setOpenSubCat, setActions])
 
   const toggleParent = (id: string) => {
     setExpandedParents(prev => {
@@ -244,29 +323,17 @@ export default function PresupuestosPage() {
   const parents = buildCategoryTree(allCats)
 
   return (
-    <div className="-mx-6 -mt-6 p-6 min-h-[calc(100vh-3rem)] bg-gradient-to-b from-transparent to-muted/20">
+    <div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center size-10 rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-900/30">
-            <PiggyBank className="size-5" />
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">{template.name}</h2>
-            <p className="text-sm text-muted-foreground">Administrá tus rubros y meses</p>
-          </div>
-        </div>
-        <DateFilter />
-      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Categories */}
         <div className="lg:col-span-2 space-y-4">
-          <div className="border rounded-lg overflow-hidden bg-background">
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             {allCats.length > 0 && (
               <>
-              <div className="flex items-center justify-between px-3 py-1 border-b bg-muted/10">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rubros</span>
+              <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rubros</span>
                 <button
                   onClick={() => {
                     if (expandedParents.size === parents.filter(p => p.children.length > 0).length) {
@@ -275,57 +342,68 @@ export default function PresupuestosPage() {
                       setExpandedParents(new Set(parents.filter(p => p.children.length > 0).map(p => p.id)))
                     }
                   }}
-                  className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
                 >
                   {expandedParents.size === parents.filter(p => p.children.length > 0).length ? "Contraer todo" : "Expandir todo"}
                 </button>
               </div>
-              <div className="text-sm">
+              <div>
                 {parents.map((parent) => {
                   const isExpanded = expandedParents.has(parent.id)
                   return (
                   <div key={parent.id}>
-                    <div className={`flex items-center py-0.5 px-1.5 transition-colors ${isExpanded ? "bg-yellow-100/50" : "hover:bg-yellow-100 bg-muted/5"} border-t border-border/50 first:border-t-0`}>
-                      <button onClick={() => toggleParent(parent.id)} className="p-0.5 rounded hover:bg-accent text-gray-400 hover:text-gray-600 shrink-0">
+                    <div className="flex items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
+                      <button onClick={() => toggleParent(parent.id)} className="text-slate-400 hover:text-slate-600 mr-2">
                         {parent.children.length > 0 ? (
-                          isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />
+                          isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />
                         ) : (
-                          <span className="size-3.5 block" />
+                          <span className="size-4 block" />
                         )}
                       </button>
-                      <button className="text-cyan-500 hover:text-cyan-700 shrink-0 ml-0.5" title="Subcategoría" onClick={() => { setAddingSub(addingSub === parent.id ? null : parent.id); setSubCatName(""); setSubCatBudgeted("") }}>
+                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" title="Subcategoría" onClick={() => { setAddingSub(addingSub === parent.id ? null : parent.id); setSubCatName(""); setSubCatBudgeted("") }}>
                         <FolderDown className="size-3.5" />
                       </button>
-                      <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-0.5" onClick={() => { setEditingCat(parent); setEditCatName(parent.name); setEditCatBudgeted(String(parent.budgeted)); setOpenCatEdit(true); setEditCatHasChildren(parent.children.length > 0); setEditCatHasSub(parent.children.length > 0 || parent.budgeted === 0) }}>
+                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" onClick={() => { setEditingCat(parent); setEditCatName(parent.name); setEditCatBudgeted(String(parent.budgeted)); setOpenCatEdit(true); setEditCatHasChildren(parent.children.length > 0); setEditCatHasSub(parent.children.length > 0 || parent.budgeted === 0) }}>
                         <Pencil className="size-3.5" />
                       </button>
-                      <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDeleteCategory(parent.id, parent.name)}>
+                      <button className="text-slate-400 hover:text-rose-600 transition-colors p-1 mr-0.5" onClick={() => handleDeleteCategory(parent.id, parent.name)}>
                         <Trash2 className="size-3.5" />
                       </button>
-                      <span className="font-medium truncate min-w-0">{parent.name}</span>
-                      <span className="tabular-nums shrink-0 ml-auto font-semibold">
+                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</span>
+                      <span className="ml-auto text-sm font-semibold text-slate-700 tabular-nums">
                         {parent.children.length > 0 ? fmt(parent.children.reduce((s, c) => s + c.budgeted, 0)) : fmt(parent.budgeted)}
                       </span>
                     </div>
 
                     {parent.children.length > 0 && isExpanded && parent.children.map((child) => (
-                      <div key={child.id} className="flex items-center py-0.5 pl-8 pr-1.5 hover:bg-yellow-50/70 border-t border-dashed border-border/30">
-                        <span className="truncate min-w-0 text-muted-foreground">└ {child.name}</span>
-                        <span className="tabular-nums shrink-0 text-muted-foreground ml-auto">{fmt(child.budgeted)}</span>
-                        <button className="text-blue-500 hover:text-blue-700 shrink-0 ml-1" onClick={() => { setEditingCat(child); setEditCatName(child.name); setEditCatBudgeted(String(child.budgeted)); setOpenCatEdit(true) }}>
-                          <Pencil className="size-3.5" />
-                        </button>
-                        <button className="text-red-400 hover:text-red-600 shrink-0 ml-0.5" onClick={() => handleDeleteCategory(child.id, child.name)}>
-                          <Trash2 className="size-3.5" />
-                        </button>
+                      <div key={child.id} className="flex items-center px-6 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                        <div className="flex items-center flex-1 min-w-0">
+                          <div className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center bg-slate-100 text-slate-600">
+                            <FolderDown className="size-3.5" />
+                          </div>
+                          <div className="ml-3 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate">{child.name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 shrink-0 ml-4">
+                          <span className="text-sm font-semibold text-slate-900 tabular-nums">{fmt(child.budgeted)}</span>
+                          <div className="flex items-center gap-1">
+                            <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1" onClick={() => { setEditingCat(child); setEditCatName(child.name); setEditCatBudgeted(String(child.budgeted)); setOpenCatEdit(true) }}>
+                              <Pencil className="size-3.5" />
+                            </button>
+                            <button className="text-slate-400 hover:text-rose-600 transition-colors p-1" onClick={() => handleDeleteCategory(child.id, child.name)}>
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     ))}
 
                     {addingSub === parent.id && (
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 border-t border-dashed bg-muted/5">
+                      <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-slate-100">
                         <input
                           placeholder="Sub"
-                          className="h-7 px-1.5 text-sm rounded border border-input bg-transparent flex-1 min-w-0 outline-none focus:border-ring"
+                          className="h-8 px-2 text-sm rounded-lg border border-slate-200 bg-white flex-1 min-w-0 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                           value={subCatName}
                           onChange={(e) => setSubCatName(e.target.value)}
                           autoFocus
@@ -333,14 +411,14 @@ export default function PresupuestosPage() {
                         <input
                           type="number" step="0.01" min="0"
                           placeholder="$"
-                          className="h-7 px-1.5 text-sm rounded border border-input bg-transparent w-20 outline-none focus:border-ring tabular-nums"
+                          className="h-8 px-2 text-sm rounded-lg border border-slate-200 bg-white w-24 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent tabular-nums"
                           value={subCatBudgeted}
                           onChange={(e) => setSubCatBudgeted(e.target.value)}
                         />
-                        <button className="text-primary hover:text-primary/80 shrink-0" onClick={() => handleAddCategory(subCatName, subCatBudgeted, parent.id)}>
-                          <Plus className="size-3.5" />
+                        <button className="text-indigo-600 hover:text-indigo-800 shrink-0 p-1" onClick={() => handleAddCategory(subCatName, subCatBudgeted, parent.id)}>
+                          <Plus className="size-4" />
                         </button>
-                        <button className="text-muted-foreground hover:text-foreground shrink-0" onClick={() => setAddingSub(null)}>
+                        <button className="text-slate-400 hover:text-slate-600 shrink-0 p-1" onClick={() => setAddingSub(null)}>
                           <span className="text-sm">✕</span>
                         </button>
                       </div>
@@ -353,9 +431,9 @@ export default function PresupuestosPage() {
             )}
 
             {allCats.length > 0 && (
-              <div className="flex items-center justify-between px-1.5 py-0.5 border-t border-border/50 bg-yellow-100/30 text-sm">
-                <span className="font-semibold">Total</span>
-                <span className="tabular-nums font-semibold">
+              <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">Total</span>
+                <span className="text-sm font-semibold text-slate-700 tabular-nums">
                   {fmt(allCats.filter(c => !c.parent_id).reduce((s, p) => {
                     const children = allCats.filter(ch => ch.parent_id === p.id)
                     return s + (children.length > 0 ? children.reduce((cs, ch) => cs + ch.budgeted, 0) : p.budgeted)
@@ -364,8 +442,8 @@ export default function PresupuestosPage() {
               </div>
             )}
 
-            <div className="border-t border-border/50">
-              <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={() => setOpenNewCat(true)}>
+            <div className="border-t border-slate-200">
+              <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 w-full px-6 py-4 hover:bg-slate-50 transition-colors" onClick={() => setOpenNewCat(true)}>
                 <Plus className="size-3.5" /> {p.agregarRubro}
               </button>
             </div>
@@ -374,40 +452,40 @@ export default function PresupuestosPage() {
 
         {/* Monthly budgets */}
         <div className="space-y-3">
-          <div className="border rounded-lg overflow-hidden bg-background">
-            <div className="px-3 py-2 bg-muted/20 border-b">
-              <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{p.mesesFinancieros}</span>
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-3 bg-slate-50 border-b border-slate-200">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{p.mesesFinancieros}</span>
             </div>
             {monthlyBudgets.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4">{p.emptyMonths}</p>
+              <p className="text-sm text-slate-500 p-6">{p.emptyMonths}</p>
             ) : (
-              <div className="divide-y">
+              <div>
                 {monthlyBudgets.map((mb) => (
-                  <div key={mb.id} className="flex items-center justify-between px-3 py-2 hover:bg-muted/20">
+                  <div key={mb.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
                     <div className="min-w-0">
-                      <span className="text-base font-medium capitalize block leading-tight">{formatMonth(mb.month)}</span>
-                      <span className="text-xs text-muted-foreground tabular-nums">
+                      <span className="text-sm font-semibold text-slate-900 capitalize block">{formatMonth(mb.month)}</span>
+                      <span className="text-xs text-slate-500 tabular-nums">
                         {fmt(parents.reduce((s, p) => {
                           const children = categories.filter(ch => ch.parent_id === p.id)
                           return s + (children.length > 0 ? children.reduce((cs, ch) => cs + ch.budgeted, 0) : p.budgeted)
                         }, 0))} presupuestado
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Link href={`/presupuestos/${mb.id}`} className="inline-flex items-center gap-1 text-sm font-medium px-2 py-1 rounded border border-input hover:bg-accent transition-colors">
-                        {p.verDetalle} <ChevronRight className="size-3.5 text-gray-400" />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Link href={`/presupuestos/${mb.id}`} className="inline-flex items-center gap-1 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-colors">
+                        {p.verDetalle} <ChevronRight className="size-3" />
                       </Link>
-                      <Button variant="ghost" size="icon" className="size-7 text-red-400 hover:text-red-600" onClick={() => handleDeleteMonth(mb.id)}>
+                      <button className="text-slate-400 hover:text-rose-600 transition-colors p-1" onClick={() => handleDeleteMonth(mb.id)}>
                         <Trash2 className="size-3.5" />
-                      </Button>
+                      </button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-            <div className="border-t border-border/50">
-              <button className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground w-full px-1.5 py-0.5 hover:bg-muted/30" onClick={() => setOpenMonth(true)}>
-                <Calendar className="size-3.5 text-violet-500" /> {p.mes}
+            <div className="border-t border-slate-200">
+              <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 w-full px-6 py-4 hover:bg-slate-50 transition-colors" onClick={() => setOpenMonth(true)}>
+                <Calendar className="size-3.5" /> {p.mes}
               </button>
             </div>
           </div>
@@ -415,133 +493,199 @@ export default function PresupuestosPage() {
       </div>
 
       <Dialog open={openCatEdit} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCatEdit(v) }}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{p.editCategoryTitle}</DialogTitle></DialogHeader>
-          <form onSubmit={handleEditCategory} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="catName">{p.catNombre}</Label>
-              <Input id="catName" value={editCatName} onChange={(e) => setEditCatName(e.target.value)} required />
-            </div>
-            {editCatHasChildren ? (
-              <div className="space-y-2">
-                <Label>{p.catMonto}</Label>
-                <p className="text-xs text-muted-foreground">Calculado automáticamente de las subcategorías</p>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{p.editCategoryTitle}</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Modificá el nombre y monto del rubro.</p>
+          </DialogHeader>
+          <form onSubmit={handleEditCategory} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="catName" className="text-sm font-medium text-slate-700">{p.catNombre}</Label>
+                <Input id="catName" value={editCatName} onChange={(e) => setEditCatName(e.target.value)} required />
               </div>
-            ) : (
-              <>
-                <label className="flex items-center gap-2 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={editCatHasSub}
-                    onChange={(e) => { setEditCatHasSub(e.target.checked); if (e.target.checked) setEditCatBudgeted("0") }}
-                    className="accent-primary"
-                  />
-                  Tiene subcategorías
-                </label>
-                {editCatHasSub ? (
-                  <p className="text-xs text-muted-foreground">El valor se calculará automáticamente como la suma de sus subcategorías.</p>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="catBudgeted">{p.catMonto}</Label>
-                    <Input id="catBudgeted" type="number" step="0.01" min="0" value={editCatBudgeted} onChange={(e) => setEditCatBudgeted(e.target.value)} required />
-                  </div>
-                )}
-              </>
-            )}
-            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : p.catGuardarCambios}</Button>
+              {editCatHasChildren ? (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">{p.catMonto}</Label>
+                  <p className="text-xs text-slate-500">Calculado automáticamente de las subcategorías</p>
+                </div>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={editCatHasSub}
+                      onChange={(e) => { setEditCatHasSub(e.target.checked); if (e.target.checked) setEditCatBudgeted("0") }}
+                      className="accent-indigo-600 rounded"
+                    />
+                    Tiene subcategorías
+                  </label>
+                  {editCatHasSub ? (
+                    <p className="text-xs text-slate-500">El valor se calculará automáticamente como la suma de sus subcategorías.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catBudgeted" className="text-sm font-medium text-slate-700">{p.catMonto}</Label>
+                      <Input id="catBudgeted" type="number" step="0.01" min="0" value={editCatBudgeted} onChange={(e) => setEditCatBudgeted(e.target.value)} required />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : p.catGuardarCambios}</Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={openMonth} onOpenChange={setOpenMonth}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">{p.newMonthTitle}</DialogTitle>
-            <p className="text-xs text-muted-foreground mt-1">Seleccioná el mes y año que querés abrir.</p>
+            <p className="text-xs text-slate-500 mt-1">Seleccioná el mes y año que querés abrir.</p>
           </DialogHeader>
-          <form onSubmit={handleCreateMonth} className="space-y-4">
-            <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
-            {allCats.length > 0 && (
-              <div className="max-h-48 overflow-y-auto space-y-px text-xs">
-                <p className="text-[10px] text-muted-foreground sticky top-0 bg-background pb-0.5">{p.rubrosLabel}</p>
-                {allCats.filter(c => !c.parent_id).map((cat) => {
-                  const children = allCats.filter(c => c.parent_id === cat.id)
-                  const parentTotal = children.length > 0 ? children.reduce((s, c) => s + c.budgeted, 0) : cat.budgeted
-                  return (
-                    <div key={cat.id}>
-                      <div className="flex justify-between text-[11px] px-2 py-0.5 rounded bg-muted/50 font-medium">
-                        <span className="truncate mr-2">{cat.name}</span>
-                        <span className="tabular-nums shrink-0">{fmt(parentTotal)}</span>
-                      </div>
-                      {children.map((child) => (
-                        <div key={child.id} className="flex justify-between text-[11px] pl-4 pr-2 py-0.5 text-muted-foreground">
-                          <span className="truncate mr-2">└ {child.name}</span>
-                          <span className="tabular-nums shrink-0">{fmt(child.budgeted)}</span>
+          <form onSubmit={handleCreateMonth} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <MonthPicker value={selectedMonth} onChange={setSelectedMonth} />
+              {allCats.length > 0 && (
+                <div className="max-h-48 overflow-y-auto space-y-px text-xs">
+                  <p className="text-[10px] text-slate-500 sticky top-0 bg-slate-50 pb-0.5 font-semibold uppercase tracking-wider">{p.rubrosLabel}</p>
+                  {allCats.filter(c => !c.parent_id).map((cat) => {
+                    const children = allCats.filter(c => c.parent_id === cat.id)
+                    const parentTotal = children.length > 0 ? children.reduce((s, c) => s + c.budgeted, 0) : cat.budgeted
+                    return (
+                      <div key={cat.id}>
+                        <div className="flex justify-between text-[11px] px-2 py-1 rounded bg-white border border-slate-100 font-medium text-slate-700">
+                          <span className="truncate mr-2">{cat.name}</span>
+                          <span className="tabular-nums shrink-0">{fmt(parentTotal)}</span>
                         </div>
-                      ))}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-            <Button type="submit" size="sm" className="w-full text-xs h-7" disabled={submitting}>{submitting ? "Creando..." : p.crearMes}</Button>
+                        {children.map((child) => (
+                          <div key={child.id} className="flex justify-between text-[11px] pl-4 pr-2 py-0.5 text-slate-500">
+                            <span className="truncate mr-2">└ {child.name}</span>
+                            <span className="tabular-nums shrink-0">{fmt(child.budgeted)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" size="sm" disabled={submitting}>{submitting ? "Creando..." : p.crearMes}</Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={openNewCat} onOpenChange={setOpenNewCat}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo rubro</DialogTitle></DialogHeader>
-          <form onSubmit={handleSubmitNewParentCat} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="addCatName">{p.catNombre}</Label>
-              <Input id="addCatName" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required />
-            </div>
-            <label className="flex items-center gap-2 text-xs cursor-pointer">
-              <input
-                type="checkbox"
-                checked={newCatHasSub}
-                onChange={(e) => setNewCatHasSub(e.target.checked)}
-                className="accent-primary"
-              />
-              Tiene subcategorías
-            </label>
-            {newCatHasSub ? (
-              <p className="text-xs text-muted-foreground">El valor se calculará automáticamente como la suma de sus subcategorías.</p>
-            ) : (
-              <div className="space-y-2">
-                <Label htmlFor="addCatBudgeted">{p.catMonto}</Label>
-                <Input id="addCatBudgeted" type="number" step="0.01" min="0" value={newCatBudgeted} onChange={(e) => setNewCatBudgeted(e.target.value)} required />
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo rubro</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Agregá una categoría de presupuesto.</p>
+          </DialogHeader>
+          <form onSubmit={handleSubmitNewParentCat} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="addCatName" className="text-sm font-medium text-slate-700">{p.catNombre}</Label>
+                <Input id="addCatName" value={newCatName} onChange={(e) => setNewCatName(e.target.value)} required />
               </div>
-            )}
-            <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Agregando..." : p.agregarRubro}</Button>
+              <label className="flex items-center gap-2 text-sm cursor-pointer text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={newCatHasSub}
+                  onChange={(e) => setNewCatHasSub(e.target.checked)}
+                  className="accent-indigo-600 rounded"
+                />
+                Tiene subcategorías
+              </label>
+              {newCatHasSub ? (
+                <p className="text-xs text-slate-500">El valor se calculará automáticamente como la suma de sus subcategorías.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="addCatBudgeted" className="text-sm font-medium text-slate-700">{p.catMonto}</Label>
+                  <Input id="addCatBudgeted" type="number" step="0.01" min="0" value={newCatBudgeted} onChange={(e) => setNewCatBudgeted(e.target.value)} required />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>{submitting ? "Agregando..." : p.agregarRubro}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openSubCat} onOpenChange={(v) => { if (!v) { setOpenSubCat(false); setSubParentId(""); setSubCreateName(""); setSubCreateBudgeted("") } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva subcategoría</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Agregá una subcategoría a un rubro existente.</p>
+          </DialogHeader>
+          <form onSubmit={handleSubCatSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-slate-700">Rubro padre</Label>
+                <select
+                  value={subParentId}
+                  onChange={(e) => setSubParentId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  required
+                >
+                  <option value="">Seleccionar rubro</option>
+                  {categories.filter((c) => !c.parent_id).map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="subCreateName" className="text-sm font-medium text-slate-700">{p.catNombre}</Label>
+                <Input id="subCreateName" value={subCreateName} onChange={(e) => setSubCreateName(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="subCreateBudgeted" className="text-sm font-medium text-slate-700">{p.catMonto}</Label>
+                <Input id="subCreateBudgeted" type="number" step="0.01" min="0" value={subCreateBudgeted} onChange={(e) => setSubCreateBudgeted(e.target.value)} required />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>{submitting ? "Agregando..." : "Agregar subcategoría"}</Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={openDeleteCat} onOpenChange={setOpenDeleteCat}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">¿Eliminar "{deleteCatName}"?</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-4">
             {deleteCatExpenses.length > 0 && (
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">
+              <div className="bg-rose-50 rounded-lg p-4">
+                <p className="text-xs text-rose-600 mb-2">
                   {deleteCatExpenses.length} gasto{deleteCatExpenses.length !== 1 ? "s" : ""} asociado{deleteCatExpenses.length !== 1 ? "s" : ""} también será{deleteCatExpenses.length !== 1 ? "n" : ""} eliminado{deleteCatExpenses.length !== 1 ? "s" : ""}:
                 </p>
-                <div className="max-h-40 overflow-y-auto space-y-0.5 text-xs">
+                <div className="max-h-40 overflow-y-auto space-y-0.5">
                   {deleteCatExpenses.map((exp) => (
-                    <div key={exp.id} className="flex justify-between px-2 py-0.5 rounded bg-muted/30">
+                    <div key={exp.id} className="flex justify-between px-3 py-1 text-xs rounded bg-white border border-rose-100 text-slate-700">
                       <span className="truncate mr-2">{exp.description || "Sin concepto"}</span>
-                      <span className="tabular-nums shrink-0">{fmt(exp.amount)}</span>
+                      <span className="tabular-nums font-medium text-rose-600">{fmt(exp.amount)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            {deleteCatExpenses.length === 0 && (
+              <div className="bg-rose-50 rounded-lg p-4 text-sm text-rose-700">
+                <p>¿Eliminar la categoría <strong>{deleteCatName}</strong>? No tiene gastos asociados.</p>
+              </div>
+            )}
             <div className="flex gap-2 pt-1">
-              <Button variant="outline" size="sm" className="flex-1 text-xs" onClick={() => setOpenDeleteCat(false)}>Cancelar</Button>
+              <DialogClose render={<Button variant="outline" size="sm" className="flex-1 text-xs">Cancelar</Button>} />
               <Button variant="destructive" size="sm" className="flex-1 text-xs" onClick={confirmDeleteCategory} disabled={submitting}>{submitting ? "Eliminando..." : "Eliminar todo"}</Button>
             </div>
           </div>
