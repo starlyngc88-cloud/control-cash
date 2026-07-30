@@ -3,6 +3,7 @@ import type { ZodError } from "zod"
 const FRIENDLY = "⚠️ Epa, algo salió mal. Inténtalo nuevamente."
 
 export function friendlyError(err: unknown): string {
+  if (typeof err === "string") return err
   if (err instanceof Error && "issues" in err) {
     const zodErr = err as ZodError
     return zodErr.issues.map((e: { message: string }) => e.message).join(". ")

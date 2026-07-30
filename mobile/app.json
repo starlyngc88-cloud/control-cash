@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "KellyCash",
+    "slug": "kellycash",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "kellycash",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#f8fafc",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kellycash.mobile",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Usamos Face ID para iniciar sesión rápidamente."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f8fafc"
+      },
+      "package": "com.kellycash.mobile",
+      "permissions": []
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

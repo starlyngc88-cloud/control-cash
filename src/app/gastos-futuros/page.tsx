@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -28,6 +28,7 @@ import type { FutureExpense, FutureExpenseCategory } from "@/types"
 import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRight, List, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { useHeaderActions } from "@/components/HeaderActionsContext"
 
 function getUrgencyClass(expectedDate: string): string {
   const now = new Date()
@@ -90,6 +91,47 @@ export default function GastosFuturosPage() {
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const [planCuota, setPlanCuota] = useState("")
+
+  const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
+  const headerDropdownRef = useRef<HTMLDivElement>(null)
+  const { setActions } = useHeaderActions()
+
+  useEffect(() => {
+    setActions(
+      <div className="relative" ref={headerDropdownRef}>
+        <button
+          onClick={() => setHeaderDropdownOpen((v) => !v)}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-sm shadow-indigo-200 transition-colors flex items-center gap-2"
+        >
+          <Plus className="size-4" />
+          Nuevo
+          <ChevronDown className={`size-3.5 transition-transform ${headerDropdownOpen ? "rotate-180" : ""}`} />
+        </button>
+        {headerDropdownOpen && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setHeaderDropdownOpen(false)} />
+            <div className="absolute right-0 top-full mt-1 z-50 w-56 bg-white rounded-xl border border-slate-200 shadow-lg py-1.5 overflow-hidden">
+              <button
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => { openNewCat(); setHeaderDropdownOpen(false) }}
+              >
+                <List className="size-4 text-emerald-500" />
+                Nueva categoría
+              </button>
+              <button
+                className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
+                onClick={() => { openNew(); setHeaderDropdownOpen(false) }}
+              >
+                <Crosshair className="size-4 text-emerald-500" />
+                Nuevo gasto futuro
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    )
+    return () => setActions(null)
+  }, [headerDropdownOpen, setActions])
 
   const load = async () => {
     const [e, cats, dash] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard()])
@@ -293,171 +335,167 @@ export default function GastosFuturosPage() {
   return (
     <div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
-      <div className="flex items-center justify-end mb-5">
-          <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
-            <DialogTrigger render={(props) => <Button {...props} variant="outline" onClick={() => openNewCat()}><List className="size-4 mr-2" />Categoría</Button>} />
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
-                <p className="text-xs text-slate-500 mt-1">Las categorías organizan tus gastos futuros.</p>
-              </DialogHeader>
-              <form onSubmit={handleCatSubmit} className="space-y-5">
-                <div className="bg-slate-50 rounded-lg p-4 space-y-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="catName" className="text-sm font-medium text-slate-700">Nombre</Label>
-                    <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-2 pt-1">
-                  <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
-                  <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
-            <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Eliminar categoría</DialogTitle>
-              <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="bg-rose-50 rounded-lg p-4 text-sm text-rose-700">
-                <p>
-                  ¿Eliminar la categoría <strong>{catToDelete?.name}</strong>?
-                </p>
-                {catDeleteExpenses.length > 0 && (
-                  <p className="mt-1 text-xs text-rose-500">Los siguientes gastos también serán eliminados:</p>
-                )}
-                {catDeleteExpenses.length === 0 && (
-                  <p className="mt-1 text-xs text-rose-400">No hay gastos asociados.</p>
-                )}
+      <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Las categorías organizan tus gastos futuros.</p>
+          </DialogHeader>
+          <form onSubmit={handleCatSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="catName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                <Input id="catName" value={catName} onChange={(e) => setCatName(e.target.value)} required />
               </div>
-              {catDeleteExpenses.length > 0 && (
-                <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-slate-200 rounded-lg p-2">
-                  {catDeleteExpenses.map((fe) => (
-                    <div key={fe.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded hover:bg-slate-50">
-                      <span className="text-slate-700">{fe.title}</span>
-                      <span className="font-semibold text-rose-600 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
-                    </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editingCat ? "Guardar cambios" : "Crear categoría"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
+        <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Eliminar categoría</DialogTitle>
+          <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="bg-rose-50 rounded-lg p-4 text-sm text-rose-700">
+            <p>
+              ¿Eliminar la categoría <strong>{catToDelete?.name}</strong>?
+            </p>
+            {catDeleteExpenses.length > 0 && (
+              <p className="mt-1 text-xs text-rose-500">Los siguientes gastos también serán eliminados:</p>
+            )}
+            {catDeleteExpenses.length === 0 && (
+              <p className="mt-1 text-xs text-rose-400">No hay gastos asociados.</p>
+            )}
+          </div>
+          {catDeleteExpenses.length > 0 && (
+            <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-slate-200 rounded-lg p-2">
+              {catDeleteExpenses.map((fe) => (
+                <div key={fe.id} className="flex items-center justify-between text-sm px-3 py-1.5 rounded hover:bg-slate-50">
+                  <span className="text-slate-700">{fe.title}</span>
+                  <span className="font-semibold text-rose-600 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+            <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
+              {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}`}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+      </Dialog>
+      <Dialog key={editing?.id ?? 'new'} open={open} onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{editing ? dict.editTitle : dict.newTitle}</DialogTitle>
+          <p className="text-xs text-slate-500 mt-1">Planificá un gasto futuro y calculá tu ahorro.</p>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="title" className="text-sm font-medium text-slate-700">{dict.titleLabel}</Label>
+              <Input id="title" placeholder={dict.titlePlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="description" className="text-sm font-medium text-slate-700">{dict.descripcion}</Label>
+              <Input id="description" placeholder={dict.descripcionPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="catSelect" className="text-sm font-medium text-slate-700">{dict.categoria}</Label>
+                <select
+                  id="catSelect"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                >
+                  <option value="">— Sin categoría —</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
-                </div>
-              )}
-              <div className="flex justify-end gap-2 pt-1">
-                <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
-                <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>
-                  {submitting ? "Eliminando..." : `Eliminar ${catDeleteExpenses.length > 0 ? `(${catDeleteExpenses.length} gastos)` : ""}`}
-                </Button>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="date" className="text-sm font-medium text-slate-700">{dict.fecha}</Label>
+                <Input id="date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} required />
               </div>
             </div>
-          </DialogContent>
-          </Dialog>
-          <Dialog key={editing?.id ?? 'new'} open={open} onOpenChange={(v) => { if (!v) setEditing(null); setOpen(v) }}>
-            <DialogTrigger render={(props) => <Button {...props} onClick={openNew}><Plus className="size-4 mr-2" />{dict.newTitle}</Button>} />
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editing ? dict.editTitle : dict.newTitle}</DialogTitle>
-              <p className="text-xs text-slate-500 mt-1">Planificá un gasto futuro y calculá tu ahorro.</p>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="bg-slate-50 rounded-lg p-4 space-y-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="title" className="text-sm font-medium text-slate-700">{dict.titleLabel}</Label>
-                  <Input id="title" placeholder={dict.titlePlaceholder} value={title} onChange={(e) => setTitle(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="description" className="text-sm font-medium text-slate-700">{dict.descripcion}</Label>
-                  <Input id="description" placeholder={dict.descripcionPlaceholder} value={description} onChange={(e) => setDescription(e.target.value)} />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="catSelect" className="text-sm font-medium text-slate-700">{dict.categoria}</Label>
-                    <select
-                      id="catSelect"
-                      value={categoryId}
-                      onChange={(e) => setCategoryId(e.target.value)}
-                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                    >
-                      <option value="">— Sin categoría —</option>
-                      {categories.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="date" className="text-sm font-medium text-slate-700">{dict.fecha}</Label>
-                    <Input id="date" type="date" value={expectedDate} onChange={(e) => setExpectedDate(e.target.value)} required />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="amount" className="text-sm font-medium text-slate-700">{dict.monto}</Label>
-                  <Input id="amount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={expectedAmount} onChange={(e) => setExpectedAmount(e.target.value)} required />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="planCuota" className="text-sm font-medium text-slate-700">Ahorro mensual (opcional)</Label>
-                  <Input id="planCuota" type="number" step="0.01" min="0.01" placeholder="0.00" value={planCuota} onChange={(e) => setPlanCuota(e.target.value)} />
-                </div>
-                {planCalc && (
-                  <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-sm text-amber-800">
-                    {planCalc.type === "fecha" ? (
-                      <p>Necesitas ahorrar <strong>{planCalc.cuota}</strong> por mes durante <strong>{planCalc.meses} meses</strong></p>
-                    ) : (
-                      <p>Ahorrando <strong>{fmt(parseFloat(planCuota || "0"))}</strong> por mes, alcanzas la meta en <strong>{planCalc.meses} meses</strong> (~{planCalc.fechaEst})</p>
-                    )}
-                  </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="amount" className="text-sm font-medium text-slate-700">{dict.monto}</Label>
+              <Input id="amount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={expectedAmount} onChange={(e) => setExpectedAmount(e.target.value)} required />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="planCuota" className="text-sm font-medium text-slate-700">Ahorro mensual (opcional)</Label>
+              <Input id="planCuota" type="number" step="0.01" min="0.01" placeholder="0.00" value={planCuota} onChange={(e) => setPlanCuota(e.target.value)} />
+            </div>
+            {planCalc && (
+              <div className="rounded-lg border bg-amber-50 border-amber-200 p-3 text-sm text-amber-800">
+                {planCalc.type === "fecha" ? (
+                  <p>Necesitas ahorrar <strong>{planCalc.cuota}</strong> por mes durante <strong>{planCalc.meses} meses</strong></p>
+                ) : (
+                  <p>Ahorrando <strong>{fmt(parseFloat(planCuota || "0"))}</strong> por mes, alcanzas la meta en <strong>{planCalc.meses} meses</strong> (~{planCalc.fechaEst})</p>
                 )}
               </div>
-              <div className="flex justify-end gap-2">
-                <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
-                <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
-              </div>
-            </form>
-          </DialogContent>
-          </Dialog>
-      </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+            <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
+          </div>
+        </form>
+      </DialogContent>
+      </Dialog>
 
-      <div className="grid gap-4 md:grid-cols-4 mb-6">
-        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+      <div className="grid gap-2 md:grid-cols-4 mb-3">
+        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">{dict.totalPrevisto}</p>
-              <h3 className="text-3xl font-bold text-rose-600">{fmt(dashboard?.totalPrevisto ?? 0)}</h3>
+              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalPrevisto}</p>
+              <h3 className="text-lg font-bold text-rose-600">{fmt(dashboard?.totalPrevisto ?? 0)}</h3>
             </div>
-            <div className="p-3 bg-orange-50 rounded-lg text-orange-600">
-              <Crosshair className="size-6" />
+            <div className="p-1.5 bg-orange-50 rounded-lg text-orange-600">
+              <Crosshair className="size-3.5" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">{dict.pendientes}</p>
-              <h3 className="text-3xl font-bold text-slate-800">{dashboard?.numPendientes ?? 0}</h3>
+              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pendientes}</p>
+              <h3 className="text-lg font-bold text-slate-800">{dashboard?.numPendientes ?? 0}</h3>
             </div>
-            <div className="p-3 bg-slate-50 rounded-lg text-slate-600">
-              <List className="size-6" />
+            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
+              <List className="size-3.5" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">{dict.proximos30}</p>
-              <h3 className="text-3xl font-bold text-slate-800">{dashboard?.next30 ?? 0}</h3>
+              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos30}</p>
+              <h3 className="text-lg font-bold text-slate-800">{dashboard?.next30 ?? 0}</h3>
             </div>
-            <div className="p-3 bg-red-50 rounded-lg text-red-600">
-              <Crosshair className="size-6" />
+            <div className="p-1.5 bg-red-50 rounded-lg text-red-600">
+              <Crosshair className="size-3.5" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-slate-500 mb-1">{dict.proximos90}</p>
-              <h3 className="text-3xl font-bold text-slate-800">{dashboard?.next90 ?? 0}</h3>
+              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos90}</p>
+              <h3 className="text-lg font-bold text-slate-800">{dashboard?.next90 ?? 0}</h3>
             </div>
-            <div className="p-3 bg-yellow-50 rounded-lg text-yellow-600">
-              <Crosshair className="size-6" />
+            <div className="p-1.5 bg-yellow-50 rounded-lg text-yellow-600">
+              <Crosshair className="size-3.5" />
             </div>
           </div>
         </div>
@@ -469,7 +507,7 @@ export default function GastosFuturosPage() {
         </div>
       )}
 
-      <div className="relative flex-1 max-w-xs mb-4">
+      <div className="relative flex-1 max-w-xs mb-3">
         <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           type="text"
@@ -481,12 +519,12 @@ export default function GastosFuturosPage() {
       </div>
 
       {!hasItems ? (
-        <div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm text-center">
-          <p className="text-sm text-slate-500">{dict.empty}</p>
+        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm text-center">
+          <p className="text-xs text-slate-500">{dict.empty}</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos por categoría</span>
             <button
               onClick={() => {
@@ -505,56 +543,56 @@ export default function GastosFuturosPage() {
               const cat = categories.find((c) => c.id === catId)
               return (
                 <div key={key}>
-                  <div className="flex items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
+                  <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
                     <button onClick={() => setExpandedCats((prev) => {
                       const next = new Set(prev)
                       if (next.has(key)) next.delete(key)
                       else next.add(key)
                       return next
                     })} className="text-slate-400 hover:text-slate-600 mr-2">
-                      {isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+                      {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
                     </button>
                     {cat && (
                       <>
-                        <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" onClick={() => openEditCat(cat)}>
-                          <Pencil className="size-3.5" />
+                        <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 mr-0.5" onClick={() => openEditCat(cat)}>
+                          <Pencil className="size-3" />
                         </button>
-                        <button className="text-slate-400 hover:text-rose-600 transition-colors p-1 mr-0.5" onClick={() => handleDeleteCat(cat.id)}>
-                          <Trash2 className="size-3.5" />
+                        <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 mr-0.5" onClick={() => handleDeleteCat(cat.id)}>
+                          <Trash2 className="size-3" />
                         </button>
                       </>
                     )}
-                    <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{catName}</span>
-                    <span className="text-xs text-slate-400 ml-2">({items.length})</span>
-                    <span className="ml-auto text-sm font-semibold text-rose-600 tabular-nums">{fmt(catTotal)}</span>
+                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{catName}</span>
+                    <span className="text-[10px] text-slate-400 ml-1.5">({items.length})</span>
+                    <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(catTotal)}</span>
                   </div>
 
                   {isExpanded && items.map((fe) => (
-                    <div key={fe.id} className={`flex items-center px-6 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0 ${getUrgencyClass(fe.expected_date)}`}>
+                    <div key={fe.id} className={`flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0 ${getUrgencyClass(fe.expected_date)}`}>
                       <div className="flex items-center flex-1 min-w-0">
-                        <div className="flex items-center gap-3">
-                          <span className={`size-2 rounded-full shrink-0 ${getUrgencyDot(fe.expected_date)}`} />
+                        <div className="flex items-center gap-2">
+                          <span className={`size-1.5 rounded-full shrink-0 ${getUrgencyDot(fe.expected_date)}`} />
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-900 truncate">{fe.title}</p>
-                            <p className="text-xs text-slate-500">{new Date(fe.expected_date).toLocaleDateString("es-CO")}{fe.status === "completed" ? ` · ${dict.statusCompleted}` : ""}</p>
+                            <p className="text-xs font-medium text-slate-900 truncate">{fe.title}</p>
+                            <p className="text-[10px] text-slate-500">{new Date(fe.expected_date).toLocaleDateString("es-CO")}{fe.status === "completed" ? ` · ${dict.statusCompleted}` : ""}</p>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 shrink-0 ml-4">
-                        <span className="text-sm font-semibold text-rose-600 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
-                        <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-3 shrink-0 ml-3">
+                        <span className="text-xs font-semibold text-rose-600 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
+                        <div className="flex items-center gap-0.5">
                           {fe.status === "planned" && (
                             <>
-                              <button className="text-slate-400 hover:text-green-600 transition-colors p-1" title={dict.markCompleted} onClick={() => handleMarkCompleted(fe.id)}>
-                                <CheckCircle2 className="size-3.5" />
+                              <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.markCompleted} onClick={() => handleMarkCompleted(fe.id)}>
+                                <CheckCircle2 className="size-3" />
                               </button>
-                              <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1" onClick={() => openEdit(fe)}>
-                                <Pencil className="size-3.5" />
+                              <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEdit(fe)}>
+                                <Pencil className="size-3" />
                               </button>
                             </>
                           )}
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-1" onClick={() => handleDelete(fe.id)}>
-                            <Trash2 className="size-3.5" />
+                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDelete(fe.id)}>
+                            <Trash2 className="size-3" />
                           </button>
                         </div>
                       </div>
@@ -564,10 +602,10 @@ export default function GastosFuturosPage() {
               )
             })}
           </div>
-          <div className="bg-white px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-            <span className="text-sm text-rose-600 font-medium">Total: {fmt(dashboard?.totalPrevisto ?? 0)}</span>
-            <button className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
-              <Plus className="size-3.5" /> {dict.newTitle}
+          <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between">
+            <span className="text-xs text-rose-600 font-medium">Total: {fmt(dashboard?.totalPrevisto ?? 0)}</span>
+            <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
+              <Plus className="size-3" /> {dict.newTitle}
             </button>
           </div>
         </div>

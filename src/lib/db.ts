@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
-import type { Person, Income, IncomeCategory, Expense, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
-import { personSchema, incomeSchema, expenseSchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, incomeCategorySchema } from "./validation"
+import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
+import { personSchema, incomeSchema, expenseSchema, expenseCategorySchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, incomeCategorySchema } from "./validation"
 import { sanitizeInput } from "./sanitize"
 import { logError } from "./errors"
 
@@ -92,6 +92,34 @@ export async function deleteIncomeCategory(id: string) {
   if (error) throw error
 }
 
+/* ---- Expense Categories ---- */
+
+export async function getExpenseCategories() {
+  const { data, error } = await supabase.from("expense_categories").select("*").order("name")
+  if (error?.code === "PGRST205") return []
+  if (error) throw error
+  return data as ExpenseCategory[]
+}
+
+export async function createExpenseCategory(input: { name: string }) {
+  const parsed = expenseCategorySchema.parse(sanitizeInput(input))
+  const { data, error } = await supabase.from("expense_categories").insert(parsed).select().single()
+  if (error) throw error
+  return data as ExpenseCategory
+}
+
+export async function updateExpenseCategory(id: string, input: { name: string }) {
+  const parsed = expenseCategorySchema.parse(sanitizeInput(input))
+  const { error } = await supabase.from("expense_categories").update(parsed).eq("id", id)
+  if (error) throw error
+}
+
+export async function deleteExpenseCategory(id: string) {
+  await supabase.from("expenses").update({ expense_category_id: null }).eq("expense_category_id", id)
+  const { error } = await supabase.from("expense_categories").delete().eq("id", id)
+  if (error) throw error
+}
+
 /* ---- Expenses ---- */
 
 export async function getExpenses(options?: { person_id?: string; limit?: number; startDate?: string; endDate?: string }) {
@@ -104,16 +132,23 @@ export async function getExpenses(options?: { person_id?: string; limit?: number
   if (error) throw error
   const expenses = data as Expense[]
   const personIds = [...new Set(expenses.map((e) => e.person_id))]
-  const { data: people } = await supabase.from("people").select("id, name").in("id", personIds)
-  const peopleMap = new Map((people ?? []).map((p) => [p.id, { name: p.name }]))
-  const catIds = [...new Set(expenses.map((e) => e.budget_category_id).filter(Boolean) as string[])]
-  const { data: cats } = catIds.length > 0 ? await supabase.from("budget_categories").select("id, name, template_id, budgeted").in("id", catIds) : { data: [] }
-  const catMap = new Map((cats ?? []).map((c) => [c.id, { id: c.id, name: c.name, template_id: c.template_id, budgeted: c.budgeted }]))
-  const result = expenses.map((e) => ({ ...e, people: peopleMap.get(e.person_id) ?? null, budget_categories: e.budget_category_id ? (catMap.get(e.budget_category_id) ?? null) : null }))
-  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: Pick<BudgetCategory, "id" | "name" | "template_id" | "budgeted"> | null })[]
+  const expCatIds = [...new Set(expenses.map((e) => e.expense_category_id).filter(Boolean) as string[])]
+  const [people, expCats] = await Promise.all([
+    supabase.from("people").select("id, name").in("id", personIds),
+    expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : Promise.resolve({ data: [] }),
+  ])
+  const peopleMap = new Map((people?.data ?? []).map((p: any) => [p.id, { name: p.name }]))
+  const expCatMap = new Map((expCats?.data ?? []).map((c: any) => [c.id, { id: c.id, name: c.name }]))
+  const result = expenses.map((e) => ({
+    ...e,
+    people: peopleMap.get(e.person_id) ?? null,
+    budget_categories: null,
+    expense_categories: e.expense_category_id ? (expCatMap.get(e.expense_category_id) ?? null) : null,
+  }))
+  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null })[]
 }
 
-export async function createExpense(input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null }) {
+export async function createExpense(input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
   const { data, error } = await supabase.from("expenses").insert(parsed).select().single()
   if (error) throw error
@@ -125,7 +160,7 @@ export async function deleteExpense(id: string) {
   if (error) throw error
 }
 
-export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null }) {
+export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
   const { error } = await supabase.from("expenses").update(parsed).eq("id", id)
   if (error) throw error

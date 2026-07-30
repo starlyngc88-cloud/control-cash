@@ -19,12 +19,17 @@ export const incomeSchema = z.object({
   category_id: z.string().uuid().nullable().optional(),
 })
 
+export const expenseCategorySchema = z.object({
+  name: z.string().trim().min(1).max(MAX_STR),
+})
+
 export const expenseSchema = z.object({
   person_id: z.string().uuid(),
   amount: z.number().positive("El importe debe ser positivo").finite(),
   description: z.string().trim().max(MAX_DESC).default(""),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
   budget_category_id: z.string().uuid().nullable().optional(),
+  expense_category_id: z.string().uuid().nullable().optional(),
 })
 
 export const budgetTemplateSchema = z.object({

@@ -40,10 +40,21 @@
 | Personalización | ⚙️ |
 | Guía | 📖 |
 
-## Esquema de colores (Tailwind)
+## Esquema de colores (Tailwind) — Diseño Refactorizado
 
-- Sidebar: `bg-sidebar`, `bg-sidebar-accent`
-- Ingresos: green (green-600, green-100 bg)
-- Gastos: red (red-600, red-100 bg)
-- Presupuesto: violet (violet-600)
-- Dashboard header: sky-100/sky-600
+- **Primario:** indigo-600 / indigo-700 hover — botones, acentos (`#4f46e5`)
+- **Sidebar:** `bg-[#0f172a]` (slate-900) — panel izquierdo oscuro
+- **Superficie:** white — cards, diálogos
+- **Fondo página:** `bg-[#f8fafc]` (slate-50)
+- **Cards:** `rounded-xl border border-slate-100 shadow-sm`
+- **Inputs:** bg-slate-50, focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20
+- **Ingresos:** emerald-600 / emerald-50 bg
+- **Gastos:** rose-600 / rose-100 bg
+- **Presupuesto:** violet-600
+- **Sin categoría:** orange-500 en warning, emerald-600 si todo clasificado
+- **Botón primario:** bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm shadow-indigo-200
+
+### Login
+- **Panel izquierdo:** `bg-[#0f172a]` con gradiente indigo-500/5, icono Wallet indigo-400
+- **Panel derecho:** card blanco con form
+- **Input icons:** Mail/Lock en slate-400

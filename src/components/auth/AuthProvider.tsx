@@ -67,9 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) {
-      if (error.message.includes("Invalid login credentials")) return "⚠️ Contraseña incorrecta."
-      if (error.message.includes("Invalid email")) return "⚠️ Revisa el correo."
-      return "⚠️ Epa, algo salió mal."
+      const msg = error.message
+      if (msg.includes("Invalid login credentials")) return "⚠️ Contraseña incorrecta."
+      if (msg.includes("Invalid email")) return "⚠️ Revisa el correo."
+      if (msg.includes("Email not confirmed")) return "⚠️ Confirma tu correo antes de iniciar sesión."
+      if (msg.includes("rate_limit") || msg.includes("rate limit")) return "⚠️ Demasiados intentos. Espera un momento."
+      return `⚠️ ${msg}`
     }
 
     // Asegurar que tenga rol asignado
@@ -113,9 +116,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: { data: { email: email.toLowerCase().trim() } },
     })
     if (error) {
-      if (error.message.includes("already registered")) return "⚠️ Este correo ya está registrado. Inicia sesión."
-      if (error.message.includes("assword")) return "⚠️ La contraseña debe tener al menos 6 caracteres."
-      return "⚠️ Epa, algo salió mal."
+      const msg = error.message
+      if (msg.includes("already registered")) return "⚠️ Este correo ya está registrado. Inicia sesión."
+      if (msg.includes("assword")) return "⚠️ La contraseña debe tener al menos 6 caracteres."
+      return `⚠️ ${msg}`
     }
 
     // Asignar rol si no existe (respeta roles predefinidos como admin)

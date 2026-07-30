@@ -1,100 +1,121 @@
-# Reglas de UI/UX - KellyCash
+# Reglas de UI/UX - KellyCash (Refactorizado)
 
 ## Inspiración
 - Notion (clean, minimal)
 - Linear (transiciones, estados)
 - Vercel (geometrico, sombras sutiles)
+- **Design Reference:** `_design_reference/index.html` — identidad visual unificada
 
 ## Principios generales
 - Sin scroll en sidebar (todo visible)
-- Cards con hover: `hover:shadow-md hover:-translate-y-0.5`
-- Bordes redondeados `rounded-lg` o `rounded-xl`
+- Cards con `rounded-xl border border-slate-100 shadow-sm`
+- Bordes redondeados `rounded-lg` (inputs, botones) o `rounded-xl` (cards)
 - Transiciones suaves `transition-all duration-200`
-- Inputs con `focus:border-ring focus:ring-3 focus:ring-ring/50`
+- Fondo página: `bg-[#f8fafc]`
+- Inputs: `bg-slate-50 border-slate-200`, focus: `bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20`
+- Iconos decorativos dentro de inputs (Mail, Lock, Search) con `absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400 pointer-events-none`
 
 ## Patrones de componentes
 
-### Cards
+### KPI Cards (gastos, ingresos, futuros, dashboard)
 ```tsx
-<Card className="transition-all duration-200 hover:shadow-md hover:-translate-y-0.5">
-  <CardHeader className="flex flex-row items-center justify-between pb-2">
-    <CardTitle className="text-sm font-medium">Título</CardTitle>
-  </CardHeader>
-  <CardContent>
-    {/* contenido */}
-  </CardContent>
-</Card>
-```
-
-### StatBadge (dashboard row)
-```tsx
-<div className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 bg-background">
-  <p className="text-[10px] text-muted-foreground">{label}</p>
-  <p className={`text-xs font-bold tabular-nums ${color}`}>{value}</p>
-  {icon && <div className="ml-auto">{icon}</div>}
-</div>
-```
-
-### Botón filtro fechas (DateFilter)
-- Forma píldora (`rounded-full`)
-- Icono violeta (Calendar) + texto + chevron (ChevronDown)
-- Diálogo con MultiMonthPicker
-- Label dinámico: mes único o rango "Enero 2026 - Marzo 2026"
-
-### MultiMonthPicker
-- Input manual YYYY-MM + botón "+"
-- Grid 4 columnas con meses del año
-- Multi-selección: toggle on/off con check visual (bg-primary)
-- Navegación anual: flechas izquierda/derecha
-- Tags de meses seleccionados abajo
-- Botón "Aplicar (N meses)" al fondo
-
-### Gráfico Evolución anual (dashboard)
-- Card con scroll horizontal si > 12 meses
-- Barras verticales agrupadas: 4 colores por mes (ingresos, gastos, presupuesto, balance)
-- Altura fija 120px, ancho mínimo 500px
-- Tooltips con valores compactos (1.2k, 3.5M)
-- Leyenda inferior con círculos de colores
-
-### Budget progress bar
-```tsx
-<div className="flex items-center gap-3 rounded-lg border px-3 py-2 bg-muted/10">
-  <span className="text-xs text-muted-foreground">Presupuesto:</span>
-  <div className="flex-1 max-w-[200px]">
-    <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%` }} />
+<div className="bg-white rounded-xl p-6 border border-slate-100 shadow-sm flex flex-col justify-between">
+  <div className="flex justify-between items-start">
+    <div>
+      <p className="text-sm font-medium text-slate-500 mb-1">Label</p>
+      <h3 className="text-3xl font-bold text-{color}-600">{fmt(value)}</h3>
+    </div>
+    <div className="p-3 bg-{color}-50 rounded-lg text-{color}-600">
+      <Icon className="size-6" />
     </div>
   </div>
 </div>
 ```
-- verde < 80%, amarillo 80-100%, rojo > 100%
 
-### Listas de items
-- `flex items-center justify-between`
-- Hover: `hover:bg-muted/30` o `hover:bg-green-50/70`
-- Items separados por `border-t border-border/50`
+### Vista agrupada por categoría (gastos, ingresos, futuros, ahorros, compromisos)
+```tsx
+<div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+  <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
+    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Título por categoría</span>
+    <button className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">
+      {allExpanded ? "Contraer todo" : "Expandir todo"}
+    </button>
+  </div>
+```
 
-### Diálogos
-- Usar `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`
-- Formularios dentro del diálogo
-- Botón submit `w-full`
+- **Header de categoría:** `bg-slate-50`, icono expandir, botones editar/eliminar, nombre, count, total
+- **Item row:** icono redondo bg-{color}-100, descripción + fecha, persona, monto, botones editar/eliminar
 
-### Sidebar
-- Fondo: `bg-sidebar` (variable CSS)
-- Item activo: `bg-sidebar-accent text-sidebar-accent-foreground shadow-sm`
-- Item hover: `hover:bg-sidebar-accent/50 hover:translate-x-0.5`
-- Submenú: indentado con `border-l-2 border-muted pl-2 ml-3`
+### Botón primario (header actions)
+```tsx
+<button className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg text-sm font-medium shadow-sm shadow-indigo-200 transition-colors flex items-center gap-2">
+```
+
+### Búsqueda
+```tsx
+<div className="relative">
+  <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+  <input className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent bg-white" />
+</div>
+```
+
+### Select
+```tsx
+<select className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none">
+```
+
+### Diálogo de confirmación para eliminar categoría
+```tsx
+<Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
+  <DialogContent>
+    <p>¿Eliminar la categoría <strong>{catToDelete?.name}</strong>?</p>
+    {related.length > 0 && <Lista de elementos relacionados />}
+    {related.length === 0 && <p>No hay elementos asociados.</p>}
+    <div className="flex justify-end gap-2">
+      <DialogClose render={<Button variant="outline">Cancelar</Button>} />
+      <Button variant="destructive" onClick={confirmDeleteCat}>Eliminar</Button>
+    </div>
+  </DialogContent>
+</Dialog>
+```
+
+### Login — Split screen
+```tsx
+<div className="min-h-screen flex bg-[#f8fafc]">
+  {/* Panel izquierdo oscuro */}
+  <div className="hidden lg:flex lg:w-1/2 bg-[#0f172a] flex-col items-center justify-center">
+    <Wallet className="size-10 text-indigo-400" />
+    <h1 className="text-4xl font-bold text-white">KellyCash</h1>
+    <p className="text-slate-400 text-lg">La platica bajo control</p>
+  </div>
+  {/* Panel derecho */}
+  <div className="flex-1 flex items-center justify-center">
+    <Card className="bg-white rounded-xl border border-slate-100 shadow-sm p-8">
+      <Form />
+    </Card>
+  </div>
+</div>
+```
+
+### Diálogo de confirmación para eliminar (reemplaza `confirm()` nativo)
+- Usar `<Dialog>` con `variant="destructive"` en el botón de confirmación
+- Mostrar elementos relacionados si existen
+- Botón Cancelar con `DialogClose` + `variant="outline"`
+- Siempre preguntar, incluso cuando no hay elementos asociados
 
 ## Colores semánticos
-- Ingresos: green-600 / green-100 bg
-- Gastos: red-600 / red-100 bg
+- Ingresos: emerald-600 / emerald-50 bg
+- Gastos: rose-600 / rose-100 bg
 - Presupuesto: violet-600
-- Balance: blue-600
+- Rubro (budget category): indigo-500 / indigo-50 bg
+- Primario (botones, acentos): indigo-600 / indigo-700 hover
+- Sin categoría: orange-500 bg-orange-50 (warning), emerald-600 bg-emerald-50 (todo ok)
+- Sidebar: `bg-[#0f172a]`
 - Warning (gasto > 80%): yellow-500
 - Exceso (gasto > 100%): red-500
 
 ## Responsive
-- Sidebar fijo 56 (o 10 colapsado)
-- Main content: `flex-1 p-6 overflow-auto`
-- Grids responsive: `md:grid-cols-2 lg:grid-cols-3`
-- Sin scroll horizontal
+- Sidebar fijo 64 (o 16 colapsado)
+- Main content: `flex-1 flex flex-col h-screen overflow-hidden`
+- Grids responsive: `md:grid-cols-2 lg:grid-cols-3 lg:grid-cols-4`
+- Login: panel izquierdo oculto en mobile (`hidden lg:flex`)

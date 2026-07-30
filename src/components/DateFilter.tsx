@@ -43,10 +43,10 @@ export function DateFilter() {
     : `${formatMonth(months[0])} - ${formatMonth(months[months.length - 1])}`
 
   return (
-    <div suppressHydrationWarning className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+    <div suppressHydrationWarning className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">
       <button
         onClick={() => setMonths([currentMonth])}
-        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
           isCurrentMonth
             ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200"
             : "text-slate-500 hover:text-slate-700"
@@ -56,7 +56,7 @@ export function DateFilter() {
       </button>
       <button
         onClick={() => setMonths([previousMonth])}
-        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
           isPreviousMonth
             ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200"
             : "text-slate-500 hover:text-slate-700"
@@ -66,7 +66,7 @@ export function DateFilter() {
       </button>
       <button
         onClick={() => setMonths(yearMonths)}
-        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${
           isThisYear
             ? "bg-white text-indigo-600 shadow-sm ring-1 ring-slate-200"
             : "text-slate-500 hover:text-slate-700"
@@ -75,14 +75,14 @@ export function DateFilter() {
         Este Año
       </button>
 
-      <div className="w-px h-6 bg-slate-300 mx-2" />
+      <div className="w-px h-5 bg-slate-300 mx-1.5" />
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger render={<button type="button" className="flex items-center gap-2 px-3 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer" />}>
-          <Calendar className="size-4" />
-          <span className="text-sm font-medium hidden sm:inline">{label}</span>
+        <DialogTrigger render={<button type="button" className="flex items-center gap-1.5 px-2 text-slate-500 hover:text-slate-700 transition-colors cursor-pointer" />}>
+          <Calendar className="size-3.5" />
+          <span className="text-xs font-medium hidden sm:inline">{label}</span>
         </DialogTrigger>
-        <DialogContent className="max-w-64">
+        <DialogContent className="max-w-xs sm:max-w-sm">
           <MultiMonthPicker initialMonths={months} onChange={setMonths} onClose={() => setOpen(false)} />
         </DialogContent>
       </Dialog>

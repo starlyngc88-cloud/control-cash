@@ -20,6 +20,12 @@ export interface Income {
   created_at: string
 }
 
+export interface ExpenseCategory {
+  id: string
+  name: string
+  created_at: string
+}
+
 export interface Expense {
   id: string
   person_id: string
@@ -28,6 +34,7 @@ export interface Expense {
   date: string
   created_at: string
   budget_category_id?: string | null
+  expense_category_id?: string | null
 }
 
 export interface BudgetTemplate {

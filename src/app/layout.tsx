@@ -38,7 +38,7 @@ export default function RootLayout({
               <Sidebar />
               <main className="flex-1 flex flex-col h-screen overflow-hidden">
                 <Header />
-                <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                   {children}
                 </div>
               </main>

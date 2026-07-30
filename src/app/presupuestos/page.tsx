@@ -326,13 +326,13 @@ export default function PresupuestosPage() {
     <div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Categories */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             {allCats.length > 0 && (
               <>
-              <div className="flex items-center justify-between px-6 py-3 bg-slate-50 border-b border-slate-200">
+              <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
                 <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rubros</span>
                 <button
                   onClick={() => {
@@ -352,47 +352,47 @@ export default function PresupuestosPage() {
                   const isExpanded = expandedParents.has(parent.id)
                   return (
                   <div key={parent.id}>
-                    <div className="flex items-center px-6 py-4 bg-slate-50 border-b border-slate-200">
-                      <button onClick={() => toggleParent(parent.id)} className="text-slate-400 hover:text-slate-600 mr-2">
+                    <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                      <button onClick={() => toggleParent(parent.id)} className="text-slate-400 hover:text-slate-600 mr-1.5">
                         {parent.children.length > 0 ? (
-                          isExpanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />
+                          isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />
                         ) : (
-                          <span className="size-4 block" />
+                          <span className="size-3.5 block" />
                         )}
                       </button>
-                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" title="Subcategoría" onClick={() => { setAddingSub(addingSub === parent.id ? null : parent.id); setSubCatName(""); setSubCatBudgeted("") }}>
-                        <FolderDown className="size-3.5" />
+                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 mr-0.5" title="Subcategoría" onClick={() => { setAddingSub(addingSub === parent.id ? null : parent.id); setSubCatName(""); setSubCatBudgeted("") }}>
+                        <FolderDown className="size-3" />
                       </button>
-                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1 mr-0.5" onClick={() => { setEditingCat(parent); setEditCatName(parent.name); setEditCatBudgeted(String(parent.budgeted)); setOpenCatEdit(true); setEditCatHasChildren(parent.children.length > 0); setEditCatHasSub(parent.children.length > 0 || parent.budgeted === 0) }}>
-                        <Pencil className="size-3.5" />
+                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 mr-0.5" onClick={() => { setEditingCat(parent); setEditCatName(parent.name); setEditCatBudgeted(String(parent.budgeted)); setOpenCatEdit(true); setEditCatHasChildren(parent.children.length > 0); setEditCatHasSub(parent.children.length > 0 || parent.budgeted === 0) }}>
+                        <Pencil className="size-3" />
                       </button>
-                      <button className="text-slate-400 hover:text-rose-600 transition-colors p-1 mr-0.5" onClick={() => handleDeleteCategory(parent.id, parent.name)}>
-                        <Trash2 className="size-3.5" />
+                      <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 mr-0.5" onClick={() => handleDeleteCategory(parent.id, parent.name)}>
+                        <Trash2 className="size-3" />
                       </button>
-                      <span className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</span>
-                      <span className="ml-auto text-sm font-semibold text-slate-700 tabular-nums">
+                      <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</span>
+                      <span className="ml-auto text-xs font-semibold text-slate-700 tabular-nums">
                         {parent.children.length > 0 ? fmt(parent.children.reduce((s, c) => s + c.budgeted, 0)) : fmt(parent.budgeted)}
                       </span>
                     </div>
 
                     {parent.children.length > 0 && isExpanded && parent.children.map((child) => (
-                      <div key={child.id} className="flex items-center px-6 py-3 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                      <div key={child.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
                         <div className="flex items-center flex-1 min-w-0">
-                          <div className="h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center bg-slate-100 text-slate-600">
-                            <FolderDown className="size-3.5" />
+                          <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-slate-100 text-slate-600">
+                            <FolderDown className="size-3" />
                           </div>
-                          <div className="ml-3 min-w-0">
-                            <p className="text-sm font-medium text-slate-900 truncate">{child.name}</p>
+                          <div className="ml-2.5 min-w-0">
+                            <p className="text-xs font-medium text-slate-900 truncate">{child.name}</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 shrink-0 ml-4">
-                          <span className="text-sm font-semibold text-slate-900 tabular-nums">{fmt(child.budgeted)}</span>
-                          <div className="flex items-center gap-1">
-                            <button className="text-slate-400 hover:text-indigo-600 transition-colors p-1" onClick={() => { setEditingCat(child); setEditCatName(child.name); setEditCatBudgeted(String(child.budgeted)); setOpenCatEdit(true) }}>
-                              <Pencil className="size-3.5" />
+                        <div className="flex items-center gap-3 shrink-0 ml-3">
+                          <span className="text-xs font-semibold text-slate-900 tabular-nums">{fmt(child.budgeted)}</span>
+                          <div className="flex items-center gap-0.5">
+                            <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => { setEditingCat(child); setEditCatName(child.name); setEditCatBudgeted(String(child.budgeted)); setOpenCatEdit(true) }}>
+                              <Pencil className="size-3" />
                             </button>
-                            <button className="text-slate-400 hover:text-rose-600 transition-colors p-1" onClick={() => handleDeleteCategory(child.id, child.name)}>
-                              <Trash2 className="size-3.5" />
+                            <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDeleteCategory(child.id, child.name)}>
+                              <Trash2 className="size-3" />
                             </button>
                           </div>
                         </div>
@@ -400,7 +400,7 @@ export default function PresupuestosPage() {
                     ))}
 
                     {addingSub === parent.id && (
-                      <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-slate-100">
+                      <div className="flex items-center gap-2 px-4 py-2 bg-white border-b border-slate-100">
                         <input
                           placeholder="Sub"
                           className="h-8 px-2 text-sm rounded-lg border border-slate-200 bg-white flex-1 min-w-0 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
