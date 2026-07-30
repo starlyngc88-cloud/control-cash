@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { supabase } from "@/lib/supabase"
 import type { Session, User } from "@supabase/supabase-js"
 
+const DEBUG_LOGS = typeof __DEV__ !== "undefined" ? __DEV__ : true
+
 type AuthContextType = {
   user: User | null
   session: Session | null
@@ -29,12 +31,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (DEBUG_LOGS) {
+        console.log("[KellyCash][Mobile][Auth] init session", {
+          userId: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          expiresAt: session?.expires_at ?? null,
+        })
+      }
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (DEBUG_LOGS) {
+        console.log("[KellyCash][Mobile][Auth] state changed", {
+          event,
+          userId: session?.user?.id ?? null,
+          email: session?.user?.email ?? null,
+          expiresAt: session?.expires_at ?? null,
+        })
+      }
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
