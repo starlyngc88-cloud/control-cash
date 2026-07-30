@@ -1,16 +1,20 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getExpenses, getPeople, getExpenseCategories, createExpense, updateExpense, deleteExpense } from "@/services/api"
+import { getExpenses, getPeople, getExpenseCategories, getAllBudgetCategories, createExpense, updateExpense, deleteExpense, createExpenseCategory, deleteExpenseCategory } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Plus, TrendingUp, Pencil, Trash2, Search, X } from "lucide-react-native"
+import { useMonthFilter } from "@/hooks/useMonthFilter"
+import DateFilter from "@/components/DateFilter"
+import DatePickerModal from "@/components/DatePickerModal"
+import { Plus, TrendingUp, Pencil, Trash2, Search, X, Calendar } from "lucide-react-native"
 
 export default function GastosScreen() {
   const insets = useSafeAreaInsets()
   const [expenses, setExpenses] = useState<any[]>([])
   const [people, setPeople] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
+  const [budgetCategories, setBudgetCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
@@ -18,25 +22,40 @@ export default function GastosScreen() {
   const [editing, setEditing] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const { months, setMonths } = useMonthFilter()
+
   // Form state
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [categoryId, setCategoryId] = useState("")
+  const [budgetCategoryId, setBudgetCategoryId] = useState("")
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const parsedDate = useMemo(() => new Date(date + "T12:00:00"), [date])
+  const [catManagerOpen, setCatManagerOpen] = useState(false)
+  const [catManagerName, setCatManagerName] = useState("")
 
   const load = useCallback(async () => {
-    const [exp, p, cats] = await Promise.all([
-      getExpenses(),
+    const sorted = [...months].sort()
+    const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
+    const endDate = sorted.length > 0 ? (() => {
+      const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+      return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
+    })() : undefined
+    const [exp, p, cats, bCats] = await Promise.all([
+      getExpenses({ startDate, endDate }),
       getPeople(),
       getExpenseCategories(),
+      getAllBudgetCategories(),
     ])
     setExpenses(exp)
     setPeople(p)
     setCategories(cats)
+    setBudgetCategories(bCats)
     setLoading(false)
     setRefreshing(false)
-  }, [])
+  }, [months])
 
   useEffect(() => { load() }, [load])
 
@@ -49,6 +68,7 @@ export default function GastosScreen() {
     setDescription("")
     setDate(new Date().toISOString().split("T")[0])
     setCategoryId("")
+    setBudgetCategoryId("")
     setModalOpen(true)
   }
 
@@ -59,6 +79,7 @@ export default function GastosScreen() {
     setDescription(exp.description)
     setDate(exp.date)
     setCategoryId(exp.expense_category_id ?? "")
+    setBudgetCategoryId(exp.budget_category_id ?? "")
     setModalOpen(true)
   }
 
@@ -75,6 +96,7 @@ export default function GastosScreen() {
         description,
         date,
         expense_category_id: categoryId || null,
+        budget_category_id: budgetCategoryId || null,
       }
       if (editing) {
         await updateExpense(editing.id, data)
@@ -115,12 +137,17 @@ export default function GastosScreen() {
   return (
     <View className="flex-1 bg-[#f8fafc]" style={{ paddingTop: insets.top + 12 }}>
       {/* Header */}
-      <View className="flex-row items-center justify-between px-4 mb-3">
+      <View className="flex-row items-center justify-between px-4 mb-2">
         <Text className="text-lg font-bold text-slate-800">Gastos</Text>
         <TouchableOpacity onPress={openNew} className="bg-indigo-600 px-4 py-2 rounded-xl flex-row items-center gap-1.5">
           <Plus size={14} color="white" />
           <Text className="text-xs font-semibold text-white">Nuevo</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Filter */}
+      <View className="px-4 mb-3">
+        <DateFilter months={months} onChange={setMonths} />
       </View>
 
       {/* Search */}
@@ -143,7 +170,7 @@ export default function GastosScreen() {
       </View>
 
       {/* KPI summary */}
-      <View className="flex-row gap-3 mx-4 mb-3">
+      <View className="flex-row gap-2 mx-4 mb-3">
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-rose-500 mb-0.5">Total gastado</Text>
           <Text className="text-sm font-bold text-rose-600">{formatCurrency(expenses.reduce((s: number, e: any) => s + Number(e.amount), 0))}</Text>
@@ -151,6 +178,10 @@ export default function GastosScreen() {
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Registros</Text>
           <Text className="text-sm font-bold text-slate-800">{expenses.length}</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Categorías</Text>
+          <Text className="text-sm font-bold text-slate-800">{new Set(expenses.map((e: any) => e.expense_category_id).filter(Boolean)).size}</Text>
         </View>
       </View>
 
@@ -175,7 +206,7 @@ export default function GastosScreen() {
                     {exp.description || "Sin concepto"}
                   </Text>
                   <Text className="text-[10px] text-slate-400">
-                    {exp.people?.name}{exp.people?.name ? " · " : ""}{new Date(exp.date).toLocaleDateString("es-CO")}
+                    {exp.people?.name}{exp.people?.name ? " · " : ""}{exp.budget_categories?.name ? `${exp.budget_categories.name} · ` : ""}{new Date(exp.date).toLocaleDateString("es-CO")}
                   </Text>
                 </View>
                 <Text className="text-xs font-semibold text-rose-600 mr-2">
@@ -193,6 +224,14 @@ export default function GastosScreen() {
         )}
         <View className="h-8" />
       </ScrollView>
+
+      {/* Footer total */}
+      <View className="px-4 py-3 border-t border-slate-200 bg-white" style={{ paddingBottom: insets.bottom + 12 }}>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-sm font-medium text-slate-600">Total</Text>
+          <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, e: any) => s + Number(e.amount), 0))}</Text>
+        </View>
+      </View>
 
       {/* Modal */}
       <Modal visible={modalOpen} animationType="slide" transparent>
@@ -235,6 +274,23 @@ export default function GastosScreen() {
                 </View>
 
                 <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Fecha</Text>
+                  <TouchableOpacity
+                    onPress={() => setDatePickerOpen(true)}
+                    className="h-10 px-3 rounded-xl border border-slate-200 bg-white flex-row items-center"
+                  >
+                    <Calendar size={14} color="#94a3b8" />
+                    <Text className="ml-2 text-sm text-slate-800">{parsedDate.toLocaleDateString("es-CO")}</Text>
+                  </TouchableOpacity>
+                  <DatePickerModal
+                    date={parsedDate}
+                    onChange={(d) => setDate(d.toISOString().split("T")[0])}
+                    visible={datePickerOpen}
+                    onClose={() => setDatePickerOpen(false)}
+                  />
+                </View>
+
+                <View>
                   <Text className="text-xs font-medium text-slate-600 mb-1">Descripción</Text>
                   <TextInput
                     className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
@@ -246,7 +302,33 @@ export default function GastosScreen() {
                 </View>
 
                 <View>
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Categoría</Text>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Tipo de gasto</Text>
+                  <View className="flex-row flex-wrap gap-1.5">
+                    <TouchableOpacity
+                      onPress={() => setBudgetCategoryId("")}
+                      className={`px-3 py-1.5 rounded-xl border ${!budgetCategoryId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}
+                    >
+                      <Text className={`text-xs ${!budgetCategoryId ? "text-white" : "text-slate-400"}`}>Sin rubro</Text>
+                    </TouchableOpacity>
+                    {budgetCategories.map((bc) => (
+                      <TouchableOpacity
+                        key={bc.id}
+                        onPress={() => setBudgetCategoryId(bc.id)}
+                        className={`px-3 py-1.5 rounded-xl border ${budgetCategoryId === bc.id ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}
+                      >
+                        <Text className={`text-xs ${budgetCategoryId === bc.id ? "text-white" : "text-slate-600"}`}>{bc.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View>
+                  <View className="flex-row items-center justify-between mb-1">
+                    <Text className="text-xs font-medium text-slate-600">Categoría</Text>
+                    <TouchableOpacity onPress={() => setCatManagerOpen(true)}>
+                      <Text className="text-[10px] text-indigo-600 font-medium">Gestionar categorías</Text>
+                    </TouchableOpacity>
+                  </View>
                   <View className="flex-row flex-wrap gap-1.5">
                     <TouchableOpacity
                       onPress={() => setCategoryId("")}
@@ -279,6 +361,66 @@ export default function GastosScreen() {
                 <Text className="text-sm font-semibold text-white">{editing ? "Guardar cambios" : "Crear gasto"}</Text>
               )}
             </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Category Manager Modal */}
+      <Modal visible={catManagerOpen} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
+          <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-semibold text-slate-800">Gestionar categorías</Text>
+              <TouchableOpacity onPress={() => { setCatManagerOpen(false); setCatManagerName("") }}>
+                <X size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            <View className="max-h-96">
+              <View className="flex-row items-center gap-2 mb-4">
+                <TextInput
+                  className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
+                  placeholder="Nueva categoría"
+                  placeholderTextColor="#94a3b8"
+                  value={catManagerName}
+                  onChangeText={setCatManagerName}
+                />
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!catManagerName.trim()) return
+                    await createExpenseCategory({ name: catManagerName.trim() })
+                    setCatManagerName("")
+                    const cats = await getExpenseCategories()
+                    setCategories(cats)
+                  }}
+                  className="h-10 px-4 rounded-xl bg-indigo-600 items-center justify-center"
+                >
+                  <Text className="text-xs font-semibold text-white">Agregar</Text>
+                </TouchableOpacity>
+              </View>
+
+              {categories.map((cat) => (
+                <View key={cat.id} className="flex-row items-center justify-between py-2.5 border-b border-slate-100">
+                  <Text className="text-sm text-slate-800">{cat.name}</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      Alert.alert("Eliminar categoría", `¿Eliminar "${cat.name}"?`, [
+                        { text: "Cancelar", style: "cancel" },
+                        { text: "Eliminar", style: "destructive", onPress: async () => {
+                          await deleteExpenseCategory(cat.id)
+                          const cats = await getExpenseCategories()
+                          setCategories(cats)
+                          if (categoryId === cat.id) setCategoryId("")
+                        }},
+                      ])
+                    }}
+                    className="p-1.5"
+                  >
+                    <Trash2 size={14} color="#e11d48" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>

@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement } from "@/services/api"
+import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, countAllSavingMovements } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Plus, PiggyBank, Pencil, Trash2, ArrowDownCircle, ArrowUpCircle, X } from "lucide-react-native"
+import { Plus, PiggyBank, Pencil, Trash2, ArrowDownCircle, ArrowUpCircle, Search, X } from "lucide-react-native"
 
 export default function HuchaScreen() {
   const insets = useSafeAreaInsets()
@@ -16,6 +16,8 @@ export default function HuchaScreen() {
   const [editing, setEditing] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
   const [movementSavingId, setMovementSavingId] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [movementsCount, setMovementsCount] = useState(0)
 
   // Form state
   const [name, setName] = useState("")
@@ -26,8 +28,9 @@ export default function HuchaScreen() {
   const [movNotes, setMovNotes] = useState("")
 
   const load = useCallback(async () => {
-    const s = await getSavings()
+    const [s, m] = await Promise.all([getSavings(), countAllSavingMovements()])
     setSavings(s)
+    setMovementsCount(m)
     setLoading(false)
     setRefreshing(false)
   }, [])
@@ -95,6 +98,7 @@ export default function HuchaScreen() {
   }
 
   const totalAhorrado = savings.reduce((s: number, sv: any) => s + Number(sv.current_amount), 0)
+  const filtered = savings.filter((s) => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.description?.toLowerCase().includes(search.toLowerCase()))
 
   if (loading) {
     return (
@@ -113,22 +117,40 @@ export default function HuchaScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search */}
       <View className="mx-4 mb-3">
-        <View className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total ahorrado</Text>
-          <Text className="text-xl font-bold text-emerald-600">{formatCurrency(totalAhorrado)}</Text>
+        <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
+          <Search size={14} color="#94a3b8" />
+          <TextInput className="flex-1 ml-2 text-xs text-slate-800" placeholder="Buscar hucha..." placeholderTextColor="#94a3b8" value={search} onChangeText={setSearch} />
+          {search ? <TouchableOpacity onPress={() => setSearch("")}><X size={14} color="#94a3b8" /></TouchableOpacity> : null}
+        </View>
+      </View>
+
+      {/* KPI summary */}
+      <View className="flex-row gap-3 mx-4 mb-3">
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-emerald-500 mb-0.5">Total ahorrado</Text>
+          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(totalAhorrado)}</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Huchas</Text>
+          <Text className="text-sm font-bold text-slate-800">{savings.length}</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Movimientos</Text>
+          <Text className="text-sm font-bold text-slate-800">{movementsCount}</Text>
         </View>
       </View>
 
       <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
-        {savings.length === 0 ? (
+        {filtered.length === 0 ? (
           <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
             <PiggyBank size={32} color="#cbd5e1" />
-            <Text className="text-xs text-slate-400 mt-2">No hay huchas aún</Text>
+            <Text className="text-xs text-slate-400 mt-2">{search ? "Sin resultados para esa búsqueda" : "No hay huchas aún"}</Text>
           </View>
         ) : (
           <View className="space-y-3">
-            {savings.map((s) => {
+            {filtered.map((s) => {
               const progress = Number(s.target_amount) > 0 ? Math.min(100, (Number(s.current_amount) / Number(s.target_amount)) * 100) : 0
               return (
                 <View key={s.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
@@ -162,6 +184,11 @@ export default function HuchaScreen() {
             })}
           </View>
         )}
+        {/* Footer total */}
+        <View className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex-row items-center justify-between">
+          <Text className="text-xs font-medium text-slate-500">Total general</Text>
+          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(totalAhorrado)}</Text>
+        </View>
         <View className="h-8" />
       </ScrollView>
 

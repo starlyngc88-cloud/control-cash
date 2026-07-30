@@ -144,9 +144,9 @@ export default function PresupuestosScreen() {
           <Text className="text-[10px] font-medium text-slate-400 mb-1.5">Meses abiertos</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-1.5">
             {monthlyBudgets.slice(0, 6).map((mb: any) => (
-              <View key={mb.id} className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              <TouchableOpacity key={mb.id} onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })} className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
                 <Text className="text-[10px] text-slate-600">{mb.month?.slice(0, 7)}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </ScrollView>
         </View>

@@ -1,10 +1,13 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome } from "@/services/api"
+import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome, createIncomeCategory, deleteIncomeCategory } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Plus, TrendingDown, Pencil, Trash2, Search, X } from "lucide-react-native"
+import { useMonthFilter } from "@/hooks/useMonthFilter"
+import DateFilter from "@/components/DateFilter"
+import DatePickerModal from "@/components/DatePickerModal"
+import { Plus, TrendingDown, Pencil, Trash2, Search, X, Calendar } from "lucide-react-native"
 
 export default function IngresosScreen() {
   const insets = useSafeAreaInsets()
@@ -18,20 +21,33 @@ export default function IngresosScreen() {
   const [editing, setEditing] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  const [catManagerOpen, setCatManagerOpen] = useState(false)
+  const [newCatName, setNewCatName] = useState("")
+
+  const { months, setMonths } = useMonthFilter()
+
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [categoryId, setCategoryId] = useState("")
+  const [datePickerOpen, setDatePickerOpen] = useState(false)
+  const parsedDate = useMemo(() => new Date(date + "T12:00:00"), [date])
 
   const load = useCallback(async () => {
-    const [inc, p, cats] = await Promise.all([getIncomes(), getPeople(), getIncomeCategories()])
+    const sorted = [...months].sort()
+    const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
+    const endDate = sorted.length > 0 ? (() => {
+      const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+      return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
+    })() : undefined
+    const [inc, p, cats] = await Promise.all([getIncomes({ startDate, endDate }), getPeople(), getIncomeCategories()])
     setIncomes(inc)
     setPeople(p)
     setCategories(cats)
     setLoading(false)
     setRefreshing(false)
-  }, [])
+  }, [months])
 
   useEffect(() => { load() }, [load])
   useRealtimeSubscription("incomes", () => load(), () => load(), () => load())
@@ -79,11 +95,15 @@ export default function IngresosScreen() {
 
   return (
     <View className="flex-1 bg-[#f8fafc]" style={{ paddingTop: insets.top + 12 }}>
-      <View className="flex-row items-center justify-between px-4 mb-3">
+      <View className="flex-row items-center justify-between px-4 mb-2">
         <Text className="text-lg font-bold text-slate-800">Ingresos</Text>
         <TouchableOpacity onPress={openNew} className="bg-indigo-600 px-4 py-2 rounded-xl flex-row items-center gap-1.5">
           <Plus size={14} color="white" /><Text className="text-xs font-semibold text-white">Nuevo</Text>
         </TouchableOpacity>
+      </View>
+
+      <View className="px-4 mb-3">
+        <DateFilter months={months} onChange={setMonths} />
       </View>
 
       <View className="mx-4 mb-3">
@@ -102,6 +122,10 @@ export default function IngresosScreen() {
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Registros</Text>
           <Text className="text-sm font-bold text-slate-800">{incomes.length}</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Categorías</Text>
+          <Text className="text-sm font-bold text-slate-800">{new Set(incomes.filter(i => i.category_id).map(i => i.category_id)).size}</Text>
         </View>
       </View>
 
@@ -131,6 +155,13 @@ export default function IngresosScreen() {
         <View className="h-8" />
       </ScrollView>
 
+      {filtered.length > 0 && (
+        <View className="flex-row items-center justify-between px-4 py-2.5 bg-white border-t border-slate-200" style={{ paddingBottom: insets.bottom + 8 }}>
+          <Text className="text-xs font-medium text-slate-500">Total ({filtered.length} registros)</Text>
+          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(filtered.reduce((s: number, i: any) => s + Number(i.amount), 0))}</Text>
+        </View>
+      )}
+
       <Modal visible={modalOpen} animationType="slide" transparent>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
           <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ paddingBottom: insets.bottom + 20 }}>
@@ -156,11 +187,33 @@ export default function IngresosScreen() {
                   <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
                 </View>
                 <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Fecha</Text>
+                  <TouchableOpacity
+                    onPress={() => setDatePickerOpen(true)}
+                    className="h-10 px-3 rounded-xl border border-slate-200 bg-white flex-row items-center"
+                  >
+                    <Calendar size={14} color="#94a3b8" />
+                    <Text className="ml-2 text-sm text-slate-800">{parsedDate.toLocaleDateString("es-CO")}</Text>
+                  </TouchableOpacity>
+                  <DatePickerModal
+                    date={parsedDate}
+                    onChange={(d) => setDate(d.toISOString().split("T")[0])}
+                    visible={datePickerOpen}
+                    onClose={() => setDatePickerOpen(false)}
+                  />
+                </View>
+
+                <View>
                   <Text className="text-xs font-medium text-slate-600 mb-1">Descripción</Text>
                   <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="¿De dónde viene?" placeholderTextColor="#94a3b8" value={description} onChangeText={setDescription} />
                 </View>
                 <View>
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Categoría</Text>
+                  <View className="flex-row items-center justify-between mb-1">
+                    <Text className="text-xs font-medium text-slate-600">Categoría</Text>
+                    <TouchableOpacity onPress={() => setCatManagerOpen(true)}>
+                      <Text className="text-[10px] font-medium text-indigo-600">Gestionar categorías</Text>
+                    </TouchableOpacity>
+                  </View>
                   <View className="flex-row flex-wrap gap-1.5">
                     <TouchableOpacity onPress={() => setCategoryId("")}
                       className={`px-3 py-1.5 rounded-xl border ${!categoryId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
@@ -181,6 +234,56 @@ export default function IngresosScreen() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={catManagerOpen} animationType="slide" transparent>
+        <View className="flex-1 justify-end bg-black/30">
+          <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ maxHeight: "70%", paddingBottom: insets.bottom + 20 }}>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-semibold text-slate-800">Gestionar categorías</Text>
+              <TouchableOpacity onPress={() => setCatManagerOpen(false)}><X size={20} color="#94a3b8" /></TouchableOpacity>
+            </View>
+            <ScrollView className="max-h-60 mb-4">
+              {categories.length === 0 ? (
+                <Text className="text-xs text-slate-400 text-center py-4">Sin categorías aún</Text>
+              ) : (
+                categories.map((cat) => (
+                  <View key={cat.id} className="flex-row items-center justify-between py-2.5 border-b border-slate-100">
+                    <Text className="text-xs text-slate-800">{cat.name}</Text>
+                    <TouchableOpacity onPress={async () => {
+                      await deleteIncomeCategory(cat.id)
+                      const updated = await getIncomeCategories()
+                      setCategories(updated)
+                    }}>
+                      <Trash2 size={14} color="#e11d48" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <View className="flex-row items-center gap-2">
+              <TextInput
+                className="flex-1 h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
+                placeholder="Nueva categoría..."
+                placeholderTextColor="#94a3b8"
+                value={newCatName}
+                onChangeText={setNewCatName}
+              />
+              <TouchableOpacity
+                onPress={async () => {
+                  if (!newCatName.trim()) return
+                  await createIncomeCategory({ name: newCatName.trim() })
+                  setNewCatName("")
+                  const updated = await getIncomeCategories()
+                  setCategories(updated)
+                }}
+                className="h-10 px-4 rounded-xl bg-indigo-600 items-center justify-center"
+              >
+                <Text className="text-xs font-semibold text-white">Agregar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   )

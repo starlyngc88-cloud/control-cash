@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, deleteFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
-import { Plus, CalendarClock, Pencil, Trash2, X, Circle, CheckCircle2, Ban } from "lucide-react-native"
+import { Plus, CalendarClock, Pencil, Trash2, Search, X, Circle, CheckCircle2, Ban } from "lucide-react-native"
 
 const STATUS_ICONS: Record<string, any> = { planned: Circle, completed: CheckCircle2, cancelled: Ban }
 const STATUS_COLORS: Record<string, string> = { planned: "#f59e0b", completed: "#059669", cancelled: "#94a3b8" }
@@ -17,6 +17,7 @@ export default function GastosFuturosScreen() {
   const [categories, setCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [catModalOpen, setCatModalOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
@@ -92,6 +93,13 @@ export default function GastosFuturosScreen() {
     setCatName(""); setCatModalOpen(false); load()
   }
 
+  const now = new Date()
+  const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+  const in90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
+  const dueSoon30 = items.filter((fe: any) => fe.expected_date && new Date(fe.expected_date) <= in30 && fe.status === "planned")
+  const dueSoon90 = items.filter((fe: any) => fe.expected_date && new Date(fe.expected_date) <= in90 && fe.status === "planned")
+  const filtered = items.filter((fe: any) => !search || fe.title?.toLowerCase().includes(search.toLowerCase()) || fe.description?.toLowerCase().includes(search.toLowerCase()))
+
   if (loading) return (
     <View className="flex-1 bg-background items-center justify-center" style={{ paddingTop: insets.top }}>
       <ActivityIndicator size="large" color="#4f46e5" />
@@ -110,15 +118,46 @@ export default function GastosFuturosScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Summary */}
-      <View className="flex-row gap-3 mx-4 mb-3">
-        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
-          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total previsto</Text>
-          <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.reduce((s: number, i: any) => s + Number(i.expected_amount), 0))}</Text>
+      {/* Search */}
+      <View className="mx-4 mb-3">
+        <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
+          <Search size={14} color="#94a3b8" />
+          <TextInput
+            className="flex-1 ml-2 text-xs text-slate-800"
+            placeholder="Buscar gasto futuro..."
+            placeholderTextColor="#94a3b8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <X size={14} color="#94a3b8" />
+            </TouchableOpacity>
+          ) : null}
         </View>
-        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
-          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pendientes</Text>
-          <Text className="text-sm font-bold text-amber-600">{items.filter((i: any) => i.status === "planned").length}</Text>
+      </View>
+
+      {/* KPI */}
+      <View className="gap-2 mx-4 mb-3">
+        <View className="flex-row gap-3">
+          <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+            <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total previsto</Text>
+            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.reduce((s: number, i: any) => s + Number(i.expected_amount), 0))}</Text>
+          </View>
+          <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+            <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pendientes</Text>
+            <Text className="text-sm font-bold text-amber-600">{items.filter((i: any) => i.status === "planned").length}</Text>
+          </View>
+        </View>
+        <View className="flex-row gap-3">
+          <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+            <Text className="text-[10px] font-medium text-indigo-500 mb-0.5">Próximos 30 días</Text>
+            <Text className="text-sm font-bold text-indigo-600">{dueSoon30.length}</Text>
+          </View>
+          <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+            <Text className="text-[10px] font-medium text-indigo-500 mb-0.5">Próximos 90 días</Text>
+            <Text className="text-sm font-bold text-indigo-600">{dueSoon90.length}</Text>
+          </View>
         </View>
       </View>
 
@@ -128,14 +167,14 @@ export default function GastosFuturosScreen() {
           <Plus size={12} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar categoría</Text>
         </TouchableOpacity>
 
-        {items.length === 0 ? (
+        {filtered.length === 0 ? (
           <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
             <CalendarClock size={32} color="#cbd5e1" />
             <Text className="text-xs text-slate-400 mt-2">Sin gastos futuros</Text>
           </View>
         ) : (
           <View className="space-y-2">
-            {items.map((item: any) => {
+            {filtered.map((item: any) => {
               const urgency = getUrgency(item.expected_date)
               const StatusIcon = STATUS_ICONS[item.status] ?? Circle
               const statusColor = STATUS_COLORS[item.status] ?? "#94a3b8"
@@ -177,6 +216,12 @@ export default function GastosFuturosScreen() {
         )}
         <View className="h-8" />
       </ScrollView>
+
+      {/* Footer total */}
+      <View className="bg-white border-t border-slate-200 px-4 py-3 flex-row items-center justify-between" style={{ paddingBottom: insets.bottom + 12 }}>
+        <Text className="text-xs font-medium text-slate-500">Total visible</Text>
+        <Text className="text-sm font-bold text-slate-800">{formatCurrency(filtered.reduce((s: number, i: any) => s + Number(i.expected_amount), 0))}</Text>
+      </View>
 
       {/* Item Modal */}
       <Modal visible={modalOpen} animationType="slide" transparent>

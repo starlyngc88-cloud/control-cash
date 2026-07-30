@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
-import { Plus, CircleDollarSign, Pencil, Trash2, X, ArrowDownCircle, History } from "lucide-react-native"
+import { Plus, CircleDollarSign, Pencil, Trash2, X, ArrowDownCircle, History, Search } from "lucide-react-native"
 
 export default function CompromisosScreen() {
   const insets = useSafeAreaInsets()
@@ -13,6 +13,7 @@ export default function CompromisosScreen() {
   const [categories, setCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [historyModalOpen, setHistoryModalOpen] = useState(false)
@@ -98,6 +99,10 @@ export default function CompromisosScreen() {
   const totalDeuda = commitments.reduce((s: number, c: any) => s + Number(c.current_balance), 0)
   const totalOriginal = commitments.reduce((s: number, c: any) => s + Number(c.total_amount), 0)
 
+  const filtered = commitments.filter((c) =>
+    !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.description?.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
     <View className="flex-1 bg-[#f8fafc]" style={{ paddingTop: insets.top + 12 }}>
       <View className="flex-row items-center justify-between px-4 mb-3">
@@ -110,6 +115,25 @@ export default function CompromisosScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search */}
+      <View className="mx-4 mb-3">
+        <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
+          <Search size={14} color="#94a3b8" />
+          <TextInput
+            className="flex-1 ml-2 text-xs text-slate-800"
+            placeholder="Buscar compromiso..."
+            placeholderTextColor="#94a3b8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search ? (
+            <TouchableOpacity onPress={() => setSearch("")}>
+              <X size={14} color="#94a3b8" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+
       <View className="flex-row gap-3 mx-4 mb-3">
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Deuda total</Text>
@@ -119,47 +143,64 @@ export default function CompromisosScreen() {
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pagado</Text>
           <Text className="text-sm font-bold text-emerald-600">{formatCurrency(totalOriginal - totalDeuda)}</Text>
         </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Compromisos</Text>
+          <Text className="text-sm font-bold text-slate-800">{commitments.length}</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Progreso</Text>
+          <Text className="text-sm font-bold text-indigo-600">{totalOriginal > 0 ? Math.round(((totalOriginal - totalDeuda) / totalOriginal) * 100) : 0}%</Text>
+        </View>
       </View>
 
-      <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
-        {commitments.length === 0 ? (
-          <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
-            <CircleDollarSign size={32} color="#cbd5e1" />
-            <Text className="text-xs text-slate-400 mt-2">Sin compromisos</Text>
-          </View>
-        ) : (
-          <View className="space-y-3">
-            {commitments.map((c: any) => {
-              const progress = Number(c.total_amount) > 0 ? ((Number(c.total_amount) - Number(c.current_balance)) / Number(c.total_amount)) * 100 : 0
-              return (
-                <View key={c.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                  <View className="flex-row items-start justify-between mb-2">
-                    <View className="flex-1 mr-2">
-                      <Text className="text-sm font-semibold text-slate-800">{c.name}</Text>
-                      {c.description ? <Text className="text-[10px] text-slate-400">{c.description}</Text> : null}
+      <View className="flex-1">
+        <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
+          {filtered.length === 0 ? (
+            <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
+              <CircleDollarSign size={32} color="#cbd5e1" />
+              <Text className="text-xs text-slate-400 mt-2">{search ? "Sin resultados" : "Sin compromisos"}</Text>
+            </View>
+          ) : (
+            <View className="space-y-3">
+              {filtered.map((c: any) => {
+                const progress = Number(c.total_amount) > 0 ? ((Number(c.total_amount) - Number(c.current_balance)) / Number(c.total_amount)) * 100 : 0
+                return (
+                  <View key={c.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
+                    <View className="flex-row items-start justify-between mb-2">
+                      <View className="flex-1 mr-2">
+                        <Text className="text-sm font-semibold text-slate-800">{c.name}</Text>
+                        {c.description ? <Text className="text-[10px] text-slate-400">{c.description}</Text> : null}
+                      </View>
+                      <View className="flex-row gap-1">
+                        <TouchableOpacity onPress={() => openPayment(c.id)} className="p-1.5 bg-emerald-100 rounded-lg"><ArrowDownCircle size={14} color="#059669" /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => openHistory(c)} className="p-1.5 bg-indigo-100 rounded-lg"><History size={12} color="#4f46e5" /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => openEdit(c)} className="p-1.5 bg-slate-100 rounded-lg"><Pencil size={12} color="#64748b" /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-1.5 bg-rose-100 rounded-lg"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                      </View>
                     </View>
-                    <View className="flex-row gap-1">
-                      <TouchableOpacity onPress={() => openPayment(c.id)} className="p-1.5 bg-emerald-100 rounded-lg"><ArrowDownCircle size={14} color="#059669" /></TouchableOpacity>
-                      <TouchableOpacity onPress={() => openHistory(c)} className="p-1.5 bg-indigo-100 rounded-lg"><History size={12} color="#4f46e5" /></TouchableOpacity>
-                      <TouchableOpacity onPress={() => openEdit(c)} className="p-1.5 bg-slate-100 rounded-lg"><Pencil size={12} color="#64748b" /></TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-1.5 bg-rose-100 rounded-lg"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                    <View className="h-2 bg-slate-100 rounded-full mb-1.5 overflow-hidden">
+                      <View className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
                     </View>
+                    <View className="flex-row justify-between items-center">
+                      <Text className="text-xs font-semibold text-rose-600">Saldo: {formatCurrency(Number(c.current_balance))}</Text>
+                      <Text className="text-[10px] text-slate-400">Total: {formatCurrency(Number(c.total_amount))}</Text>
+                    </View>
+                    {c.budget_categories?.name ? <Text className="text-[10px] text-slate-400 mt-1">Rubro: {c.budget_categories.name}</Text> : null}
                   </View>
-                  <View className="h-2 bg-slate-100 rounded-full mb-1.5 overflow-hidden">
-                    <View className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
-                  </View>
-                  <View className="flex-row justify-between items-center">
-                    <Text className="text-xs font-semibold text-rose-600">Saldo: {formatCurrency(Number(c.current_balance))}</Text>
-                    <Text className="text-[10px] text-slate-400">Total: {formatCurrency(Number(c.total_amount))}</Text>
-                  </View>
-                  {c.budget_categories?.name ? <Text className="text-[10px] text-slate-400 mt-1">Rubro: {c.budget_categories.name}</Text> : null}
-                </View>
-              )
-            })}
+                )
+              })}
+            </View>
+          )}
+          <View className="h-4" />
+        </ScrollView>
+
+        <View className="bg-white border-t border-slate-200 px-4 py-3 shadow-lg" style={{ paddingBottom: insets.bottom + 8 }}>
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs font-medium text-slate-500">Saldo restante total</Text>
+            <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, c: any) => s + Number(c.current_balance), 0))}</Text>
           </View>
-        )}
-        <View className="h-8" />
-      </ScrollView>
+        </View>
+      </View>
 
       {/* Commitment Modal */}
       <Modal visible={modalOpen} animationType="slide" transparent>

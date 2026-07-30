@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import type { Person, ExpenseCategory, IncomeCategory, DashboardData, BudgetTemplate, BudgetCategory, MonthlyBudget, FutureExpenseCategory, FutureExpense, Commitment, CommitmentPayment, AllowedUser } from "@/types/database"
+import type { Person, ExpenseCategory, IncomeCategory, DashboardData, YearlyMonth, BudgetTemplate, BudgetCategory, MonthlyBudget, FutureExpenseCategory, FutureExpense, Commitment, CommitmentPayment, AllowedUser } from "@/types/database"
 
 export async function getPeople(): Promise<Person[]> {
   const { data } = await supabase.from("people").select("*").order("name")
@@ -16,14 +16,29 @@ export async function deletePerson(id: string) {
 }
 
 export async function getExpenses(opts?: { startDate?: string; endDate?: string }): Promise<any[]> {
-  let query = supabase
-    .from("expenses")
-    .select("*, people(name), expense_categories(name)")
-    .order("date", { ascending: false })
+  let query = supabase.from("expenses").select("*").order("date", { ascending: false })
   if (opts?.startDate) query = query.gte("date", opts.startDate)
   if (opts?.endDate) query = query.lte("date", opts.endDate)
-  const { data } = await query
-  return data ?? []
+  const { data, error } = await query
+  if (error || !data) return []
+  const expenses = data as any[]
+  const personIds = [...new Set(expenses.map((e: any) => e.person_id))]
+  const expCatIds = [...new Set(expenses.map((e: any) => e.expense_category_id).filter(Boolean))]
+  const budgetCatIds = [...new Set(expenses.map((e: any) => e.budget_category_id).filter(Boolean))]
+  const [peopleRes, expCatsRes, bCatsRes] = await Promise.all([
+    supabase.from("people").select("id, name").in("id", personIds),
+    expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : { data: [] },
+    budgetCatIds.length > 0 ? supabase.from("budget_categories").select("id, name").in("id", budgetCatIds) : { data: [] },
+  ])
+  const peopleMap = new Map((peopleRes.data ?? []).map((p: any) => [p.id, { name: p.name }]))
+  const expCatMap = new Map((expCatsRes.data ?? []).map((c: any) => [c.id, { id: c.id, name: c.name }]))
+  const bCatMap = new Map((bCatsRes.data ?? []).map((bc: any) => [bc.id, { name: bc.name }]))
+  return expenses.map((e: any) => ({
+    ...e,
+    people: peopleMap.get(e.person_id) ?? null,
+    expense_categories: e.expense_category_id ? expCatMap.get(e.expense_category_id) ?? null : null,
+    budget_categories: e.budget_category_id ? bCatMap.get(e.budget_category_id) ?? null : null,
+  }))
 }
 export async function createExpense(data: any) {
   return supabase.from("expenses").insert(data).select().single()
@@ -36,14 +51,16 @@ export async function deleteExpense(id: string) {
 }
 
 export async function getIncomes(opts?: { startDate?: string; endDate?: string }): Promise<any[]> {
-  let query = supabase
-    .from("income")
-    .select("*, people(name), income_categories(name)")
-    .order("date", { ascending: false })
+  let query = supabase.from("income").select("*, income_categories(name)").order("date", { ascending: false })
   if (opts?.startDate) query = query.gte("date", opts.startDate)
   if (opts?.endDate) query = query.lte("date", opts.endDate)
-  const { data } = await query
-  return data ?? []
+  const { data, error } = await query
+  if (error || !data) return []
+  const raw = data as any[]
+  const personIds = [...new Set(raw.map((inc: any) => inc.person_id))]
+  const { data: people } = await supabase.from("people").select("id, name").in("id", personIds)
+  const peopleMap = new Map((people ?? []).map((p: any) => [p.id, { name: p.name }]))
+  return raw.map((inc: any) => ({ ...inc, people: peopleMap.get(inc.person_id) ?? null }))
 }
 export async function createIncome(data: any) {
   return supabase.from("income").insert(data).select().single()
@@ -98,6 +115,23 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
   return { totalBudgeted, totalIngresos, totalGastos, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
 }
 
+export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
+  const months: YearlyMonth[] = []
+  for (let m = 1; m <= 12; m++) {
+    const monthStr = `${year}-${String(m).padStart(2, "0")}`
+    const startDate = monthStr + "-01"
+    const endDate = new Date(year, m, 0).toISOString().split("T")[0]
+    const [incomesData, expensesData] = await Promise.all([
+      getIncomes({ startDate, endDate }),
+      getExpenses({ startDate, endDate }),
+    ])
+    const ingresos = incomesData.reduce((s: number, i: any) => s + Number(i.amount), 0)
+    const gastos = expensesData.reduce((s: number, e: any) => s + Number(e.amount), 0)
+    months.push({ month: monthStr, ingresos, gastos, presupuesto: 0, balance: ingresos - gastos })
+  }
+  return months
+}
+
 export async function getSavings() {
   const { data } = await supabase.from("savings").select("*, saving_categories(name)").order("name")
   return data ?? []
@@ -118,6 +152,11 @@ export async function createSavingMovement(data: any) {
 export async function getSavingMovements(savingId: string) {
   const { data } = await supabase.from("saving_movements").select("*").eq("saving_id", savingId).order("movement_date", { ascending: false })
   return data ?? []
+}
+
+export async function countAllSavingMovements(): Promise<number> {
+  const { count } = await supabase.from("saving_movements").select("*", { count: "exact", head: true })
+  return count ?? 0
 }
 
 export async function getSavingCategories() {

@@ -136,6 +136,14 @@ export interface UserRole {
   created_at?: string
 }
 
+export interface YearlyMonth {
+  month: string
+  ingresos: number
+  gastos: number
+  presupuesto: number
+  balance: number
+}
+
 export interface DashboardData {
   totalBudgeted: number
   totalIngresos: number

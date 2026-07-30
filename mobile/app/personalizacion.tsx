@@ -22,8 +22,22 @@ export default function PersonalizacionScreen() {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [language, setLanguage] = useState("standard")
+  const [currency, setCurrency] = useState("COP")
 
   const isAdmin = userRole?.role === "admin"
+
+  const isLastAdmin = async (userId: string) => {
+    const targetRole = await getUserRole(userId)
+    if (targetRole?.role !== "admin") return false
+    const { data: adminRoles } = await supabase.from("user_roles").select("user_id").eq("role", "admin")
+    const activeAdminIds = new Set(
+      adminRoles
+        ?.filter(r => allowedUsers.some(au => au.id === r.user_id && au.active))
+        .map(r => r.user_id) ?? []
+    )
+    return activeAdminIds.size === 1 && activeAdminIds.has(userId)
+  }
 
   const load = useCallback(async () => {
     if (!user) return
@@ -53,11 +67,21 @@ export default function PersonalizacionScreen() {
   const handleDeleteUser = (id: string) => {
     Alert.alert("Eliminar usuario", "¿Estás segura?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => { await deleteAllowedUser(id); load() }},
+      { text: "Eliminar", style: "destructive", onPress: async () => {
+        if (await isLastAdmin(id)) {
+          Alert.alert("Error", "No puedes desactivar o eliminar al último administrador.")
+          return
+        }
+        await deleteAllowedUser(id); load()
+      }},
     ])
   }
 
   const handleRoleChange = async (userId: string, role: "admin" | "user") => {
+    if (role === "user" && await isLastAdmin(userId)) {
+      Alert.alert("Error", "No puedes desactivar o eliminar al último administrador.")
+      return
+    }
     await updateUserRole(userId, role)
     load()
   }
@@ -92,6 +116,36 @@ export default function PersonalizacionScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4">
+        {/* Language & Currency */}
+        <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden mb-3">
+          <View className="px-4 py-3 border-b border-slate-100">
+            <Text className="text-sm font-semibold text-slate-800">Idioma y moneda</Text>
+          </View>
+          <View className="px-4 py-3 border-b border-slate-100">
+            <Text className="text-xs font-medium text-slate-600 mb-2">Idioma</Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity onPress={() => setLanguage("standard")} className={`px-4 py-2 rounded-lg border ${language === "standard" ? "bg-indigo-600 border-indigo-600" : "bg-slate-100 border-slate-200"}`}>
+                <Text className={`text-xs font-medium ${language === "standard" ? "text-white" : "text-slate-600"}`}>Standard</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setLanguage("kellycaribe")} className={`px-4 py-2 rounded-lg border ${language === "kellycaribe" ? "bg-indigo-600 border-indigo-600" : "bg-slate-100 border-slate-200"}`}>
+                <Text className={`text-xs font-medium ${language === "kellycaribe" ? "text-white" : "text-slate-600"}`}>KellyCaribe</Text>
+              </TouchableOpacity>
+            </View>
+            <Text className="text-[10px] text-slate-400 mt-1">Próximamente</Text>
+          </View>
+          <View className="px-4 py-3">
+            <Text className="text-xs font-medium text-slate-600 mb-2">Moneda</Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity onPress={() => setCurrency("COP")} className={`px-4 py-2 rounded-lg border ${currency === "COP" ? "bg-indigo-600 border-indigo-600" : "bg-slate-100 border-slate-200"}`}>
+                <Text className={`text-xs font-medium ${currency === "COP" ? "text-white" : "text-slate-600"}`}>COP $</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setCurrency("EUR")} className={`px-4 py-2 rounded-lg border ${currency === "EUR" ? "bg-indigo-600 border-indigo-600" : "bg-slate-100 border-slate-200"}`}>
+                <Text className={`text-xs font-medium ${currency === "EUR" ? "text-white" : "text-slate-600"}`}>EUR €</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
         {/* Security */}
         <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden mb-3">
           <View className="px-4 py-3 border-b border-slate-100">
