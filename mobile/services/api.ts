@@ -1,5 +1,38 @@
-import { supabase } from "@/lib/supabase"
+import { assertSupabaseConfigured, supabase } from "@/lib/supabase"
 import type { Person, ExpenseCategory, IncomeCategory, DashboardData, YearlyMonth, BudgetTemplate, BudgetCategory, MonthlyBudget, FutureExpenseCategory, FutureExpense, Commitment, CommitmentPayment, AllowedUser } from "@/types/database"
+
+const DEBUG_PREFIX = "[KellyCash][Mobile][Supabase]"
+const DEBUG_LOGS = typeof __DEV__ !== "undefined" ? __DEV__ : true
+let didLogAuthSnapshot = false
+
+async function debugAuthState(scope: string) {
+  if (didLogAuthSnapshot) return
+  const { data, error } = await supabase.auth.getSession()
+  const session = data.session
+  if (error) {
+    console.error(`${DEBUG_PREFIX} ${scope} auth.getSession failed`, error)
+    return
+  }
+  if (DEBUG_LOGS) {
+    console.log(`${DEBUG_PREFIX} ${scope} auth`, {
+      userId: session?.user?.id ?? null,
+      email: session?.user?.email ?? null,
+      expiresAt: session?.expires_at ?? null,
+      hasAccessToken: Boolean(session?.access_token),
+    })
+  }
+  didLogAuthSnapshot = true
+}
+
+function logReadResult(scope: string, error: unknown, rowCount?: number) {
+  if (error) {
+    console.error(`${DEBUG_PREFIX} ${scope} query failed`, error)
+    return
+  }
+  if (DEBUG_LOGS) {
+    console.log(`${DEBUG_PREFIX} ${scope} query ok`, { rowCount: rowCount ?? null })
+  }
+}
 
 export async function getPeople(): Promise<Person[]> {
   const { data } = await supabase.from("people").select("*").order("name")
@@ -16,29 +49,44 @@ export async function deletePerson(id: string) {
 }
 
 export async function getExpenses(opts?: { startDate?: string; endDate?: string }): Promise<any[]> {
+  assertSupabaseConfigured()
+  await debugAuthState("getExpenses")
+  if (DEBUG_LOGS) {
+    console.log(`${DEBUG_PREFIX} getExpenses filters`, opts ?? {})
+  }
+
   let query = supabase.from("expenses").select("*").order("date", { ascending: false })
   if (opts?.startDate) query = query.gte("date", opts.startDate)
   if (opts?.endDate) query = query.lte("date", opts.endDate)
   const { data, error } = await query
+  logReadResult("getExpenses:expenses", error, data?.length)
   if (error || !data) return []
+
   const expenses = data as any[]
   const personIds = [...new Set(expenses.map((e: any) => e.person_id))]
   const expCatIds = [...new Set(expenses.map((e: any) => e.expense_category_id).filter(Boolean))]
   const budgetCatIds = [...new Set(expenses.map((e: any) => e.budget_category_id).filter(Boolean))]
+
   const [peopleRes, expCatsRes, bCatsRes] = await Promise.all([
-    supabase.from("people").select("id, name").in("id", personIds),
+    personIds.length > 0 ? supabase.from("people").select("id, name").in("id", personIds) : Promise.resolve({ data: [] }),
     expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : { data: [] },
     budgetCatIds.length > 0 ? supabase.from("budget_categories").select("id, name").in("id", budgetCatIds) : { data: [] },
   ])
+  logReadResult("getExpenses:people", "error" in peopleRes ? peopleRes.error : null, peopleRes.data?.length)
+  logReadResult("getExpenses:expense_categories", "error" in expCatsRes ? expCatsRes.error : null, expCatsRes.data?.length)
+  logReadResult("getExpenses:budget_categories", "error" in bCatsRes ? bCatsRes.error : null, bCatsRes.data?.length)
+
   const peopleMap = new Map((peopleRes.data ?? []).map((p: any) => [p.id, { name: p.name }]))
   const expCatMap = new Map((expCatsRes.data ?? []).map((c: any) => [c.id, { id: c.id, name: c.name }]))
   const bCatMap = new Map((bCatsRes.data ?? []).map((bc: any) => [bc.id, { name: bc.name }]))
-  return expenses.map((e: any) => ({
+  const mapped = expenses.map((e: any) => ({
     ...e,
     people: peopleMap.get(e.person_id) ?? null,
     expense_categories: e.expense_category_id ? expCatMap.get(e.expense_category_id) ?? null : null,
     budget_categories: e.budget_category_id ? bCatMap.get(e.budget_category_id) ?? null : null,
   }))
+  logReadResult("getExpenses:mapped", null, mapped.length)
+  return mapped
 }
 export async function createExpense(data: any) {
   return supabase.from("expenses").insert(data).select().single()
@@ -51,14 +99,22 @@ export async function deleteExpense(id: string) {
 }
 
 export async function getIncomes(opts?: { startDate?: string; endDate?: string }): Promise<any[]> {
+  assertSupabaseConfigured()
+  if (DEBUG_LOGS) {
+    console.log(`${DEBUG_PREFIX} getIncomes filters`, opts ?? {})
+  }
   let query = supabase.from("income").select("*, income_categories(name)").order("date", { ascending: false })
   if (opts?.startDate) query = query.gte("date", opts.startDate)
   if (opts?.endDate) query = query.lte("date", opts.endDate)
   const { data, error } = await query
+  logReadResult("getIncomes:income", error, data?.length)
   if (error || !data) return []
   const raw = data as any[]
   const personIds = [...new Set(raw.map((inc: any) => inc.person_id))]
-  const { data: people } = await supabase.from("people").select("id, name").in("id", personIds)
+  const { data: people, error: peopleError } = personIds.length > 0
+    ? await supabase.from("people").select("id, name").in("id", personIds)
+    : { data: [], error: null }
+  logReadResult("getIncomes:people", peopleError, people?.length)
   const peopleMap = new Map((people ?? []).map((p: any) => [p.id, { name: p.name }]))
   return raw.map((inc: any) => ({ ...inc, people: peopleMap.get(inc.person_id) ?? null }))
 }
@@ -95,17 +151,22 @@ export async function deleteIncomeCategory(id: string) {
 }
 
 export async function getDashboardData(months: string[]): Promise<DashboardData | null> {
+  assertSupabaseConfigured()
   if (months.length === 0) return null
   const sorted = [...months].sort()
   const startDate = sorted[0] + "-01"
   const last = sorted[sorted.length - 1]
   const endDate = new Date(parseInt(last.split("-")[0]), parseInt(last.split("-")[1]), 0).toISOString().split("T")[0]
+  if (DEBUG_LOGS) {
+    console.log(`${DEBUG_PREFIX} getDashboardData range`, { months, startDate, endDate })
+  }
 
   const [incomesData, expensesData, budgetData] = await Promise.all([
     getIncomes({ startDate, endDate }),
     getExpenses({ startDate, endDate }),
     supabase.from("budget_categories").select("budgeted"),
   ])
+  logReadResult("getDashboardData:budget_categories", budgetData.error, budgetData.data?.length)
 
   const totalIngresos = incomesData.reduce((s: number, i: any) => s + Number(i.amount), 0)
   const totalGastos = expensesData.reduce((s: number, e: any) => s + Number(e.amount), 0)
@@ -116,6 +177,7 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
 }
 
 export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
+  assertSupabaseConfigured()
   const months: YearlyMonth[] = []
   for (let m = 1; m <= 12; m++) {
     const monthStr = `${year}-${String(m).padStart(2, "0")}`
