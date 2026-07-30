@@ -16,6 +16,7 @@ export default function GastosFuturosScreen() {
   const [items, setItems] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -31,8 +32,18 @@ export default function GastosFuturosScreen() {
   const [catName, setCatName] = useState("")
 
   const load = useCallback(async () => {
-    const [fe, cats] = await Promise.all([getFutureExpenses(), getFutureExpenseCategories()])
-    setItems(fe); setCategories(cats); setLoading(false); setRefreshing(false)
+    try {
+      setLoadError(null)
+      const [fe, cats] = await Promise.all([getFutureExpenses(), getFutureExpenseCategories()])
+      setItems(fe)
+      setCategories(cats)
+    } catch (error) {
+      console.error("[KellyCash][Mobile][GastosFuturos] load failed", error)
+      setLoadError("No se pudieron cargar los gastos futuros desde Supabase.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -119,6 +130,12 @@ export default function GastosFuturosScreen() {
       </View>
 
       {/* Search */}
+      {loadError ? (
+        <View className="mx-4 mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <Text className="text-[11px] text-rose-700">{loadError}</Text>
+        </View>
+      ) : null}
+
       <View className="mx-4 mb-3">
         <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
           <Search size={14} color="#94a3b8" />

@@ -18,24 +18,32 @@ export default function DashboardScreen() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [yearlyData, setYearlyData] = useState<YearlyMonth[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const screenWidth = Dimensions.get("window").width
 
   const load = useCallback(async () => {
-    const [dashboard, yearly] = await Promise.all([
-      getDashboardData(months),
-      getYearlyData(new Date().getFullYear()),
-    ])
-    setData(dashboard)
-    setYearlyData(yearly)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      setLoadError(null)
+      const [dashboard, yearly] = await Promise.all([
+        getDashboardData(months),
+        getYearlyData(new Date().getFullYear()),
+      ])
+      setData(dashboard)
+      setYearlyData(yearly)
+    } catch (error) {
+      console.error("[KellyCash][Mobile][Dashboard] load failed", error)
+      setLoadError("No se pudieron cargar los resúmenes. Verifica sesión, RLS y variables de Supabase.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [months])
 
   useEffect(() => { load() }, [load])
 
   useRealtimeSubscription("expenses", () => load(), () => load(), () => load())
-  useRealtimeSubscription("incomes", () => load(), () => load(), () => load())
+  useRealtimeSubscription("income", () => load(), () => load(), () => load())
 
   const onRefresh = () => {
     setRefreshing(true)
@@ -125,6 +133,11 @@ export default function DashboardScreen() {
           <Text style={{ fontSize: 18, fontWeight: "700", color: "#1e293b" }}>Resumen</Text>
           <DateFilter months={months} onChange={setMonths} />
         </View>
+        {loadError ? (
+          <View style={{ marginBottom: 12, borderWidth: 1, borderColor: "#fecaca", borderRadius: 12, backgroundColor: "#fff1f2", paddingHorizontal: 12, paddingVertical: 10 }}>
+            <Text style={{ fontSize: 11, color: "#be123c" }}>{loadError}</Text>
+          </View>
+        ) : null}
 
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
           {KPI_CARDS.map((card) => {

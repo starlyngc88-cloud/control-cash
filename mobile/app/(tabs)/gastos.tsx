@@ -16,6 +16,7 @@ export default function GastosScreen() {
   const [categories, setCategories] = useState<any[]>([])
   const [budgetCategories, setBudgetCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -37,24 +38,31 @@ export default function GastosScreen() {
   const [catManagerName, setCatManagerName] = useState("")
 
   const load = useCallback(async () => {
-    const sorted = [...months].sort()
-    const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
-    const endDate = sorted.length > 0 ? (() => {
-      const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
-      return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
-    })() : undefined
-    const [exp, p, cats, bCats] = await Promise.all([
-      getExpenses({ startDate, endDate }),
-      getPeople(),
-      getExpenseCategories(),
-      getAllBudgetCategories(),
-    ])
-    setExpenses(exp)
-    setPeople(p)
-    setCategories(cats)
-    setBudgetCategories(bCats)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      setLoadError(null)
+      const sorted = [...months].sort()
+      const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
+      const endDate = sorted.length > 0 ? (() => {
+        const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+        return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
+      })() : undefined
+      const [exp, p, cats, bCats] = await Promise.all([
+        getExpenses({ startDate, endDate }),
+        getPeople(),
+        getExpenseCategories(),
+        getAllBudgetCategories(),
+      ])
+      setExpenses(exp)
+      setPeople(p)
+      setCategories(cats)
+      setBudgetCategories(bCats)
+    } catch (error) {
+      console.error("[KellyCash][Mobile][Gastos] load failed", error)
+      setLoadError("No se pudieron cargar los gastos. Revisa la sesión y la configuración de Supabase.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [months])
 
   useEffect(() => { load() }, [load])
@@ -151,6 +159,12 @@ export default function GastosScreen() {
       </View>
 
       {/* Search */}
+      {loadError ? (
+        <View className="mx-4 mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <Text className="text-[11px] text-rose-700">{loadError}</Text>
+        </View>
+      ) : null}
+
       <View className="mx-4 mb-3">
         <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
           <Search size={14} color="#94a3b8" />

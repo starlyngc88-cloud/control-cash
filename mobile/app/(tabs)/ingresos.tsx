@@ -15,6 +15,7 @@ export default function IngresosScreen() {
   const [people, setPeople] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -35,22 +36,29 @@ export default function IngresosScreen() {
   const parsedDate = useMemo(() => new Date(date + "T12:00:00"), [date])
 
   const load = useCallback(async () => {
-    const sorted = [...months].sort()
-    const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
-    const endDate = sorted.length > 0 ? (() => {
-      const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
-      return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
-    })() : undefined
-    const [inc, p, cats] = await Promise.all([getIncomes({ startDate, endDate }), getPeople(), getIncomeCategories()])
-    setIncomes(inc)
-    setPeople(p)
-    setCategories(cats)
-    setLoading(false)
-    setRefreshing(false)
+    try {
+      setLoadError(null)
+      const sorted = [...months].sort()
+      const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
+      const endDate = sorted.length > 0 ? (() => {
+        const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+        return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
+      })() : undefined
+      const [inc, p, cats] = await Promise.all([getIncomes({ startDate, endDate }), getPeople(), getIncomeCategories()])
+      setIncomes(inc)
+      setPeople(p)
+      setCategories(cats)
+    } catch (error) {
+      console.error("[KellyCash][Mobile][Ingresos] load failed", error)
+      setLoadError("No se pudieron cargar los ingresos. Revisa sesión y configuración de Supabase.")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
   }, [months])
 
   useEffect(() => { load() }, [load])
-  useRealtimeSubscription("incomes", () => load(), () => load(), () => load())
+  useRealtimeSubscription("income", () => load(), () => load(), () => load())
 
   const openNew = () => {
     setEditing(null)
@@ -107,6 +115,11 @@ export default function IngresosScreen() {
       </View>
 
       <View className="mx-4 mb-3">
+        {loadError ? (
+          <View className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+            <Text className="text-[11px] text-rose-700">{loadError}</Text>
+          </View>
+        ) : null}
         <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
           <Search size={14} color="#94a3b8" />
           <TextInput className="flex-1 ml-2 text-xs text-slate-800" placeholder="Buscar ingreso..." placeholderTextColor="#94a3b8" value={search} onChangeText={setSearch} />
