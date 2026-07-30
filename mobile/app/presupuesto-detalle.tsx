@@ -29,12 +29,14 @@ export default function PresupuestoDetalleScreen() {
   const [totalBudgeted, setTotalBudgeted] = useState(0)
   const [totalSpent, setTotalSpent] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     if (!id) return
     try {
+      setLoadError(null)
       const [allMonthly, allExpenses] = await Promise.all([
         getMonthlyBudgets(),
         getExpenses(),
@@ -98,6 +100,9 @@ export default function PresupuestoDetalleScreen() {
       setMonthlyBudget(mb)
       setTotalBudgeted(rootNodes.reduce((s: number, r: any) => s + nodeBudgeted(r), 0))
       setTotalSpent(rootNodes.reduce((s: number, r: any) => s + nodeSpent(r), 0))
+    } catch (error) {
+      console.error("[KellyCash][Mobile][PresupuestoDetalle] load failed", error)
+      setLoadError("No se pudo calcular el detalle del presupuesto con los gastos actuales.")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -146,6 +151,12 @@ export default function PresupuestoDetalleScreen() {
           · {monthlyBudget.budget_templates?.name}
         </Text>
       </View>
+
+      {loadError ? (
+        <View className="mx-4 mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <Text className="text-[11px] text-rose-700">{loadError}</Text>
+        </View>
+      ) : null}
 
       <View className="mx-4 mb-3 flex-row gap-2">
         <View className="flex-1 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
