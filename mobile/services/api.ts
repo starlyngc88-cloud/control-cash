@@ -378,6 +378,13 @@ export async function createMonthlyBudget(data: { template_id: string; month: st
     const { error: chError } = await supabase.from("budget_categories").insert({ monthly_budget_id: mb.id, name: ch.name, budgeted: ch.budgeted, parent_id: idMap.get(ch.parent_id!) ?? null })
     if (chError) return { data: mb, error: chError }
   }
+  const monthDate = new Date(mb.month + "T00:00:00")
+  const endOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).toISOString().split("T")[0]
+  const { data: monthExpenses } = await supabase.from("expenses").select("id, budget_category_id").gte("date", mb.month).lte("date", endOfMonth)
+  for (const exp of (monthExpenses ?? []) as any[]) {
+    const targetId = exp.budget_category_id ? idMap.get(exp.budget_category_id) : undefined
+    if (targetId) await supabase.from("expenses").update({ budget_category_id: targetId }).eq("id", exp.id)
+  }
   return { data: mb, error: null }
 }
 export async function deleteMonthlyBudget(id: string) {
