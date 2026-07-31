@@ -2,30 +2,15 @@ import { useLocalSearchParams, router } from "expo-router"
 import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getMonthlyBudgets, getExpenses, getMonthlyBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory } from "@/services/api"
+import { getMonthlyBudgetDashboard, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, type MonthCategoryNode } from "@/services/api"
 import { formatCurrency, formatMonth } from "@/utils/format"
 import { X, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react-native"
-
-type CatStatus = "green" | "yellow" | "red"
-
-interface CatData {
-  id: string
-  name: string
-  budgeted: number
-  spent: number
-  available: number
-  excess: number
-  percentage: number
-  status: CatStatus
-  parent_id: string | null
-  children: CatData[]
-}
 
 export default function PresupuestoDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const insets = useSafeAreaInsets()
-  const [monthlyBudget, setMonthlyBudget] = useState<any>(null)
-  const [roots, setRoots] = useState<CatData[]>([])
+  const [monthlyBudget, setMonthlyBudget] = useState<{ month: string; templateName: string } | null>(null)
+  const [roots, setRoots] = useState<MonthCategoryNode[]>([])
   const [totalBudgeted, setTotalBudgeted] = useState(0)
   const [totalSpent, setTotalSpent] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -35,7 +20,7 @@ export default function PresupuestoDetalleScreen() {
   const [submitting, setSubmitting] = useState(false)
 
   const [editModalOpen, setEditModalOpen] = useState(false)
-  const [editingCat, setEditingCat] = useState<CatData | null>(null)
+  const [editingCat, setEditingCat] = useState<MonthCategoryNode | null>(null)
   const [editName, setEditName] = useState("")
   const [editBudgeted, setEditBudgeted] = useState("")
   const [editHasChildren, setEditHasChildren] = useState(false)
@@ -45,7 +30,7 @@ export default function PresupuestoDetalleScreen() {
   const [rootBudgeted, setRootBudgeted] = useState("")
 
   const [subModalOpen, setSubModalOpen] = useState(false)
-  const [addSubParent, setAddSubParent] = useState<CatData | null>(null)
+  const [addSubParent, setAddSubParent] = useState<MonthCategoryNode | null>(null)
   const [subName, setSubName] = useState("")
   const [subBudgeted, setSubBudgeted] = useState("")
 
@@ -53,69 +38,11 @@ export default function PresupuestoDetalleScreen() {
     if (!id) return
     try {
       setLoadError(null)
-      const [allMonthly, allExpenses] = await Promise.all([
-        getMonthlyBudgets(),
-        getExpenses(),
-      ])
-      const mb = allMonthly.find((m: any) => m.id === id)
-      if (!mb) { setLoading(false); setRefreshing(false); return }
-
-      const categories = await getMonthlyBudgetCategories(mb.id, mb.template_id)
-
-      const monthDate = new Date(mb.month + "T00:00:00")
-      const year = monthDate.getFullYear()
-      const mon = monthDate.getMonth()
-      const startDate = new Date(year, mon, 1).toISOString().split("T")[0]
-      const endDate = new Date(year, mon + 1, 0).toISOString().split("T")[0]
-
-      const monthExpenses = allExpenses.filter(
-        (e: any) => e.date >= startDate && e.date <= endDate
-      )
-
-      const catSpent: Record<string, number> = {}
-      for (const exp of monthExpenses) {
-        if (exp.budget_category_id) {
-          catSpent[exp.budget_category_id] = (catSpent[exp.budget_category_id] ?? 0) + Number(exp.amount)
-        }
-      }
-
-      const treeMap = new Map<string, any>()
-      for (const cat of categories) treeMap.set(cat.id, { ...cat, children: [] })
-      const rootNodes: any[] = []
-      for (const cat of categories) {
-        const node = treeMap.get(cat.id)
-        if (cat.parent_id && treeMap.has(cat.parent_id)) {
-          treeMap.get(cat.parent_id).children.push(node)
-        } else {
-          rootNodes.push(node)
-        }
-      }
-
-      const nodeBudgeted = (n: any): number =>
-        n.children.length === 0 ? Number(n.budgeted) : n.children.reduce((s: number, c: any) => s + nodeBudgeted(c), 0)
-
-      const nodeSpent = (n: any): number =>
-        n.children.length === 0 ? (catSpent[n.id] ?? 0) : n.children.reduce((s: number, c: any) => s + nodeSpent(c), 0)
-
-      const buildNode = (n: any): CatData => {
-        const budgeted = nodeBudgeted(n)
-        const spent = nodeSpent(n)
-        const available = Math.max(0, budgeted - spent)
-        const excess = Math.max(0, spent - budgeted)
-        const percentage = budgeted > 0 ? (spent / budgeted) * 100 : spent > 0 ? Infinity : 0
-        let status: CatStatus = "green"
-        if (percentage > 100) status = "red"
-        else if (percentage >= 80) status = "yellow"
-        return {
-          id: n.id, name: n.name, budgeted, spent, available, excess, percentage, status,
-          parent_id: n.parent_id ?? null, children: n.children.map(buildNode),
-        }
-      }
-
-      setRoots(rootNodes.map(buildNode))
-      setMonthlyBudget(mb)
-      setTotalBudgeted(rootNodes.reduce((s: number, r: any) => s + nodeBudgeted(r), 0))
-      setTotalSpent(rootNodes.reduce((s: number, r: any) => s + nodeSpent(r), 0))
+      const data = await getMonthlyBudgetDashboard(id)
+      setMonthlyBudget({ month: data.month, templateName: data.templateName })
+      setRoots(data.categories)
+      setTotalBudgeted(data.totalBudgeted)
+      setTotalSpent(data.totalGastos)
     } catch (error) {
       console.error("[KellyCash][Mobile][PresupuestoDetalle] load failed", error)
       setLoadError("No se pudo calcular el detalle del presupuesto con los gastos actuales.")
@@ -136,7 +63,7 @@ export default function PresupuestoDetalleScreen() {
     })
   }
 
-  const openEdit = (cat: CatData) => {
+  const openEdit = (cat: MonthCategoryNode) => {
     setEditingCat(cat)
     setEditName(cat.name)
     setEditBudgeted(String(cat.budgeted))
@@ -177,7 +104,7 @@ export default function PresupuestoDetalleScreen() {
     } catch { Alert.alert("Error", "No se pudo guardar.") } finally { setSubmitting(false) }
   }
 
-  const handleDeleteCat = (cat: CatData) => {
+  const handleDeleteCat = (cat: MonthCategoryNode) => {
     Alert.alert("Eliminar rubro", `¿Eliminar "${cat.name}"? Los gastos asociados quedarán sin rubro. Solo afecta a este mes.`, [
       { text: "Cancelar", style: "cancel" },
       { text: "Eliminar", style: "destructive", onPress: async () => {
@@ -217,7 +144,7 @@ export default function PresupuestoDetalleScreen() {
           {formatMonth(monthlyBudget.month)}
         </Text>
         <Text className="text-xs text-slate-400">
-          · {monthlyBudget.budget_templates?.name}
+          · {monthlyBudget.templateName}
         </Text>
       </View>
 

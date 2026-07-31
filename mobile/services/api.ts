@@ -397,6 +397,74 @@ export async function deleteMonthlyBudget(id: string) {
   return supabase.from("monthly_budgets").delete().eq("id", id)
 }
 
+export type CatStatus = "green" | "yellow" | "red"
+
+export interface MonthCategoryNode {
+  id: string
+  name: string
+  budgeted: number
+  spent: number
+  available: number
+  excess: number
+  percentage: number
+  status: CatStatus
+  parent_id: string | null
+  children: MonthCategoryNode[]
+}
+
+export async function getMonthlyBudgetDashboard(id: string) {
+  const { data: mb, error } = await supabase.from("monthly_budgets").select("*, budget_templates(name)").eq("id", id).single()
+  if (error || !mb) throw error
+  const categories = await getMonthlyBudgetCategories(mb.id, mb.template_id)
+  const monthDate = new Date(mb.month + "T00:00:00")
+  const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).toISOString().split("T")[0]
+  const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).toISOString().split("T")[0]
+  const [expenseResult, incomeResult] = await Promise.all([
+    supabase.from("expenses").select("amount, budget_category_id").gte("date", startDate).lte("date", endDate),
+    supabase.from("income").select("amount").gte("date", startDate).lte("date", endDate),
+  ])
+  const categorySpent: Record<string, number> = {}
+  for (const exp of expenseResult.data ?? []) {
+    if (exp.budget_category_id) categorySpent[exp.budget_category_id] = (categorySpent[exp.budget_category_id] ?? 0) + Number(exp.amount)
+  }
+  const treeMap = new Map<string, any>()
+  for (const cat of categories) treeMap.set(cat.id, { ...cat, children: [] })
+  const roots: any[] = []
+  for (const cat of categories) {
+    const node = treeMap.get(cat.id)
+    if (cat.parent_id && treeMap.has(cat.parent_id)) treeMap.get(cat.parent_id).children.push(node)
+    else roots.push(node)
+  }
+  const nodeBudgeted = (n: any): number =>
+    n.children.length === 0 ? Number(n.budgeted) : n.children.reduce((s: number, c: any) => s + nodeBudgeted(c), 0)
+  const nodeSpent = (n: any): number =>
+    n.children.length === 0 ? (categorySpent[n.id] ?? 0) : n.children.reduce((s: number, c: any) => s + nodeSpent(c), 0)
+  const build = (n: any): MonthCategoryNode => {
+    const budgeted = nodeBudgeted(n)
+    const spent = nodeSpent(n)
+    const available = Math.max(0, budgeted - spent)
+    const excess = Math.max(0, spent - budgeted)
+    const percentage = budgeted > 0 ? (spent / budgeted) * 100 : spent > 0 ? Infinity : 0
+    let status: CatStatus = "green"
+    if (percentage > 100) status = "red"
+    else if (percentage >= 80) status = "yellow"
+    return { id: n.id, name: n.name, budgeted, spent, available, excess, percentage, status, parent_id: n.parent_id ?? null, children: n.children.map(build) }
+  }
+  const builtRoots = roots.map(build)
+  const totalBudgeted = roots.reduce((s: number, r: any) => s + nodeBudgeted(r), 0)
+  const totalGastos = roots.reduce((s: number, r: any) => s + nodeSpent(r), 0)
+  const totalIngresos = (incomeResult.data ?? []).reduce((s: number, i: any) => s + Number(i.amount), 0)
+  return {
+    month: mb.month,
+    templateName: mb.budget_templates?.name ?? "",
+    totalIngresos,
+    totalBudgeted,
+    totalGastos,
+    balance: totalIngresos - totalGastos,
+    categories: builtRoots,
+  }
+}
+
 export async function getAllowedUsers(): Promise<AllowedUser[]> {
   const { data } = await supabase.from("allowed_users").select("*").order("created_at")
   return data ?? []
