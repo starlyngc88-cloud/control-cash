@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label"
 import { ArrowLeft, Circle, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export default function MonthlyBudgetPage() {
   const params = useParams()
@@ -144,10 +145,18 @@ export default function MonthlyBudgetPage() {
             </button>
           )
         })()}
-        <span><span className="text-muted-foreground">{d.ingresos}</span> <b className="text-green-600">{fmt(data.totalIngresos)}</b></span>
-        <span><span className="text-muted-foreground">{d.presupuestado}</span> <b className="text-blue-600">{fmt(data.totalBudgeted)}</b></span>
-        <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">{fmt(data.totalGastos)}</b></span>
-        <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
+        <Tooltip content="Total de ingresos del mes">
+          <span><span className="text-muted-foreground">{d.ingresos}</span> <b className="text-green-600">{fmt(data.totalIngresos)}</b></span>
+        </Tooltip>
+        <Tooltip content="Total presupuestado del mes">
+          <span><span className="text-muted-foreground">{d.presupuestado}</span> <b className="text-blue-600">{fmt(data.totalBudgeted)}</b></span>
+        </Tooltip>
+        <Tooltip content="Total gastado del mes">
+          <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">{fmt(data.totalGastos)}</b></span>
+        </Tooltip>
+        <Tooltip content="Balance del mes: ingresos − gastos">
+          <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
+        </Tooltip>
       </div>
 
       {data.categories.length === 0 ? (

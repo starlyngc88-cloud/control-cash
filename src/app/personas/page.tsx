@@ -17,6 +17,7 @@ import type { Person } from "@/types"
 import { Plus, Trash2, Pencil, Users } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export default function PersonasPage() {
   const [people, setPeople] = useState<Person[]>([])
@@ -108,7 +109,9 @@ export default function PersonasPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm font-medium">{countLabel}</CardTitle>
+          <CardTitle className="text-sm font-medium">
+            <Tooltip content="Total de personas registradas en la cuenta">{countLabel}</Tooltip>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {people.length === 0 ? (

@@ -19,6 +19,7 @@ import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { useMonthFilter } from "@/components/MonthFilterContext"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export default function GastosPage() {
   const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null })[]>([])
@@ -393,57 +394,65 @@ export default function GastosPage() {
 
       {/* KPI Cards */}
       <div className="grid gap-2 md:grid-cols-4 mb-3">
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Total gastado</p>
-              <h3 className="text-lg font-bold text-rose-600">{fmt(total)}</h3>
-            </div>
-            <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
-              <ArrowUpCircle className="size-3.5" />
-            </div>
-          </div>
-        </div>
-
-        {masAlto && (
-          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
+        <Tooltip content="Suma de todos los gastos del período" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Gasto récord</p>
-                <h3 className="text-lg font-bold text-rose-600">{fmt(Number(masAlto.amount))}</h3>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Total gastado</p>
+                <h3 className="text-lg font-bold text-rose-600">{fmt(total)}</h3>
               </div>
               <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
                 <ArrowUpCircle className="size-3.5" />
               </div>
             </div>
-            <p className="mt-1 text-[10px] text-slate-500 truncate">{masAlto.description || "Sin concepto"}</p>
           </div>
+        </Tooltip>
+
+        {masAlto && (
+          <Tooltip content="El gasto individual más alto del período" className="h-full">
+            <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+              <div className="flex justify-between items-start">
+                <div>
+                  <p className="text-[10px] font-medium text-slate-500 mb-0.5">Gasto récord</p>
+                  <h3 className="text-lg font-bold text-rose-600">{fmt(Number(masAlto.amount))}</h3>
+                </div>
+                <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
+                  <ArrowUpCircle className="size-3.5" />
+                </div>
+              </div>
+              <p className="mt-1 text-[10px] text-slate-500 truncate">{masAlto.description || "Sin concepto"}</p>
+            </div>
+          </Tooltip>
         )}
 
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Categorías</p>
-              <h3 className="text-lg font-bold text-slate-800">{expenseCategories.length}</h3>
-            </div>
-            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
-              <List className="size-3.5" />
+        <Tooltip content="Cantidad de categorías de gastos creadas" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Categorías</p>
+                <h3 className="text-lg font-bold text-slate-800">{expenseCategories.length}</h3>
+              </div>
+              <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
+                <List className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
+        </Tooltip>
 
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Sin categoría</p>
-              <h3 className={`text-lg font-bold ${sinCategoria > 0 ? "text-orange-500" : "text-emerald-600"}`}>{sinCategoria}</h3>
+        <Tooltip content="Gastos del período sin categoría asignada" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Sin categoría</p>
+                <h3 className={`text-lg font-bold ${sinCategoria > 0 ? "text-orange-500" : "text-emerald-600"}`}>{sinCategoria}</h3>
+              </div>
+              <div className={`p-1.5 rounded-lg ${sinCategoria > 0 ? "bg-orange-50 text-orange-500" : "bg-emerald-50 text-emerald-600"}`}>
+                <ArrowUpCircle className="size-3.5" />
+              </div>
             </div>
-            <div className={`p-1.5 rounded-lg ${sinCategoria > 0 ? "bg-orange-50 text-orange-500" : "bg-emerald-50 text-emerald-600"}`}>
-              <ArrowUpCircle className="size-3.5" />
-            </div>
+            <p className="mt-1 text-[10px] text-slate-500">{sinCategoria > 0 ? "gastos sin clasificar" : "todo clasificado"}</p>
           </div>
-          <p className="mt-1 text-[10px] text-slate-500">{sinCategoria > 0 ? "gastos sin clasificar" : "todo clasificado"}</p>
-        </div>
+        </Tooltip>
       </div>
 
       {/* Search */}

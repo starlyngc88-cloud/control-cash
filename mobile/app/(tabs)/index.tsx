@@ -76,15 +76,14 @@ export default function DashboardScreen() {
 
   const chartWidth = Math.min(screenWidth - 64, 600)
 
-  const spentPct = data && data.totalBudgeted > 0 ? Math.min(100, (data.totalGastos / data.totalBudgeted) * 100) : 0
-
   const KPI_CARDS = [
     {
-      label: "Ingresos",
-      value: data?.totalIngresos ?? 0,
+      label: "Disponible en cuenta",
+      value: (data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0),
       icon: TrendingDown,
       color: "#059669",
       iconBg: "bg-emerald-100",
+      subtitle: `Ingreso inicial: ${formatCurrency(data?.totalIngresos ?? 0)}`,
     },
     {
       label: "Gastos",
@@ -95,10 +94,11 @@ export default function DashboardScreen() {
     },
     {
       label: "Presupuesto",
-      value: data?.totalBudgeted ?? 0,
+      value: (data?.totalBudgeted ?? 0) - (data?.totalGastos ?? 0),
       icon: Wallet,
       color: "#4f46e5",
       iconBg: "bg-indigo-100",
+      subtitle: `Presupuesto inicial: ${formatCurrency(data?.totalBudgeted ?? 0)}`,
     },
     {
       label: "Balance",
@@ -163,40 +163,15 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 15, fontWeight: "700", color: "#1e293b" }} numberOfLines={1}>
                   {formatCurrency(card.value)}
                 </Text>
+                {card.subtitle ? (
+                  <Text style={{ fontSize: 9, color: "#94a3b8", marginTop: 2 }} numberOfLines={1}>
+                    {card.subtitle}
+                  </Text>
+                ) : null}
               </View>
             )
           })}
         </View>
-
-        {data && data.totalBudgeted > 0 && (
-          <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 20 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>Presupuesto vs Gastos</Text>
-              <Text style={{ fontSize: 11, color: "#64748b" }}>
-                {formatCurrency(data.totalGastos)} / {formatCurrency(data.totalBudgeted)}
-              </Text>
-            </View>
-            <View style={{ width: "100%", backgroundColor: "#f1f5f9", borderRadius: 4, height: 8 }}>
-              <View
-                style={{
-                  width: `${Math.min(100, spentPct)}%`,
-                  height: 8,
-                  borderRadius: 4,
-                  backgroundColor: spentPct > 100 ? "#f43f5e" : spentPct > 80 ? "#f59e0b" : "#10b981",
-                }}
-              />
-            </View>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
-              <Text style={{ fontSize: 10, color: "#94a3b8" }}>{Math.round(spentPct)}% gastado</Text>
-              <Text style={{ fontSize: 10, fontWeight: "600", color: spentPct > 100 ? "#f43f5e" : "#059669" }}>
-                {spentPct > 100
-                  ? `Exceso: ${formatCurrency(data.totalGastos - data.totalBudgeted)}`
-                  : `Disponible: ${formatCurrency(data.totalBudgeted - data.totalGastos)}`
-                }
-              </Text>
-            </View>
-          </View>
-        )}
 
         <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 20 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>

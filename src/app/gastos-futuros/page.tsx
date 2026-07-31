@@ -29,6 +29,7 @@ import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRigh
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
+import { Tooltip } from "@/components/ui/tooltip"
 
 function getUrgencyClass(expectedDate: string): string {
   const now = new Date()
@@ -455,50 +456,58 @@ export default function GastosFuturosPage() {
       </Dialog>
 
       <div className="grid gap-2 md:grid-cols-4 mb-3">
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalPrevisto}</p>
-              <h3 className="text-lg font-bold text-rose-600">{fmt(dashboard?.totalPrevisto ?? 0)}</h3>
-            </div>
-            <div className="p-1.5 bg-orange-50 rounded-lg text-orange-600">
-              <Crosshair className="size-3.5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pendientes}</p>
-              <h3 className="text-lg font-bold text-slate-800">{dashboard?.numPendientes ?? 0}</h3>
-            </div>
-            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
-              <List className="size-3.5" />
+        <Tooltip content="Suma del monto esperado de gastos futuros pendientes" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalPrevisto}</p>
+                <h3 className="text-lg font-bold text-rose-600">{fmt(dashboard?.totalPrevisto ?? 0)}</h3>
+              </div>
+              <div className="p-1.5 bg-orange-50 rounded-lg text-orange-600">
+                <Crosshair className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos30}</p>
-              <h3 className="text-lg font-bold text-slate-800">{dashboard?.next30 ?? 0}</h3>
-            </div>
-            <div className="p-1.5 bg-red-50 rounded-lg text-red-600">
-              <Crosshair className="size-3.5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos90}</p>
-              <h3 className="text-lg font-bold text-slate-800">{dashboard?.next90 ?? 0}</h3>
-            </div>
-            <div className="p-1.5 bg-yellow-50 rounded-lg text-yellow-600">
-              <Crosshair className="size-3.5" />
+        </Tooltip>
+        <Tooltip content="Gastos futuros pendientes de pago" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pendientes}</p>
+                <h3 className="text-lg font-bold text-slate-800">{dashboard?.numPendientes ?? 0}</h3>
+              </div>
+              <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
+                <List className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
+        </Tooltip>
+        <Tooltip content="Gastos futuros que vencen en ≤30 días" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos30}</p>
+                <h3 className="text-lg font-bold text-slate-800">{dashboard?.next30 ?? 0}</h3>
+              </div>
+              <div className="p-1.5 bg-red-50 rounded-lg text-red-600">
+                <Crosshair className="size-3.5" />
+              </div>
+            </div>
+          </div>
+        </Tooltip>
+        <Tooltip content="Gastos futuros que vencen entre 30 y 90 días" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.proximos90}</p>
+                <h3 className="text-lg font-bold text-slate-800">{dashboard?.next90 ?? 0}</h3>
+              </div>
+              <div className="p-1.5 bg-yellow-50 rounded-lg text-yellow-600">
+                <Crosshair className="size-3.5" />
+              </div>
+            </div>
+          </div>
+        </Tooltip>
       </div>
 
       {successMsg && (

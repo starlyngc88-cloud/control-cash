@@ -7,6 +7,7 @@ import type { YearlyMonth } from "@/lib/db"
 import { PiggyBank, Wallet, TrendingDown, TrendingUp, MoreHorizontal, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { useMonthFilter } from "@/components/MonthFilterContext"
+import { Tooltip } from "@/components/ui/tooltip"
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,13 +15,13 @@ import {
   PointElement,
   LineElement,
   ArcElement,
-  Tooltip,
+  Tooltip as ChartTooltip,
   Legend,
   Filler,
 } from "chart.js"
 import { Line, Doughnut } from "react-chartjs-2"
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Tooltip, Legend, Filler)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler)
 
 type DashboardData = {
   totalIngresos: number
@@ -118,76 +119,78 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Presupuesto</p>
-              <h3 className="text-xl font-bold text-indigo-600">{fmt(data?.totalBudgeted ?? 0)}</h3>
+        <Tooltip content="Presupuesto restante del período: presupuesto inicial − gastos" className="h-full">
+          <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Presupuesto</p>
+                <h3 className="text-xl font-bold text-indigo-600">{fmt((data?.totalBudgeted ?? 0) - (data?.totalGastos ?? 0))}</h3>
+                <p className="text-[10px] text-slate-500 mt-1">Presupuesto inicial: {fmt(data?.totalBudgeted ?? 0)}</p>
+              </div>
+              <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
+                <ClipboardList className="size-4" />
+              </div>
             </div>
-            <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
-              <ClipboardList className="size-4" />
-            </div>
-          </div>
-          {data && data.totalBudgeted > 0 && (
-            <div className="mt-2 flex items-center text-[10px]">
-              <span className="text-slate-500">
-                {data.totalGastos > data.totalBudgeted
-                  ? `Exceso: ${fmt(data.totalGastos - data.totalBudgeted)}`
-                  : `Disponible: ${fmt(data.totalBudgeted - data.totalGastos)}`
-                }
-              </span>
-              {monthlyBudgetId && (
-                <Link href={`/presupuestos/${monthlyBudgetId}`} className="ml-auto text-indigo-600 hover:underline text-[10px] font-medium">
+            {monthlyBudgetId && (
+              <div className="mt-2 flex items-center">
+                <Link href={`/presupuestos/${monthlyBudgetId}`} className="text-indigo-600 hover:underline text-[10px] font-medium">
                   Ver detalle
                 </Link>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        </Tooltip>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{d.ingresos}</p>
-              <h3 className="text-xl font-bold text-emerald-600">{fmt(data?.totalIngresos ?? 0)}</h3>
-            </div>
-            <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
-              <TrendingDown className="size-4" />
+        <Tooltip content="Dinero disponible en cuenta: ingreso inicial − presupuesto inicial" className="h-full">
+          <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Disponible en cuenta</p>
+                <h3 className="text-xl font-bold text-emerald-600">{fmt((data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0))}</h3>
+                <p className="text-[10px] text-slate-500 mt-1">Ingreso inicial: {fmt(data?.totalIngresos ?? 0)}</p>
+              </div>
+              <div className="p-1.5 bg-emerald-50 rounded-lg text-emerald-600">
+                <TrendingDown className="size-4" />
+              </div>
             </div>
           </div>
-        </div>
+        </Tooltip>
 
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{d.gastos}</p>
-              <h3 className="text-xl font-bold text-rose-600">{fmt(data?.totalGastos ?? 0)}</h3>
+        <Tooltip content="Total gastado en el período (barra: % del presupuesto usado)" className="h-full">
+          <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{d.gastos}</p>
+                <h3 className="text-xl font-bold text-rose-600">{fmt(data?.totalGastos ?? 0)}</h3>
+              </div>
+              <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
+                <TrendingUp className="size-4" />
+              </div>
             </div>
-            <div className="p-1.5 bg-rose-50 rounded-lg text-rose-600">
-              <TrendingUp className="size-4" />
+            {data && data.totalBudgeted > 0 && (
+              <div className="mt-2 w-full bg-slate-100 rounded-full h-0.5">
+                <div
+                  className={`h-1 rounded-full ${spentPct > 100 ? "bg-rose-500" : spentPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                  style={{ width: `${spentPct}%` }}
+                />
+              </div>
+            )}
+          </div>
+        </Tooltip>
+
+        <Tooltip content="Balance del período: ingresos − gastos" className="h-full">
+          <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Balance</p>
+                <h3 className={`text-xl font-bold ${(data?.balance ?? 0) >= 0 ? "text-slate-800" : "text-rose-600"}`}>{fmt(data?.balance ?? 0)}</h3>
+              </div>
+              <div className={`p-1.5 rounded-lg ${(data?.balance ?? 0) >= 0 ? "bg-indigo-50 text-indigo-600" : "bg-rose-50 text-rose-600"}`}>
+                <Wallet className="size-4" />
+              </div>
             </div>
           </div>
-          {data && data.totalBudgeted > 0 && (
-            <div className="mt-2 w-full bg-slate-100 rounded-full h-0.5">
-              <div
-                className={`h-1 rounded-full ${spentPct > 100 ? "bg-rose-500" : spentPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
-                style={{ width: `${spentPct}%` }}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Balance</p>
-              <h3 className={`text-xl font-bold ${(data?.balance ?? 0) >= 0 ? "text-slate-800" : "text-rose-600"}`}>{fmt(data?.balance ?? 0)}</h3>
-            </div>
-            <div className={`p-1.5 rounded-lg ${(data?.balance ?? 0) >= 0 ? "bg-indigo-50 text-indigo-600" : "bg-rose-50 text-rose-600"}`}>
-              <Wallet className="size-4" />
-            </div>
-          </div>
-        </div>
+        </Tooltip>
       </div>
 
       {/* Charts Section */}
@@ -271,38 +274,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
-      {/* Budget Progress */}
-      {data && data.totalBudgeted > 0 && (
-        <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <div className="flex items-center justify-between mb-1.5">
-            <h3 className="text-[10px] font-semibold text-slate-800">Presupuesto vs Gastos</h3>
-            <span className="text-[10px] text-slate-500">
-              {fmt(data.totalGastos)} de {fmt(data.totalBudgeted)}
-              {monthlyBudgetId && (
-                <Link href={`/presupuestos/${monthlyBudgetId}`} className="ml-2 text-indigo-600 hover:underline">
-                  Ver detalle
-                </Link>
-              )}
-            </span>
-          </div>
-          <div className="w-full bg-slate-100 rounded-full h-2">
-            <div
-              className={`h-2 rounded-full transition-all duration-300 ${spentPct > 100 ? "bg-rose-500" : spentPct > 80 ? "bg-amber-500" : "bg-emerald-500"}`}
-              style={{ width: `${Math.min(100, spentPct)}%` }}
-            />
-          </div>
-          <div className="flex justify-between mt-1.5 text-[10px] text-slate-400">
-            <span>{Math.round(spentPct)}% gastado</span>
-            <span className={spentPct > 100 ? "text-rose-500 font-medium" : "text-emerald-600"}>
-              {spentPct > 100
-                ? `Exceso: ${fmt(data.totalGastos - data.totalBudgeted)}`
-                : `Disponible: ${fmt(data.totalBudgeted - data.totalGastos)}`
-              }
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

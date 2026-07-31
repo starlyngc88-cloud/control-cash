@@ -31,6 +31,7 @@ import { Plus, Trash2, Pencil, ShieldCheck, ArrowDownCircle, ChevronDown, Chevro
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export default function CompromisosPage() {
   const [commitments, setCommitments] = useState<(Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null })[]>([])
@@ -417,50 +418,58 @@ export default function CompromisosPage() {
       </Dialog>
 
       <div className="grid gap-2 md:grid-cols-4 mb-3">
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalCompromisos}</p>
-              <h3 className="text-lg font-bold text-slate-800">{commitments.length}</h3>
-            </div>
-            <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
-              <ShieldCheck className="size-3.5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalDeuda}</p>
-              <h3 className="text-lg font-bold text-rose-600">{fmt(totalDeuda)}</h3>
-            </div>
-            <div className="p-1.5 bg-red-50 rounded-lg text-red-600">
-              <ArrowDownCircle className="size-3.5" />
+        <Tooltip content="Cantidad de compromisos (créditos/deudas) registrados" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalCompromisos}</p>
+                <h3 className="text-lg font-bold text-slate-800">{commitments.length}</h3>
+              </div>
+              <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">
+                <ShieldCheck className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.progreso}</p>
-              <h3 className="text-lg font-bold text-slate-800">{totalOriginal > 0 ? Math.round((1 - totalDeuda / totalOriginal) * 100) : 0}%</h3>
-            </div>
-            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
-              <ShieldCheck className="size-3.5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pagosRecientes}</p>
-              <h3 className="text-lg font-bold text-slate-800">{Object.values(paymentsMap).reduce((s, pays) => s + pays.length, 0)}</h3>
-            </div>
-            <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
-              <ArrowDownCircle className="size-3.5" />
+        </Tooltip>
+        <Tooltip content="Suma de saldos pendientes de todos los compromisos" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalDeuda}</p>
+                <h3 className="text-lg font-bold text-rose-600">{fmt(totalDeuda)}</h3>
+              </div>
+              <div className="p-1.5 bg-red-50 rounded-lg text-red-600">
+                <ArrowDownCircle className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
+        </Tooltip>
+        <Tooltip content="Porcentaje de deuda ya pagada" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.progreso}</p>
+                <h3 className="text-lg font-bold text-slate-800">{totalOriginal > 0 ? Math.round((1 - totalDeuda / totalOriginal) * 100) : 0}%</h3>
+              </div>
+              <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
+                <ShieldCheck className="size-3.5" />
+              </div>
+            </div>
+          </div>
+        </Tooltip>
+        <Tooltip content="Cantidad de pagos registrados a compromisos" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pagosRecientes}</p>
+                <h3 className="text-lg font-bold text-slate-800">{Object.values(paymentsMap).reduce((s, pays) => s + pays.length, 0)}</h3>
+              </div>
+              <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
+                <ArrowDownCircle className="size-3.5" />
+              </div>
+            </div>
+          </div>
+        </Tooltip>
       </div>
 
       <div className="relative flex-1 max-w-xs mb-3">

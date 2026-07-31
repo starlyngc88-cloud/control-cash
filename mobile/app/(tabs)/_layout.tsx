@@ -1,7 +1,7 @@
 import { useState, useRef } from "react"
 import { Tabs, useRouter } from "expo-router"
 import { View, Text, TouchableOpacity, Modal, Pressable, Animated } from "react-native"
-import { Chrome as Home, TrendingUp, TrendingDown, PiggyBank, Settings, Handshake, Clock, Plus, LayoutTemplate } from "lucide-react-native"
+import { Home, TrendingUp, TrendingDown, PiggyBank, Settings, Handshake, Clock, Plus, LayoutTemplate } from "lucide-react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 
 const tabs = [

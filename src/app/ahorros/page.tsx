@@ -30,6 +30,7 @@ import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, Chevr
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
+import { Tooltip } from "@/components/ui/tooltip"
 
 export default function AhorrosPage() {
   const [savings, setSavings] = useState<(Saving & { saving_categories: Pick<SavingCategory, "name"> | null })[]>([])
@@ -394,39 +395,45 @@ export default function AhorrosPage() {
       </Dialog>
 
       <div className="grid gap-2 md:grid-cols-3 mb-3">
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalAhorrado}</p>
-              <h3 className="text-lg font-bold text-emerald-600">{fmt(totalAhorrado)}</h3>
-            </div>
-            <div className="p-1.5 bg-amber-50 rounded-lg text-amber-600">
-              <Goal className="size-3.5" />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.numHuchas}</p>
-              <h3 className="text-lg font-bold text-slate-800">{numHuchas}</h3>
-            </div>
-            <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
-              <PiggyBank className="size-3.5" />
+        <Tooltip content="Suma del saldo actual de todas las huchas" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.totalAhorrado}</p>
+                <h3 className="text-lg font-bold text-emerald-600">{fmt(totalAhorrado)}</h3>
+              </div>
+              <div className="p-1.5 bg-amber-50 rounded-lg text-amber-600">
+                <Goal className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-medium text-slate-500 mb-0.5">Movimientos</p>
-              <h3 className="text-lg font-bold text-slate-800">{recentMovements.length}</h3>
-            </div>
-            <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
-              <ArrowDownCircle className="size-3.5" />
+        </Tooltip>
+        <Tooltip content="Cantidad de metas de ahorro (huchas) creadas" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.numHuchas}</p>
+                <h3 className="text-lg font-bold text-slate-800">{numHuchas}</h3>
+              </div>
+              <div className="p-1.5 bg-slate-50 rounded-lg text-slate-600">
+                <PiggyBank className="size-3.5" />
+              </div>
             </div>
           </div>
-        </div>
+        </Tooltip>
+        <Tooltip content="Cantidad de movimientos recientes de ahorro" className="h-full">
+          <div className="bg-white rounded-xl p-3 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Movimientos</p>
+                <h3 className="text-lg font-bold text-slate-800">{recentMovements.length}</h3>
+              </div>
+              <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
+                <ArrowDownCircle className="size-3.5" />
+              </div>
+            </div>
+          </div>
+        </Tooltip>
       </div>
 
       {successMsg && (
