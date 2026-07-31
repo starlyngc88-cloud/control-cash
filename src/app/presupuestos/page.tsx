@@ -27,15 +27,16 @@ import {
 } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
 import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/types"
-import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, PiggyBank, FolderDown } from "lucide-react"
+import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, ChevronLeft, PiggyBank, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
+import { useMonthFilter } from "@/components/MonthFilterContext"
 
 export default function PresupuestosPage() {
   const [template, setTemplate] = useState<BudgetTemplate | null>(null)
   const [categories, setCategories] = useState<BudgetCategory[]>([])
-  const [monthlyBudgets, setMonthlyBudgets] = useState<(MonthlyBudget & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
+  const [monthlyBudgets, setMonthlyBudgets] = useState<(MonthlyBudget & { budget_templates: Pick<BudgetTemplate, "name">; totalBudgeted: number })[]>([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
@@ -75,6 +76,9 @@ export default function PresupuestosPage() {
 
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
+
+  const { months } = useMonthFilter()
+  const [year, setYear] = useState(() => new Date().getFullYear())
 
   const { setActions } = useHeaderActions()
 
@@ -322,6 +326,13 @@ export default function PresupuestosPage() {
   const allCats = categories
   const parents = buildCategoryTree(allCats)
 
+  const filteredMonths = monthlyBudgets.filter((mb) => {
+    const mbYear = parseInt(mb.month.slice(0, 4), 10)
+    if (mbYear !== year) return false
+    if (months.length === 0) return true
+    return months.includes(mb.month.slice(0, 7))
+  })
+
   return (
     <div>
       {error && <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300 mb-4">{error}</div>}
@@ -332,8 +343,11 @@ export default function PresupuestosPage() {
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
             {allCats.length > 0 && (
               <>
-              <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rubros</span>
+              <div className="flex items-start justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+                <div className="min-w-0">
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Modelo base</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Se copia al abrir un mes. Cada mes se edita de forma independiente.</p>
+                </div>
                 <button
                   onClick={() => {
                     if (expandedParents.size === parents.filter(p => p.children.length > 0).length) {
@@ -342,7 +356,7 @@ export default function PresupuestosPage() {
                       setExpandedParents(new Set(parents.filter(p => p.children.length > 0).map(p => p.id)))
                     }
                   }}
-                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2 shrink-0"
                 >
                   {expandedParents.size === parents.filter(p => p.children.length > 0).length ? "Contraer todo" : "Expandir todo"}
                 </button>
@@ -453,22 +467,28 @@ export default function PresupuestosPage() {
         {/* Monthly budgets */}
         <div className="space-y-3">
           <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-3 bg-slate-50 border-b border-slate-200">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
               <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{p.mesesFinancieros}</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setYear((y) => y - 1)} className="flex items-center justify-center size-5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors" title="Año anterior">
+                  <ChevronLeft className="size-3" />
+                </button>
+                <span className="text-xs font-semibold text-slate-700 tabular-nums">{year}</span>
+                <button onClick={() => setYear((y) => y + 1)} className="flex items-center justify-center size-5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200 transition-colors" title="Año siguiente">
+                  <ChevronRight className="size-3" />
+                </button>
+              </div>
             </div>
-            {monthlyBudgets.length === 0 ? (
-              <p className="text-sm text-slate-500 p-6">{p.emptyMonths}</p>
+            {filteredMonths.length === 0 ? (
+              <p className="text-sm text-slate-500 p-6">{monthlyBudgets.length === 0 ? p.emptyMonths : "No hay meses abiertos en el período seleccionado"}</p>
             ) : (
               <div>
-                {monthlyBudgets.map((mb) => (
+                {filteredMonths.map((mb) => (
                   <div key={mb.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
                     <div className="min-w-0">
                       <span className="text-sm font-semibold text-slate-900 capitalize block">{formatMonth(mb.month)}</span>
                       <span className="text-xs text-slate-500 tabular-nums">
-                        {fmt(parents.reduce((s, p) => {
-                          const children = categories.filter(ch => ch.parent_id === p.id)
-                          return s + (children.length > 0 ? children.reduce((cs, ch) => cs + ch.budgeted, 0) : p.budgeted)
-                        }, 0))} presupuestado
+                        {fmt(mb.totalBudgeted)} presupuestado
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

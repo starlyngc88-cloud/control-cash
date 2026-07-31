@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getAllBudgetCategories, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from "@/lib/db"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from "@/lib/db"
 import type { Person, Expense, ExpenseCategory, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
@@ -34,6 +34,7 @@ export default function GastosPage() {
   const { months } = useMonthFilter()
 
   const sorted = [...months].sort()
+  const activeMonth = sorted[0] ?? ""
   const startDate = months.length > 0 ? sorted[0] + "-01" : ""
   const endDate = months.length > 0
     ? new Date(parseInt(sorted[sorted.length - 1].split("-")[0]), parseInt(sorted[sorted.length - 1].split("-")[1]), 0).toISOString().split("T")[0]
@@ -101,13 +102,13 @@ export default function GastosPage() {
   }, [headerDropdownOpen, setActions])
 
   const load = useCallback(async () => {
-    const [e, p, cats, bCats] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), getAllBudgetCategories()])
+    const [e, p, cats, bCats] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([])])
     setExpenses(e)
     setPeople(p)
     setExpenseCategories(cats)
     setBudgetCategories(bCats)
     setLoading(false)
-  }, [startDate, endDate])
+  }, [startDate, endDate, activeMonth])
 
   useEffect(() => { load() }, [load])
 

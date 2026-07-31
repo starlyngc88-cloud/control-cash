@@ -161,16 +161,20 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
     console.log(`${DEBUG_PREFIX} getDashboardData range`, { months, startDate, endDate })
   }
 
-  const [incomesData, expensesData, budgetData] = await Promise.all([
+  const [incomesData, expensesData, mbResult] = await Promise.all([
     getIncomes({ startDate, endDate }),
     getExpenses({ startDate, endDate }),
-    supabase.from("budget_categories").select("budgeted"),
+    supabase.from("monthly_budgets").select("id, template_id").eq("month", startDate).maybeSingle(),
   ])
-  logReadResult("getDashboardData:budget_categories", budgetData.error, budgetData.data?.length)
+  logReadResult("getDashboardData:monthly_budgets", mbResult.error)
 
   const totalIngresos = incomesData.reduce((s: number, i: any) => s + Number(i.amount), 0)
   const totalGastos = expensesData.reduce((s: number, e: any) => s + Number(e.amount), 0)
-  const totalBudgeted = (budgetData.data ?? []).reduce((s: number, b: any) => s + Number(b.budgeted), 0)
+  let totalBudgeted = 0
+  if (mbResult.data) {
+    const cats = await getMonthlyBudgetCategories(mbResult.data.id, mbResult.data.template_id)
+    totalBudgeted = sumBudgetLeaves(cats)
+  }
   const balance = totalIngresos - totalGastos
 
   return { totalBudgeted, totalIngresos, totalGastos, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
@@ -183,13 +187,19 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
     const monthStr = `${year}-${String(m).padStart(2, "0")}`
     const startDate = monthStr + "-01"
     const endDate = new Date(year, m, 0).toISOString().split("T")[0]
-    const [incomesData, expensesData] = await Promise.all([
+    const [incomesData, expensesData, mbResult] = await Promise.all([
       getIncomes({ startDate, endDate }),
       getExpenses({ startDate, endDate }),
+      supabase.from("monthly_budgets").select("id, template_id").eq("month", startDate).maybeSingle(),
     ])
     const ingresos = incomesData.reduce((s: number, i: any) => s + Number(i.amount), 0)
     const gastos = expensesData.reduce((s: number, e: any) => s + Number(e.amount), 0)
-    months.push({ month: monthStr, ingresos, gastos, presupuesto: 0, balance: ingresos - gastos })
+    let presupuesto = 0
+    if (mbResult.data) {
+      const cats = await getMonthlyBudgetCategories(mbResult.data.id, mbResult.data.template_id)
+      presupuesto = sumBudgetLeaves(cats)
+    }
+    months.push({ month: monthStr, ingresos, gastos, presupuesto, balance: ingresos - gastos })
   }
   return months
 }
@@ -293,8 +303,44 @@ export async function getBudgetCategories(templateId: string): Promise<BudgetCat
   const { data } = await supabase.from("budget_categories").select("*").eq("template_id", templateId).order("name")
   return data ?? []
 }
+
+function sumBudgetLeaves(cats: BudgetCategory[]): number {
+  const parentIds = new Set(cats.filter((c: any) => c.parent_id).map((c: any) => c.parent_id))
+  return cats.filter((c: any) => !parentIds.has(c.id)).reduce((s, c) => s + Number(c.budgeted), 0)
+}
+
+export async function getMonthlyBudgetCategories(monthlyBudgetId: string, templateId: string): Promise<BudgetCategory[]> {
+  const { data, error } = await supabase.from("budget_categories").select("*").eq("monthly_budget_id", monthlyBudgetId).order("name")
+  if (!error && data && data.length > 0) return (data ?? []).map((c: any) => ({ ...c, parent_id: c.parent_id ?? null })) as BudgetCategory[]
+  return getBudgetCategories(templateId)
+}
+
+function monthLabel(monthStr: string): string {
+  const d = new Date(monthStr + "-01T12:00:00")
+  return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
+}
+
+export async function getBudgetCategoriesForMonth(monthStr: string): Promise<any[]> {
+  const startDate = monthStr + "-01"
+  const { data: mb } = await supabase.from("monthly_budgets").select("id, template_id").eq("month", startDate).maybeSingle()
+  if (mb) {
+    const cats = await getMonthlyBudgetCategories(mb.id, mb.template_id)
+    if (cats.length > 0) {
+      const label = monthLabel(monthStr)
+      return cats.map((c: any) => ({ ...c, budget_templates: { name: label } }))
+    }
+  }
+  const templates = await getBudgetTemplates()
+  const base = templates.find((t: any) => t.name.toLowerCase() === "modelo base")
+  if (base) {
+    const cats = await getBudgetCategories(base.id)
+    return cats.map((c: any) => ({ ...c, budget_templates: { name: "Modelo base" } }))
+  }
+  return []
+}
+
 export async function getAllBudgetCategories(): Promise<any[]> {
-  const { data } = await supabase.from("budget_categories").select("*, budget_templates(name)").order("name")
+  const { data } = await supabase.from("budget_categories").select("*, budget_templates(name)").is("monthly_budget_id", null).order("name")
   return data ?? []
 }
 export async function createBudgetCategory(data: any) {
@@ -309,12 +355,38 @@ export async function deleteBudgetCategory(id: string) {
 
 export async function getMonthlyBudgets(): Promise<any[]> {
   const { data } = await supabase.from("monthly_budgets").select("*, budget_templates(name)").order("month", { ascending: false })
-  return data ?? []
+  const months = data ?? []
+  const withTotals = await Promise.all(months.map(async (m: any) => {
+    const cats = await getMonthlyBudgetCategories(m.id, m.template_id)
+    return { ...m, totalBudgeted: sumBudgetLeaves(cats) }
+  }))
+  return withTotals
 }
 export async function createMonthlyBudget(data: { template_id: string; month: string }) {
-  return supabase.from("monthly_budgets").insert(data).select().single()
+  const { data: mb, error } = await supabase.from("monthly_budgets").insert(data).select().single()
+  if (error || !mb) return { data: null, error }
+  const tplCats = await getBudgetCategories(data.template_id)
+  const parents = tplCats.filter((c: any) => !c.parent_id)
+  const children = tplCats.filter((c: any) => c.parent_id)
+  const idMap = new Map<string, string>()
+  for (const p of parents) {
+    const { data: nc, error: ncError } = await supabase.from("budget_categories").insert({ monthly_budget_id: mb.id, name: p.name, budgeted: p.budgeted, parent_id: null }).select().single()
+    if (ncError) return { data: mb, error: ncError }
+    idMap.set(p.id, nc.id)
+  }
+  for (const ch of children) {
+    const { error: chError } = await supabase.from("budget_categories").insert({ monthly_budget_id: mb.id, name: ch.name, budgeted: ch.budgeted, parent_id: idMap.get(ch.parent_id!) ?? null })
+    if (chError) return { data: mb, error: chError }
+  }
+  return { data: mb, error: null }
 }
 export async function deleteMonthlyBudget(id: string) {
+  const { data: cats } = await supabase.from("budget_categories").select("id").eq("monthly_budget_id", id)
+  const catIds = (cats ?? []).map((c: any) => c.id)
+  if (catIds.length > 0) {
+    await supabase.from("expenses").update({ budget_category_id: null }).in("budget_category_id", catIds)
+    await supabase.from("commitments").update({ category_id: null }).in("category_id", catIds)
+  }
   return supabase.from("monthly_budgets").delete().eq("id", id)
 }
 

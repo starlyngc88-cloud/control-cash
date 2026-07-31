@@ -4,11 +4,15 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getBudgetTemplates, createBudgetTemplate, deleteBudgetTemplate, getBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, getMonthlyBudgets, createMonthlyBudget, deleteMonthlyBudget } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
-import { Plus, LayoutTemplate, Pencil, Trash2, X, Calendar, ChevronRight } from "lucide-react-native"
+import { Plus, LayoutTemplate, Pencil, Trash2, X, Calendar, ChevronRight, ChevronLeft } from "lucide-react-native"
+import { useMonthFilter } from "@/hooks/useMonthFilter"
+import DateFilter from "@/components/DateFilter"
 
 export default function PresupuestosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { months, setMonths } = useMonthFilter()
+  const [year, setYear] = useState(new Date().getFullYear())
   const [templates, setTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [categories, setCategories] = useState<any[]>([])
@@ -99,6 +103,14 @@ export default function PresupuestosScreen() {
 
   const totalBudgeted = categories.reduce((s: number, c: any) => s + Number(c.budgeted), 0)
 
+  const filteredMonthly = monthlyBudgets.filter((mb: any) => {
+    const mbMonth = String(mb.month ?? "").slice(0, 7)
+    const mbYear = parseInt(mbMonth.slice(0, 4), 10)
+    if (mbYear !== year) return false
+    if (months.length === 0) return true
+    return months.includes(mbMonth)
+  })
+
   if (loading) return (
     <View className="flex-1 bg-background items-center justify-center" style={{ paddingTop: insets.top }}>
       <ActivityIndicator size="large" color="#4f46e5" />
@@ -132,23 +144,41 @@ export default function PresupuestosScreen() {
       </ScrollView>
 
       {selectedTemplate && templates.find((t: any) => t.id === selectedTemplate) && (
-        <View className="flex-row items-center justify-between mx-4 mb-3">
-          <Text className="text-xs text-slate-500">Presupuestado: {formatCurrency(totalBudgeted)}</Text>
-          <TouchableOpacity onPress={() => handleDeleteTemplate(selectedTemplate)}><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+        <View className="mx-4 mb-3">
+          <View className="flex-row items-center justify-between">
+            <Text className="text-xs text-slate-500">Presupuestado: {formatCurrency(totalBudgeted)}</Text>
+            <TouchableOpacity onPress={() => handleDeleteTemplate(selectedTemplate)}><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+          </View>
+          <Text className="text-[9px] text-slate-400 mt-1">Plantilla base: se copia al abrir un mes. Cada mes se edita de forma independiente.</Text>
         </View>
       )}
 
       {/* Monthly budgets quick list */}
       {monthlyBudgets.length > 0 && (
         <View className="mx-4 mb-3">
-          <Text className="text-[10px] font-medium text-slate-400 mb-1.5">Meses abiertos</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-1.5">
-            {monthlyBudgets.slice(0, 6).map((mb: any) => (
-              <TouchableOpacity key={mb.id} onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })} className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                <Text className="text-[10px] text-slate-600">{mb.month?.slice(0, 7)}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          <View className="flex-row items-center justify-between mb-1.5">
+            <Text className="text-[10px] font-medium text-slate-400">Meses abiertos</Text>
+            <View className="flex-row items-center gap-2">
+              <DateFilter months={months} onChange={setMonths} />
+              <View className="flex-row items-center gap-0.5">
+                <TouchableOpacity onPress={() => setYear((y) => y - 1)} className="p-1"><ChevronLeft size={12} color="#94a3b8" /></TouchableOpacity>
+                <Text className="text-[10px] font-semibold text-slate-600 tabular-nums">{year}</Text>
+                <TouchableOpacity onPress={() => setYear((y) => y + 1)} className="p-1"><ChevronRight size={12} color="#94a3b8" /></TouchableOpacity>
+              </View>
+            </View>
+          </View>
+          {filteredMonthly.length === 0 ? (
+            <Text className="text-[10px] text-slate-400">No hay meses abiertos en el período seleccionado.</Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-1.5">
+              {filteredMonthly.slice(0, 6).map((mb: any) => (
+                <TouchableOpacity key={mb.id} onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })} className="bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+                  <Text className="text-[10px] text-slate-600">{mb.month?.slice(0, 7)}</Text>
+                  <Text className="text-[9px] text-slate-400 tabular-nums">{formatCurrency(Number(mb.totalBudgeted ?? 0))}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
         </View>
       )}
 

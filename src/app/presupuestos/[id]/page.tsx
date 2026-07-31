@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { getMonthlyBudgetDashboard, getPeople, createExpense } from "@/lib/db"
+import { getMonthlyBudgetDashboard, getPeople, createExpense, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory } from "@/lib/db"
 import type { DashboardCategory } from "@/lib/db"
 import type { Person } from "@/types"
 import {
@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Circle, ChevronDown, ChevronRight } from "lucide-react"
+import { ArrowLeft, Circle, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -39,6 +39,29 @@ export default function MonthlyBudgetPage() {
   const [expDesc, setExpDesc] = useState("")
   const [expPerson, setExpPerson] = useState("")
   const [expDate, setExpDate] = useState(new Date().toISOString().split("T")[0])
+
+  const [openCatEdit, setOpenCatEdit] = useState(false)
+  const [editCat, setEditCat] = useState<DashboardCategory | null>(null)
+  const [editCatName, setEditCatName] = useState("")
+  const [editCatBudgeted, setEditCatBudgeted] = useState("")
+  const [editCatHasChildren, setEditCatHasChildren] = useState(false)
+  const [editCatHasSub, setEditCatHasSub] = useState(false)
+
+  const [openAddRoot, setOpenAddRoot] = useState(false)
+  const [addRootName, setAddRootName] = useState("")
+  const [addRootBudgeted, setAddRootBudgeted] = useState("")
+
+  const [openAddSub, setOpenAddSub] = useState(false)
+  const [addSubParent, setAddSubParent] = useState<DashboardCategory | null>(null)
+  const [addSubName, setAddSubName] = useState("")
+  const [addSubBudgeted, setAddSubBudgeted] = useState("")
+
+  const [catToDelete, setCatToDelete] = useState<DashboardCategory | null>(null)
+
+  const reload = async () => {
+    const res = await getMonthlyBudgetDashboard(id)
+    setData(res)
+  }
 
   useEffect(() => {
     if (!id) return
@@ -96,8 +119,95 @@ export default function MonthlyBudgetPage() {
         budget_category_id: expCatId,
       })
       setOpenExpense(false)
-      const res = await getMonthlyBudgetDashboard(id)
-      setData(res)
+      await reload()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const openEdit = (cat: DashboardCategory) => {
+    const hasChildren = (childrenMap.get(cat.id) ?? []).length > 0
+    setEditCat(cat)
+    setEditCatName(cat.name)
+    setEditCatBudgeted(String(cat.budgeted))
+    setEditCatHasChildren(hasChildren)
+    setEditCatHasSub(hasChildren || cat.budgeted === 0)
+    setOpenCatEdit(true)
+  }
+
+  const handleEditCatSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editCat || !editCatName.trim()) return
+    setSubmitting(true)
+    try {
+      if (editCatHasChildren || editCatHasSub) {
+        await updateBudgetCategory(editCat.id, { name: editCatName.trim(), budgeted: 0 })
+      } else {
+        await updateBudgetCategory(editCat.id, { name: editCatName.trim(), budgeted: parseFloat(editCatBudgeted || "0") })
+      }
+      setOpenCatEdit(false)
+      setEditCat(null)
+      await reload()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const openAddRootDialog = () => {
+    setAddRootName("")
+    setAddRootBudgeted("")
+    setOpenAddRoot(true)
+  }
+
+  const handleAddRootSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!addRootName.trim()) return
+    setSubmitting(true)
+    try {
+      await createBudgetCategory({ monthly_budget_id: id, name: addRootName.trim(), budgeted: parseFloat(addRootBudgeted || "0"), parent_id: null })
+      setOpenAddRoot(false)
+      await reload()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const openAddSubDialog = (parent: DashboardCategory) => {
+    setAddSubParent(parent)
+    setAddSubName("")
+    setAddSubBudgeted("")
+    setOpenAddSub(true)
+  }
+
+  const handleAddSubSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!addSubParent || !addSubName.trim()) return
+    setSubmitting(true)
+    try {
+      await createBudgetCategory({ monthly_budget_id: id, name: addSubName.trim(), budgeted: parseFloat(addSubBudgeted || "0"), parent_id: addSubParent.id })
+      setOpenAddSub(false)
+      setAddSubParent(null)
+      await reload()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const confirmDeleteCat = async () => {
+    if (!catToDelete) return
+    setSubmitting(true)
+    try {
+      await deleteBudgetCategory(catToDelete.id)
+      setCatToDelete(null)
+      await reload()
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -113,6 +223,22 @@ export default function MonthlyBudgetPage() {
       return next
     })
   }
+
+  const actionsCell = (cat: DashboardCategory, isChild = false) => (
+    <td className={`py-1 px-2 ${isChild ? "py-0.5" : ""}`}>
+      <div className="flex items-center justify-end gap-0.5">
+        <button onClick={() => openAddSubDialog(cat)} className="p-0.5 rounded hover:bg-accent text-slate-400 hover:text-indigo-600" title="Agregar subcategoría">
+          <Plus className="size-3" />
+        </button>
+        <button onClick={() => openEdit(cat)} className="p-0.5 rounded hover:bg-accent text-slate-400 hover:text-indigo-600" title="Editar rubro">
+          <Pencil className="size-3" />
+        </button>
+        <button onClick={() => setCatToDelete(cat)} className="p-0.5 rounded hover:bg-accent text-slate-400 hover:text-rose-600" title="Eliminar rubro">
+          <Trash2 className="size-3" />
+        </button>
+      </div>
+    </td>
+  )
 
   return (
     <div className="space-y-3">
@@ -154,13 +280,28 @@ export default function MonthlyBudgetPage() {
         <Tooltip content="Total gastado del mes">
           <span><span className="text-muted-foreground">{d.gastado}</span> <b className="text-red-600">{fmt(data.totalGastos)}</b></span>
         </Tooltip>
+        <Tooltip content="Disponible del presupuesto: presupuestado − gastado">
+          <span><span className="text-muted-foreground">{d.disponible}</span> <b className={data.totalBudgeted - data.totalGastos >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.totalBudgeted - data.totalGastos)}</b></span>
+        </Tooltip>
         <Tooltip content="Balance del mes: ingresos − gastos">
           <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
         </Tooltip>
       </div>
 
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-muted-foreground">Ediciones aquí solo afectan a este mes.</p>
+        <button onClick={openAddRootDialog} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+          <Plus className="size-3.5" /> Agregar rubro
+        </button>
+      </div>
+
       {data.categories.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{d.empty}</p>
+        <div className="border rounded-lg p-6 text-center space-y-3">
+          <p className="text-xs text-muted-foreground">{d.empty}</p>
+          <button onClick={openAddRootDialog} className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800">
+            <Plus className="size-3.5" /> Agregar primer rubro
+          </button>
+        </div>
       ) : (
         <div className="border rounded-lg max-h-[70vh] overflow-y-auto">
           <table className="w-full text-xs">
@@ -172,6 +313,7 @@ export default function MonthlyBudgetPage() {
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.disponible}</th>
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.exceso}</th>
                 <th className="text-center py-1.5 px-2 font-medium text-muted-foreground w-16 bg-muted/50">{d.estado}</th>
+                <th className="py-1.5 px-2 bg-muted/50 w-24"></th>
               </tr>
             </thead>
             <tbody>
@@ -216,6 +358,7 @@ export default function MonthlyBudgetPage() {
                         {ppct > 0 ? `${ppct}%` : d.emDash}
                       </span>
                     </td>
+                    {actionsCell(parent)}
                   </tr>
                 )
 
@@ -250,6 +393,7 @@ export default function MonthlyBudgetPage() {
                           {cpct > 0 ? `${cpct}%` : d.emDash}
                         </span>
                       </td>
+                      {actionsCell(child, true)}
                     </tr>
                   )
                 }) : []
@@ -294,6 +438,116 @@ export default function MonthlyBudgetPage() {
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>{submitting ? "Guardando..." : "Guardar gasto"}</Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openCatEdit} onOpenChange={(v) => { if (!v) setEditCat(null); setOpenCatEdit(v) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar rubro</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Modificá el nombre y monto de este rubro. Solo afecta a este mes.</p>
+          </DialogHeader>
+          <form onSubmit={handleEditCatSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="catName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                <Input id="catName" value={editCatName} onChange={(e) => setEditCatName(e.target.value)} required />
+              </div>
+              {editCatHasChildren ? (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">Monto</Label>
+                  <p className="text-xs text-slate-500">Calculado automáticamente de las subcategorías</p>
+                </div>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={editCatHasSub}
+                      onChange={(e) => { setEditCatHasSub(e.target.checked); if (e.target.checked) setEditCatBudgeted("0") }}
+                      className="accent-indigo-600 rounded"
+                    />
+                    Tiene subcategorías
+                  </label>
+                  {editCatHasSub ? (
+                    <p className="text-xs text-slate-500">El valor se calculará automáticamente como la suma de sus subcategorías.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="catBudgeted" className="text-sm font-medium text-slate-700">Monto</Label>
+                      <Input id="catBudgeted" type="number" step="0.01" min="0" value={editCatBudgeted} onChange={(e) => setEditCatBudgeted(e.target.value)} required />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={() => setOpenCatEdit(false)}>Cancelar</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : "Guardar cambios"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openAddRoot} onOpenChange={(v) => { setOpenAddRoot(v); if (!v) { setAddRootName(""); setAddRootBudgeted("") } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo rubro</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Se agrega solo a este mes.</p>
+          </DialogHeader>
+          <form onSubmit={handleAddRootSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="addRootName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                <Input id="addRootName" value={addRootName} onChange={(e) => setAddRootName(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="addRootBudgeted" className="text-sm font-medium text-slate-700">Monto</Label>
+                <Input id="addRootBudgeted" type="number" step="0.01" min="0" value={addRootBudgeted} onChange={(e) => setAddRootBudgeted(e.target.value)} />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={() => setOpenAddRoot(false)}>Cancelar</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? "Agregando..." : "Agregar rubro"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={openAddSub} onOpenChange={(v) => { setOpenAddSub(v); if (!v) { setAddSubParent(null); setAddSubName(""); setAddSubBudgeted("") } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva subcategoría</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Dentro de {addSubParent?.name ?? ""} (solo este mes).</p>
+          </DialogHeader>
+          <form onSubmit={handleAddSubSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="addSubName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                <Input id="addSubName" value={addSubName} onChange={(e) => setAddSubName(e.target.value)} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="addSubBudgeted" className="text-sm font-medium text-slate-700">Monto</Label>
+                <Input id="addSubBudgeted" type="number" step="0.01" min="0" value={addSubBudgeted} onChange={(e) => setAddSubBudgeted(e.target.value)} required />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={() => setOpenAddSub(false)}>Cancelar</Button>
+              <Button type="submit" disabled={submitting}>{submitting ? "Agregando..." : "Agregar subcategoría"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar "{catToDelete?.name}"?</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Los gastos asociados a este rubro quedarán sin rubro. Solo afecta a este mes.</p>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setCatToDelete(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmDeleteCat} disabled={submitting}>{submitting ? "Eliminando..." : "Eliminar"}</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

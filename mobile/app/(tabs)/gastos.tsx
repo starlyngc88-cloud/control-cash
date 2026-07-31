@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getExpenses, getPeople, getExpenseCategories, getAllBudgetCategories, createExpense, updateExpense, deleteExpense, createExpenseCategory, deleteExpenseCategory } from "@/services/api"
+import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, deleteExpenseCategory } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
@@ -50,7 +50,7 @@ export default function GastosScreen() {
         getExpenses({ startDate, endDate }),
         getPeople(),
         getExpenseCategories(),
-        getAllBudgetCategories(),
+        sorted.length > 0 ? getBudgetCategoriesForMonth(sorted[0]) : Promise.resolve([]),
       ])
       setExpenses(exp)
       setPeople(p)

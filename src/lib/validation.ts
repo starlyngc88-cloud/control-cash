@@ -37,7 +37,8 @@ export const budgetTemplateSchema = z.object({
 })
 
 export const budgetCategorySchema = z.object({
-  template_id: z.string().uuid(),
+  template_id: z.string().uuid().optional(),
+  monthly_budget_id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(MAX_STR),
   budgeted: z.number().min(0, "El valor presupuestado no puede ser negativo").finite(),
   parent_id: z.string().uuid().nullable().optional(),
