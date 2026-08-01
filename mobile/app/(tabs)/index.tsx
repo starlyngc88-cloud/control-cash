@@ -78,7 +78,7 @@ export default function DashboardScreen() {
 
   const KPI_CARDS = [
     {
-      label: "Disponible en cuenta",
+      label: "Disponible para gastar",
       value: (data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0),
       icon: TrendingDown,
       color: "#059669",
@@ -101,7 +101,7 @@ export default function DashboardScreen() {
       subtitle: `Presupuesto inicial: ${formatCurrency(data?.totalBudgeted ?? 0)}`,
     },
     {
-      label: "Balance",
+      label: "Saldo real en cuenta a la fecha",
       value: data?.balance ?? 0,
       icon: PiggyBank,
       color: "#475569",

@@ -145,7 +145,7 @@ export default function DashboardPage() {
           <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Disponible en cuenta</p>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Disponible para gastar</p>
                 <h3 className="text-xl font-bold text-emerald-600">{fmt((data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0))}</h3>
                 <p className="text-[10px] text-slate-500 mt-1">Ingreso inicial: {fmt(data?.totalIngresos ?? 0)}</p>
               </div>
@@ -178,11 +178,11 @@ export default function DashboardPage() {
           </div>
         </Tooltip>
 
-        <Tooltip content="Balance del período: ingresos − gastos" className="h-full">
+        <Tooltip content="Saldo en cuenta ingresos iniciales − gastos" className="h-full">
           <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
             <div className="flex justify-between items-start">
               <div>
-                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Balance</p>
+                <p className="text-[10px] font-medium text-slate-500 mb-0.5">Saldo real en cuenta a la fecha</p>
                 <h3 className={`text-xl font-bold ${(data?.balance ?? 0) >= 0 ? "text-slate-800" : "text-rose-600"}`}>{fmt(data?.balance ?? 0)}</h3>
               </div>
               <div className={`p-1.5 rounded-lg ${(data?.balance ?? 0) >= 0 ? "bg-indigo-50 text-indigo-600" : "bg-rose-50 text-rose-600"}`}>

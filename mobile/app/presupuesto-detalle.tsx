@@ -117,6 +117,7 @@ export default function PresupuestoDetalleScreen() {
   }
 
   const remaining = totalBudgeted - totalSpent
+  const totalExcess = roots.reduce((s: number, r: MonthCategoryNode) => s + (r.excess || 0), 0)
 
   if (loading) {
     return (
@@ -154,19 +155,25 @@ export default function PresupuestoDetalleScreen() {
         </View>
       ) : null}
 
-      <View className="mx-4 mb-3 flex-row gap-2">
-        <View className="flex-1 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+      <View className="mx-4 mb-3 flex-row flex-wrap gap-2">
+        <View className="w-[48%] bg-white rounded-xl border border-slate-100 px-3 py-2.5">
           <Text className="text-[10px] text-slate-400 mb-0.5">Presupuestado</Text>
           <Text className="text-sm font-bold text-slate-800">{formatCurrency(totalBudgeted)}</Text>
         </View>
-        <View className="flex-1 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+        <View className="w-[48%] bg-white rounded-xl border border-slate-100 px-3 py-2.5">
           <Text className="text-[10px] text-slate-400 mb-0.5">Gastado</Text>
           <Text className="text-sm font-bold text-red-600">{formatCurrency(totalSpent)}</Text>
         </View>
-        <View className="flex-1 bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+        <View className="w-[48%] bg-white rounded-xl border border-slate-100 px-3 py-2.5">
           <Text className="text-[10px] text-slate-400 mb-0.5">Disponible</Text>
           <Text className={`text-sm font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
             {formatCurrency(remaining)}
+          </Text>
+        </View>
+        <View className="w-[48%] bg-white rounded-xl border border-slate-100 px-3 py-2.5">
+          <Text className="text-[10px] text-slate-400 mb-0.5">Exceso</Text>
+          <Text className={`text-sm font-bold ${totalExcess > 0 ? "text-red-600" : "text-slate-400"}`}>
+            {formatCurrency(totalExcess)}
           </Text>
         </View>
       </View>
@@ -249,6 +256,25 @@ export default function PresupuestoDetalleScreen() {
               </View>
             )
           })}
+        </View>
+        <View className="bg-white rounded-xl border border-slate-100 shadow-sm px-3 py-2.5">
+          <Text className="text-[10px] text-slate-400 font-semibold mb-1">Totales del mes</Text>
+          <View className="flex-row justify-between py-0.5">
+            <Text className="text-[10px] text-slate-500">Presupuestado</Text>
+            <Text className="text-[10px] font-semibold text-slate-800 tabular-nums">{formatCurrency(totalBudgeted)}</Text>
+          </View>
+          <View className="flex-row justify-between py-0.5">
+            <Text className="text-[10px] text-slate-500">Gastado</Text>
+            <Text className="text-[10px] font-semibold text-red-600 tabular-nums">{formatCurrency(totalSpent)}</Text>
+          </View>
+          <View className="flex-row justify-between py-0.5">
+            <Text className="text-[10px] text-slate-500">Disponible</Text>
+            <Text className={`text-[10px] font-semibold ${remaining >= 0 ? "text-green-600" : "text-red-600"} tabular-nums`}>{formatCurrency(remaining)}</Text>
+          </View>
+          <View className="flex-row justify-between py-0.5">
+            <Text className="text-[10px] text-slate-500">Exceso</Text>
+            <Text className={`text-[10px] font-semibold ${totalExcess > 0 ? "text-red-600" : "text-slate-400"} tabular-nums`}>{formatCurrency(totalExcess)}</Text>
+          </View>
         </View>
         <TouchableOpacity onPress={() => { setRootName(""); setRootBudgeted(""); setRootModalOpen(true) }} className="flex-row items-center justify-center gap-1.5 py-3">
           <Plus size={12} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar rubro (este mes)</Text>

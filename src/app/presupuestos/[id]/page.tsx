@@ -87,6 +87,8 @@ export default function MonthlyBudgetPage() {
   }
 
   const parents = data.categories.filter(c => !c.parent_id)
+  const totalExcess = parents.reduce((s, p) => s + p.excess, 0)
+  const totalAvailable = data.totalBudgeted - data.totalGastos
   const childrenMap = new Map<string, DashboardCategory[]>()
   for (const cat of data.categories) {
     if (cat.parent_id) {
@@ -286,6 +288,9 @@ export default function MonthlyBudgetPage() {
         <Tooltip content="Balance del mes: ingresos − gastos">
           <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
         </Tooltip>
+        <Tooltip content="Exceso total del mes: gastos que superaron el presupuesto">
+          <span><span className="text-muted-foreground">{d.exceso}</span> <b className="text-red-600">{fmt(totalExcess)}</b></span>
+        </Tooltip>
       </div>
 
       <div className="flex items-center justify-between">
@@ -328,7 +333,7 @@ export default function MonthlyBudgetPage() {
                   "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
 
                 const parentRow = (
-                  <tr key={parent.id} className="border-b hover:bg-muted/30">
+                  <tr key={parent.id} className="border-b bg-slate-50/70 hover:bg-indigo-50/70 transition-colors">
                     <td className="py-1 px-2">
                       <div className="flex items-center gap-1">
                         {children.length > 0 ? (
@@ -344,14 +349,14 @@ export default function MonthlyBudgetPage() {
                           parent.status === "green" ? "text-green-500" :
                           parent.status === "yellow" ? "text-yellow-500" : "text-red-500"
                         }`} />
-                        <span className="font-medium truncate">{parent.name}</span>
+                        <span className="font-bold truncate">{parent.name}</span>
                       </div>
                     </td>
-                    <td className="py-1 px-2 text-right tabular-nums">{fmt(parent.budgeted)}</td>
-                    <td className="py-1 px-2 text-right tabular-nums font-medium">{fmt(parent.spent)}</td>
-                    <td className={`py-1 px-2 text-right tabular-nums ${parent.available <= 0 ? "text-red-600 font-medium" : ""}`}>{fmt(parent.available)}</td>
-                    <td className="py-1 px-2 text-right tabular-nums">
-                      {parent.excess > 0 ? <span className="text-red-600 font-medium">{fmt(parent.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                    <td className="py-1 px-2 text-right tabular-nums font-semibold">{fmt(parent.budgeted)}</td>
+                    <td className="py-1 px-2 text-right tabular-nums font-semibold">{fmt(parent.spent)}</td>
+                    <td className={`py-1 px-2 text-right tabular-nums font-semibold ${parent.available <= 0 ? "text-red-600" : ""}`}>{fmt(parent.available)}</td>
+                    <td className="py-1 px-2 text-right tabular-nums font-semibold">
+                      {parent.excess > 0 ? <span className="text-red-600">{fmt(parent.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
                     </td>
                     <td className="py-1 px-2 text-center">
                       <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${ppctClass}`}>
@@ -369,7 +374,7 @@ export default function MonthlyBudgetPage() {
                     cpct >= 100 ? "text-red-700 bg-red-100 dark:bg-red-900/40" :
                     "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
                   return (
-                    <tr key={child.id} className="border-b hover:bg-muted/20 bg-muted/5">
+                    <tr key={child.id} className="border-b hover:bg-indigo-50/40 transition-colors bg-muted/5">
                       <td className="py-0.5 px-2 pl-8">
                         <div className="flex items-center gap-1.5">
                           <button onClick={() => openAddExpense(child.id, child.name)} className="p-0.5 rounded hover:bg-accent" title={`Agregar gasto a ${child.name}`}>
@@ -401,6 +406,19 @@ export default function MonthlyBudgetPage() {
                 return [parentRow, ...childRows]
               })}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-slate-300 bg-slate-100/80">
+                <td className="py-1.5 px-2 font-bold text-slate-700">Totales</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-slate-800">{fmt(data.totalBudgeted)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-bold text-slate-800">{fmt(data.totalGastos)}</td>
+                <td className={`py-1.5 px-2 text-right tabular-nums font-bold ${totalAvailable < 0 ? "text-red-600" : "text-slate-800"}`}>{fmt(totalAvailable)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-bold">
+                  {totalExcess > 0 ? <span className="text-red-600">{fmt(totalExcess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                </td>
+                <td className="py-1.5 px-2"></td>
+                <td className="py-1.5 px-2"></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
