@@ -6,3 +6,6 @@ expo-env.d.ts
 # @end expo-cli
 
 dist/
+
+# EAS builds from git in managed workflow; android/ is a local prebuild artifact
+/android/

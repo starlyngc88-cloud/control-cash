@@ -9,6 +9,7 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/splash.png",
       "backgroundColor": "#f8fafc",
       "resizeMode": "contain"
     },
@@ -21,7 +22,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#f8fafc"
+        "backgroundColor": "#f8fafc",
+        "foregroundImage": "./assets/icon.png"
       },
       "package": "com.kellycash.mobile",
       "permissions": []
