@@ -18,7 +18,8 @@
 
 - Asociados a una persona (obligatorio)
 - Monto, descripción, fecha, categoría presupuestaria (opcional)
-- Categorías vinculadas al modelo base (budget_categories)
+- **Doble clasificación:** cada gasto puede tener un **rubro** (`budget_category_id`, categoría de la plantilla de presupuesto) y una **categoría de gastos** (`expense_category_id`, rubros generales de la tabla `expense_categories`). Ambos opcionales, independientes.
+- Categorías de gastos: CRUD propio (expense_categories), con creación inline desde el formulario
 - Filtrables por rango de meses (fecha)
 - El gasto puede tener o no categoría
 
@@ -64,7 +65,7 @@
 
 ## Seguridad
 
-- Validación Zod en todas las operaciones create/update (14 schemas en validation.ts)
+- Validación Zod en todas las operaciones create/update (16 schemas en validation.ts)
 - Sanitización XSS en todos los inputs (sanitize.ts)
 - Errores amigables: friendlyError() nunca expone detalles técnicos al usuario
 - RLS (Row Level Security): todas las tablas tienen user_id + política FOR ALL USING (user_id = auth.uid())

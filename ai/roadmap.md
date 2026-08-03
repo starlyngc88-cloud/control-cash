@@ -49,12 +49,17 @@
 - [x] DateFilter pill button reusable
 - [x] Filtro compartido en Dashboard, Presupuestos, Ingresos, Gastos
 
-## Fase 5 - Mobile 📱
-- [ ] App nativa (React Native / Flutter)
-- [ ] API endpoints dedicados
-- [ ] Soporte offline
-- [ ] Notificaciones push
-- [ ] Escaneo de recibos
+## Fase 5 - Mobile 📱 (en progreso)
+- [x] App nativa con **Expo SDK 54** (React Native + expo-router), carpeta `mobile/`
+- [x] Login/registro (teclado no tapa el form en Android)
+- [x] Pantallas principales: Dashboard, Ingresos, Gastos, Presupuestos, Hucha, Gastos Futuros, Compromisos, Personas, Ajustes, Personalización
+- [x] Sesión con expo-secure-store, misma base Supabase que la web
+- [x] Branding mobile: icon, adaptive-icon, splash (moneda transparente)
+- [x] Build APK con EAS Build (profile `preview`) + fix crash expo-font
+- [ ] Notificaciones de vencimientos
+- [ ] Soporte offline (offline-first)
+- [ ] Escaneo de facturas con OCR
+- [ ] Widgets de resumen rápido
 
 ## Fase 6 - Reportes y Analytics 📊
 - [ ] Reportes mensuales PDF
@@ -63,6 +68,7 @@
 - [ ] Tendencias y predicciones
 
 ## Fase 7 - Features avanzadas 🚀
+- [ ] **Abonar/sacar en Gastos Futuros** (funcionar como hucha/alcancía): registro pendiente, esperando terminar de probar el APK actual
 - [ ] Objetivos financieros
 - [ ] Patrimonio familiar
 - [ ] Adjuntos a movimientos

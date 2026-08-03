@@ -34,6 +34,15 @@ Cada tabla incluye `user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id) NO
 | user_id | uuid FK → auth.users | DEFAULT auth.uid() |
 | created_at | timestamptz | |
 
+### expense_categories
+| Columna | Tipo | Notas |
+|---------|------|-------|
+| id | uuid PK | |
+| name | text | NOT NULL |
+| user_id | uuid FK → auth.users | DEFAULT auth.uid() |
+| created_at | timestamptz | |
+| *(creada en migration_gastos_categorias.sql)* | | |
+
 ### expenses
 | Columna | Tipo | Notas |
 |---------|------|-------|
@@ -42,9 +51,12 @@ Cada tabla incluye `user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id) NO
 | amount | numeric | NOT NULL |
 | description | text | |
 | date | date | NOT NULL |
-| budget_category_id | uuid FK → budget_categories | nullable |
+| budget_category_id | uuid FK → budget_categories | nullable (rubro/presupuesto) |
+| expense_category_id | uuid FK → expense_categories | nullable (categoría de gastos) |
 | user_id | uuid FK → auth.users | DEFAULT auth.uid() |
 | created_at | timestamptz | |
+
+> **Doble clasificación en gastos:** cada gasto puede tener simultáneamente un **rubro** (`budget_category_id`, agrupado por plantilla) y una **categoría de gastos** (`expense_category_id`, rubros generales). El formulario de Gastos muestra ambos selectores.
 
 ### budget_templates
 | Columna | Tipo | Notas |
@@ -172,10 +184,12 @@ Cada tabla incluye `user_id UUID DEFAULT auth.uid() REFERENCES auth.users(id) NO
 ## RLS (Row Level Security)
 
 Archivos de migración en `sql/`:
-- **sql/rls-migration.sql**: Agrega columna `user_id UUID DEFAULT auth.uid()` a las 14 tablas de datos, actualiza registros existentes con un UUID semilla.
+- **sql/rls-migration.sql**: Agrega columna `user_id UUID DEFAULT auth.uid()` a las tablas de datos, actualiza registros existentes con un UUID semilla.
 - **sql/rls-policies.sql**: Habilita RLS en todas las tablas:
-  - Tablas 1-14: política `FOR ALL USING (user_id = auth.uid())`
+  - Tablas de datos: política `FOR ALL USING (user_id = auth.uid())`
   - `allowed_users` y `user_roles`: política `FOR ALL USING (EXISTS SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role = 'admin')`
+
+Otras migraciones en `sql/`: `schema.sql` (base), `migration_gastos_categorias.sql` (expense_categories), `migration_categorias_gastos_futuros.sql`, `migration_categorias_ahorros.sql`, `migration_ingresos_categorias.sql`, `migration_compromisos.sql`, `migration_hucha.sql`, `migration_subcategorias.sql`, `migration_meses_independientes.sql`, `migration_auth.sql`, `fix_admin_rls.sql`, `cleanup_templates.sql`, `clean.sql`, `reset_gastos_futuros.sql`.
 
 ## Seguridad en código
 

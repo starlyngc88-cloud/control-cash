@@ -23,12 +23,13 @@ Aplicación de finanzas familiares multi-persona que reemplaza las hojas de Exce
 5. **Seguro > Confiado**: validación Zod, sanitización XSS, RLS, errores amigables
 
 ## Identidad visual (Refactorizado 2026)
+- **Logo:** moneda con fondo transparente (`assets/logo-transparent.png`), aplicado en web (login, sidebar, favicon 256px) y mobile (icon, adaptive-icon, splash)
 - **Esquema de colores unificado** basado en `_design_reference/index.html`:
   - Primario: indigo-600 (`#4f46e5`)
   - Sidebar: `bg-[#0f172a]`
   - Fondo: `bg-[#f8fafc]`
   - Cards: white con `rounded-xl border-slate-100 shadow-sm`
-- **Login split-screen**: panel oscuro (sidebar style) + form en card blanco
+- **Login split-screen**: panel oscuro (sidebar style) con logo Image + form en card blanco
 - **Vistas CRUD con patrón común**: KPI cards + búsqueda + lista agrupada por categoría expandible
 - **Diálogos de confirmación** consistentes para todas las operaciones de eliminación
 - **Doble clasificación en gastos**: rubro (budget categories) + categoría de gastos (expense categories)
@@ -43,9 +44,16 @@ Aplicación de finanzas familiares multi-persona que reemplaza las hojas de Exce
 - friendlyError() ahora pasa strings sin modificarlos
 - Errores de autenticación más descriptivos (Email not confirmed, rate limit, etc.)
 
-## Mobile (próximo)
-- App nativa (React Native / Flutter)
-- Sincronización con API existente
+## Mobile (en producción)
+- App nativa con **Expo SDK 54** (React Native + expo-router), carpeta `mobile/`
+- Misma base de datos Supabase que la web (sincronización directa)
+- Pantallas: Dashboard, Ingresos, Gastos, Presupuestos, Hucha (ahorros), Gastos Futuros, Compromisos, Personas, Ajustes, Personalización
+- Login con `behavior="height"` en Android y `softwareKeyboardLayoutMode: "resize"` (teclado no tapa el form)
+- Sesión persistida con expo-secure-store
+- Build: EAS Build (`preview` = APK, `production` = AAB)
+
+## Futuro
 - Notificaciones de vencimientos
 - Escaneo de facturas con OCR
 - Widgets de resumen rápido
+- Soporte offline (offline-first)

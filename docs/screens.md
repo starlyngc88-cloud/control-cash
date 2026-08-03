@@ -77,9 +77,9 @@
 
 ## Login (`/login`) — Refactorizado
 - **Split-screen layout:**
-  - Panel izquierdo (oculto en mobile `hidden lg:flex`): `bg-[#0f172a]` (color sidebar), icono Wallet indigo-400, título "KellyCash", slogan "La platica bajo control"
+  - Panel izquierdo (oculto en mobile `hidden lg:flex`): `bg-[#0f172a]` (color sidebar), **logo moneda** (`/logo.png` vía `<Image>`), título "KellyCash", slogan "La platica bajo control"
   - Panel derecho: formulario centrado en card `bg-white rounded-xl border-slate-100 shadow-sm p-8`
-- Logo mobile: Wallet + "KellyCash" visible solo en pantallas pequeñas
+- Logo mobile: Image + "KellyCash" visible solo en pantallas pequeñas
 - Inputs con iconos decorativos (Mail, Lock) con pl-10
 - Focus states: indigo-500 ring
 - Botón submit: indigo-600 con shadow-indigo-200
@@ -90,7 +90,7 @@
 
 ## Sidebar (global, colapsable)
 - Se oculta en `/login`
-- Header con icono Wallet + nombre app + botón colapsar
+- Header con logo moneda (Image `/logo.png`) + nombre app + botón colapsar
 - Colapsable a versión reducida (iconos sin texto)
 - Nav principal con iconos coloreados: Dashboard, Presupuestos, Ingresos, Gastos, Ahorros, Gastos Futuros, Compromisos
 - Sección expandible "Configuración" → Personalización, Personas
@@ -113,3 +113,57 @@
   - Botón "Aplicar (N meses)"
 - Persistido en localStorage como dashboard-months
 - Usado en Dashboard, Presupuestos, Ingresos, Gastos
+
+---
+
+# Pantallas Mobile (Expo / expo-router)
+
+Estructura en `mobile/app/`. Grupo `(tabs)` = tab bar inferior; grupo `(auth)` = login/registro.
+
+## Login (`(auth)/login`)
+- Login / registro / toggle
+- Android: `behavior="height"` en KeyboardAvoidingView (teclado no tapa el form)
+- `returnKeyType` + `onSubmitEditing`: Enter/Next navega entre campos y dispara submit
+- `softwareKeyboardLayoutMode: "resize"` en app.json
+- Recuperar contraseña: `(auth)/forgot-password`
+
+## Tab bar (`(tabs)/_layout.tsx`)
+- Ítems: Dashboard, Ingresos, Gastos, Presupuestos, Hucha, Gastos Futuros, Compromisos, Personas, Ajustes, Más (organizados según necesidad)
+
+## Dashboard (`(tabs)/index`)
+- Resumen con filtro de meses + últimos movimientos
+
+## Ingresos (`(tabs)/ingresos`)
+- CRUD de ingresos con categorías
+
+## Gastos (`(tabs)/gastos`)
+- CRUD de gastos con rubro (budget) + categoría de gastos
+
+## Presupuestos (`(tabs)/presupuestos`)
+- Plantillas + meses financieros
+
+## Detalle de presupuesto (`presupuesto-detalle`)
+- Dashboard del mes vs presupuesto
+
+## Hucha (`(tabs)/hucha`)
+- Ahorros con movimientos (abono/retiro)
+
+## Gastos Futuros (`(tabs)/gastos-futuros`)
+- Gastos planificados con estados
+
+## Compromisos (`(tabs)/compromisos`)
+- Deudas con pagos parciales
+
+## Personas (`(tabs)/personas`)
+- CRUD de personas
+
+## Ajustes / Más (`(tabs)/ajustes`, `(tabs)/more`)
+- Configuración general / opciones adicionales
+
+## Personalización (`personalizacion`)
+- Idioma, moneda, seguridad, usuarios
+
+## Componentes mobile (`mobile/components/`)
+- `DateFilter.tsx`, `DatePickerModal.tsx`, `LineChart.tsx`
+- `ui/`: Badge, Button, Card, EmptyState, Input
+- Estilos con NativeWind (Tailwind); iconos con lucide-react-native

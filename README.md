@@ -1,6 +1,11 @@
 # KellyCash — Presupuestos Familiares
 
-App web para controlar gastos del hogar como un Excel, pero más fácil.
+App (web + móvil) para controlar gastos del hogar como un Excel, pero más fácil.
+
+- **Web:** Next.js 16 (App Router) + Supabase + Tailwind 4 + Shadcn UI
+- **Móvil:** Expo SDK 54 (React Native + expo-router) — carpeta `mobile/`
+- **Datos:** una sola base Supabase compartida por web y móvil, con RLS por usuario
+- **Branding:** logo de moneda con fondo transparente
 
 ---
 
@@ -20,6 +25,7 @@ App web para controlar gastos del hogar como un Excel, pero más fácil.
 - **Qué es:** El dinero que sale (mercado, transporte, etc.)
 - **Cómo:** Ve a Gastos → selecciona persona, escribe monto, concepto y **rubro** → Guardar
 - **Rubro (opcional):** Asocia el gasto a una categoría del presupuesto (ej: "Mercado")
+- **Categoría de gastos (opcional):** clasificación general independiente del presupuesto
 
 ### 4. Presupuestos → Plantillas
 - **Qué es:** Una plantilla define tus rubros y cuánto planeas gastar en cada uno
@@ -51,6 +57,51 @@ App web para controlar gastos del hogar como un Excel, pero más fácil.
 ### 7. Dashboard principal
 - **Qué es:** Resumen rápido del mes actual
 - **Muestra:** Ingresos, Gastos y Balance del mes en curso + últimos movimientos
+
+### 8. Más módulos
+- **Ahorros (Hucha):** cuentas de ahorro con movimientos (abono/retiro)
+- **Gastos Futuros:** gastos planificados con fecha y estado (planned/completed/cancelled)
+- **Compromisos:** deudas con pagos parciales y saldo actual
+- **Personalización:** idioma (standard/kellycaribe), moneda (COP/EUR), contraseña, usuarios autorizados
+
+---
+
+## Desarrollo local
+
+### Web (carpeta raíz)
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm run typecheck  # tsc --noEmit
+npm run lint
+```
+Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (ver `.env.local`).
+
+### Móvil (`mobile/`)
+```bash
+cd mobile
+npm install
+npx expo start     # escanea el QR con Expo Go (o "a" para emulador Android)
+npm run typecheck  # tsc --noEmit
+npx expo lint
+```
+- Base de datos compartida con la web (mismo Supabase).
+- Sesión guardada con expo-secure-store.
+
+### Build APK (EAS)
+```bash
+cd mobile
+eas build --profile preview     # APK (distribución interna)
+eas build --profile production  # AAB (Google Play)
+```
+- `mobile/eas.json` usa `cli.appVersionSource: "local"` y el profile `preview` genera APK.
+- **Importante:** `expo-font` debe quedarse en `~14.0.12`. Si Expo lo duplica en `expo/node_modules`, el APK crashea al abrir con `NoSuchMethodError: getDirectConverter` (ver `ai/architecture.md`).
+
+---
+
+## Base de datos
+
+Supabase (PostgreSQL) con RLS. Esquema en `sql/schema.sql` + migraciones en `sql/`. Documentación: `ai/database.md`.
 
 ---
 

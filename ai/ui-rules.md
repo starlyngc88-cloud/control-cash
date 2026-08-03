@@ -84,7 +84,7 @@
 <div className="min-h-screen flex bg-[#f8fafc]">
   {/* Panel izquierdo oscuro */}
   <div className="hidden lg:flex lg:w-1/2 bg-[#0f172a] flex-col items-center justify-center">
-    <Wallet className="size-10 text-indigo-400" />
+    <Image src="/logo.png" width={96} height={96} alt="KellyCash" />
     <h1 className="text-4xl font-bold text-white">KellyCash</h1>
     <p className="text-slate-400 text-lg">La platica bajo control</p>
   </div>
@@ -96,6 +96,8 @@
   </div>
 </div>
 ```
+
+> **Nota:** el logo (moneda transparente `/logo.png`) reemplazó al icono Wallet en login y sidebar. Favicon: `src/app/icon.png` (256px, ~122 KB).
 
 ### Diálogo de confirmación para eliminar (reemplaza `confirm()` nativo)
 - Usar `<Dialog>` con `variant="destructive"` en el botón de confirmación
@@ -119,3 +121,11 @@
 - Main content: `flex-1 flex flex-col h-screen overflow-hidden`
 - Grids responsive: `md:grid-cols-2 lg:grid-cols-3 lg:grid-cols-4`
 - Login: panel izquierdo oculto en mobile (`hidden lg:flex`)
+
+## Mobile (Expo / NativeWind)
+- Mismos colores semánticos de la web (indigo primario, emerald ingresos, rose gastos, sidebar `#0f172a`)
+- Componentes base en `mobile/components/ui/`: Button, Card, Input, Badge, EmptyState
+- Iconos con `lucide-react-native` (mismo set visual que la web)
+- Cards: `bg-white rounded-2xl border border-slate-100` (NativeWind)
+- Login Android: `KeyboardAvoidingView behavior="height"` — nunca tapar el formulario con el teclado
+- Tab bar con `(tabs)/_layout.tsx` de expo-router
