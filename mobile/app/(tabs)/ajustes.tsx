@@ -1,10 +1,10 @@
 import { View, Text, TouchableOpacity, Alert, ScrollView } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useAuth } from "@/providers/AuthProvider"
-import { useRouter } from "expo-router"
-import { LogOut, User, Mail, ShieldCheck, CalendarClock, CircleDollarSign, LayoutTemplate, Users, Settings, ChevronRight } from "lucide-react-native"
+import { useRouter, type Href } from "expo-router"
+import { LogOut, User, Mail, ShieldCheck, CalendarClock, CircleDollarSign, LayoutTemplate, Users, Settings, ChevronRight, type LucideIcon } from "lucide-react-native"
 
-const LINKS = [
+const LINKS: { label: string; icon: LucideIcon; route: Href; color: string; bg: string }[] = [
   { label: "Gastos Futuros", icon: CalendarClock, route: "/gastos-futuros", color: "#f59e0b", bg: "bg-amber-50" },
   { label: "Compromisos", icon: CircleDollarSign, route: "/compromisos", color: "#e11d48", bg: "bg-rose-50" },
   { label: "Presupuestos", icon: LayoutTemplate, route: "/presupuestos", color: "#059669", bg: "bg-emerald-50" },
@@ -64,7 +64,7 @@ export default function AjustesScreen() {
           return (
             <TouchableOpacity
               key={link.label}
-              onPress={() => router.push(link.route as any)}
+              onPress={() => router.push(link.route)}
               className={`flex-row items-center px-4 py-3.5 ${i < LINKS.length - 1 ? "border-b border-slate-100" : ""}`}
             >
               <View className={`size-8 rounded-lg items-center justify-center ${link.bg}`}>

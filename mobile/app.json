@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
-      "backgroundColor": "#f8fafc",
+      "backgroundColor": "#ffffff",
       "resizeMode": "contain"
     },
     "ios": {
@@ -22,15 +22,25 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#f8fafc",
-        "foregroundImage": "./assets/icon.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/adaptive-icon.png"
       },
       "package": "com.kellycash.mobile",
-      "permissions": []
+      "permissions": [],
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "backgroundColor": "#ffffff",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

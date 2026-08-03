@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getPeople, createPerson, updatePerson, deletePerson } from "@/lib/db"
 import type { Person } from "@/types"
-import { Plus, Trash2, Pencil, Users } from "lucide-react"
+import { Plus, Trash2, Pencil } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -30,13 +30,18 @@ export default function PersonasPage() {
   const { t } = useLanguage()
   const p = t.personas
 
-  const load = async () => {
-    const people = await getPeople()
-    setPeople(people)
-    setLoading(false)
-  }
+  const load = useCallback(async () => {
+    try {
+      const people = await getPeople()
+      setPeople(people)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const openNew = () => {
     setEditing(null)

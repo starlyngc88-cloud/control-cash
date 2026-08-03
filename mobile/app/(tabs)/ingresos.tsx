@@ -1,25 +1,26 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome, createIncomeCategory, deleteIncomeCategory } from "@/services/api"
+import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome, createIncomeCategory, deleteIncomeCategory, type IncomeWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
 import DatePickerModal from "@/components/DatePickerModal"
 import { Plus, TrendingDown, Pencil, Trash2, Search, X, Calendar } from "lucide-react-native"
+import type { Person, IncomeCategory } from "@/types/database"
 
 export default function IngresosScreen() {
   const insets = useSafeAreaInsets()
-  const [incomes, setIncomes] = useState<any[]>([])
-  const [people, setPeople] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  const [incomes, setIncomes] = useState<IncomeWithRelations[]>([])
+  const [people, setPeople] = useState<Person[]>([])
+  const [categories, setCategories] = useState<IncomeCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<IncomeWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const [catManagerOpen, setCatManagerOpen] = useState(false)
@@ -57,7 +58,9 @@ export default function IngresosScreen() {
     }
   }, [months])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
   useRealtimeSubscription("income", () => load(), () => load(), () => load())
 
   const openNew = () => {
@@ -66,7 +69,7 @@ export default function IngresosScreen() {
     setModalOpen(true)
   }
 
-  const openEdit = (inc: any) => {
+  const openEdit = (inc: IncomeWithRelations) => {
     setEditing(inc)
     setPersonId(inc.person_id); setAmount(String(inc.amount)); setDescription(inc.description); setDate(inc.date); setCategoryId(inc.category_id ?? "")
     setModalOpen(true)
@@ -130,7 +133,7 @@ export default function IngresosScreen() {
       <View className="flex-row gap-3 mx-4 mb-3">
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-emerald-500 mb-0.5">Total ingresado</Text>
-          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(incomes.reduce((s: number, i: any) => s + Number(i.amount), 0))}</Text>
+          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(incomes.reduce((s: number, i: IncomeWithRelations) => s + Number(i.amount), 0))}</Text>
         </View>
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Registros</Text>
@@ -171,7 +174,7 @@ export default function IngresosScreen() {
       {filtered.length > 0 && (
         <View className="flex-row items-center justify-between px-4 py-2.5 bg-white border-t border-slate-200" style={{ paddingBottom: insets.bottom + 8 }}>
           <Text className="text-xs font-medium text-slate-500">Total ({filtered.length} registros)</Text>
-          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(filtered.reduce((s: number, i: any) => s + Number(i.amount), 0))}</Text>
+          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(filtered.reduce((s: number, i: IncomeWithRelations) => s + Number(i.amount), 0))}</Text>
         </View>
       )}
 

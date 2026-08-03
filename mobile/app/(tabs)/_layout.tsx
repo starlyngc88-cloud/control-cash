@@ -119,7 +119,7 @@ export default function TabsLayout() {
                   key={opt.name}
                   onPress={() => {
                     closeMore()
-                    setTimeout(() => router.push(`/(tabs)/${opt.name}` as any), 200)
+                    setTimeout(() => router.push({ pathname: `/(tabs)/${opt.name}` }), 200)
                   }}
                   style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, paddingHorizontal: 12, borderRadius: 12 }}
                 >

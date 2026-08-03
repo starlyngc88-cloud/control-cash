@@ -27,7 +27,7 @@ import {
 } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
 import type { BudgetTemplate, BudgetCategory, MonthlyBudget, Expense } from "@/types"
-import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, ChevronLeft, PiggyBank, FolderDown } from "lucide-react"
+import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, ChevronLeft, FolderDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
@@ -160,26 +160,35 @@ export default function PresupuestosPage() {
   }
 
   const ensureBaseTemplate = useCallback(async () => {
-    const [templates, months] = await Promise.all([getBudgetTemplates(), getMonthlyBudgets()])
-    let tmpl = templates.find((t) => t.name.toLowerCase() === "modelo base")
-    if (!tmpl) {
-      tmpl = await createBudgetTemplate("Modelo Base")
+    try {
+      const [templates, months] = await Promise.all([getBudgetTemplates(), getMonthlyBudgets()])
+      let tmpl = templates.find((t) => t.name.toLowerCase() === "modelo base")
+      if (!tmpl) {
+        tmpl = await createBudgetTemplate("Modelo Base")
+      }
+      setTemplate(tmpl)
+      setMonthlyBudgets(months)
+      const cats = await getBudgetCategories(tmpl.id)
+      setCategories(cats)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
     }
-    setTemplate(tmpl)
-    setMonthlyBudgets(months)
-    const cats = await getBudgetCategories(tmpl.id)
-    setCategories(cats)
-    setLoading(false)
   }, [])
 
-  useEffect(() => { ensureBaseTemplate() }, [ensureBaseTemplate])
+  useEffect(() => { void (async () => { await ensureBaseTemplate() })() }, [ensureBaseTemplate])
 
   const load = useCallback(async () => {
     if (!template) return
-    const months = await getMonthlyBudgets()
-    setMonthlyBudgets(months)
-    const cats = await getBudgetCategories(template.id)
-    setCategories(cats)
+    try {
+      const months = await getMonthlyBudgets()
+      setMonthlyBudgets(months)
+      const cats = await getBudgetCategories(template.id)
+      setCategories(cats)
+    } catch (err) {
+      setError(friendlyError(err))
+    }
   }, [template])
 
   useEffect(() => { if (template) load() }, [template, load])
@@ -680,7 +689,7 @@ export default function PresupuestosPage() {
       <Dialog open={openDeleteCat} onOpenChange={setOpenDeleteCat}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-base">¿Eliminar "{deleteCatName}"?</DialogTitle>
+            <DialogTitle className="text-base">¿Eliminar &ldquo;{deleteCatName}&rdquo;?</DialogTitle>
             <p className="text-xs text-slate-500 mt-1">Esta acción no se puede deshacer.</p>
           </DialogHeader>
           <div className="space-y-4">

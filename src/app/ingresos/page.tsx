@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,7 +24,7 @@ import {
   deleteIncomeCategory,
 } from "@/lib/db"
 import type { Person, Income, IncomeCategory } from "@/types"
-import { Plus, Trash2, Pencil, TrendingDown, Search, Filter, List, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, Trash2, Pencil, TrendingDown, Search, List, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
@@ -48,7 +47,11 @@ export default function IngresosPage() {
   const sorted = [...months].sort()
   const startDate = months.length > 0 ? sorted[0] + "-01" : ""
   const endDate = months.length > 0
-    ? new Date(parseInt(sorted[sorted.length - 1].split("-")[0]), parseInt(sorted[sorted.length - 1].split("-")[1]), 0).toISOString().split("T")[0]
+    ? (() => {
+        const [y, m] = sorted[sorted.length - 1].split("-").map((p) => parseInt(p, 10))
+        if (!y || !m || Number.isNaN(y) || Number.isNaN(m)) return ""
+        return new Date(y, m, 0).toISOString().split("T")[0]
+      })()
     : ""
 
   const [personId, setPersonId] = useState("")
@@ -69,6 +72,26 @@ export default function IngresosPage() {
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
   const { setActions } = useHeaderActions()
+
+  const openNew = () => {
+    setEditing(null)
+    setPersonId("")
+    setAmount("")
+    setDescription("")
+    setDate(new Date().toISOString().split("T")[0])
+    setCategoryId("")
+    setOpen(true)
+  }
+
+  const openEdit = (inc: Income & { people: Pick<Person, "name"> | null; income_categories: Pick<IncomeCategory, "name"> | null }) => {
+    setEditing(inc)
+    setPersonId(inc.person_id)
+    setAmount(String(inc.amount))
+    setDescription(inc.description)
+    setDate(inc.date)
+    setCategoryId(inc.category_id ?? "")
+    setOpen(true)
+  }
 
   useEffect(() => {
     setActions(
@@ -108,38 +131,23 @@ export default function IngresosPage() {
   }, [headerDropdownOpen, setActions])
 
   const load = useCallback(async () => {
-    const [i, p, cats] = await Promise.all([
-      getIncomes({ startDate, endDate }),
-      getPeople(),
-      getIncomeCategories(),
-    ])
-    setIncomes(i)
-    setPeople(p)
-    setCategories(cats)
-    setLoading(false)
+    try {
+      const [i, p, cats] = await Promise.all([
+        getIncomes({ startDate, endDate }),
+        getPeople(),
+        getIncomeCategories(),
+      ])
+      setIncomes(i)
+      setPeople(p)
+      setCategories(cats)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
   }, [startDate, endDate])
 
-  useEffect(() => { load() }, [load])
-
-  const openNew = () => {
-    setEditing(null)
-    setPersonId("")
-    setAmount("")
-    setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
-    setCategoryId("")
-    setOpen(true)
-  }
-
-  const openEdit = (inc: Income & { people: Pick<Person, "name"> | null; income_categories: Pick<IncomeCategory, "name"> | null }) => {
-    setEditing(inc)
-    setPersonId(inc.person_id)
-    setAmount(String(inc.amount))
-    setDescription(inc.description)
-    setDate(inc.date)
-    setCategoryId(inc.category_id ?? "")
-    setOpen(true)
-  }
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -184,12 +192,6 @@ export default function IngresosPage() {
     setEditingCat(null)
     setCatName("")
     setCatSelectionPending(selectAfter)
-    setOpenCat(true)
-  }
-
-  const openEditCat = (cat: IncomeCategory) => {
-    setEditingCat(cat)
-    setCatName(cat.name)
     setOpenCat(true)
   }
 

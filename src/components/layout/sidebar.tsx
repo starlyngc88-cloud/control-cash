@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
-  Wallet, PanelLeftClose, PanelLeft, LogOut, ChevronDown,
+  PanelLeftClose, PanelLeft, LogOut, ChevronDown,
   LayoutDashboard, TrendingDown, TrendingUp, Calendar, Handshake,
   PiggyBank, Settings, BookOpen, Users
 } from "lucide-react"
@@ -83,8 +84,14 @@ export function Sidebar() {
     <aside className="w-48 bg-[#0f172a] text-slate-300 flex flex-col shrink-0 h-screen overflow-hidden transition-all duration-300">
       {/* Logo */}
       <div className="h-12 flex items-center px-3 border-b border-slate-800 shrink-0">
-        <div className="flex items-center justify-center size-7 rounded-lg bg-indigo-500/20 text-indigo-400">
-          <Wallet className="size-3.5" />
+        <div className="flex items-center justify-center size-7 rounded-lg overflow-hidden">
+          <Image
+            src="/logo.png"
+            alt="KellyCash"
+            width={28}
+            height={28}
+            className="size-full object-cover"
+          />
         </div>
         <span className="text-white font-bold text-base tracking-wide ml-2.5">{t.app.name}</span>
         <button onClick={() => setCollapsed(true)} className="ml-auto p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">

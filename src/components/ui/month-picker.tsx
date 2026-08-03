@@ -133,13 +133,21 @@ export function MultiMonthPicker({ initialMonths, onChange, onClose }: MultiMont
   const activePreset = useMemo(() => {
     const sorted = [...draft].sort()
     const fullYear = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`)
-    const current = getCurrentMonth().sort()
-    const quarter = getLastQuarter().sort()
+    const current = [currentMonth].sort()
+    const cur = now.getMonth() + 1
+    const y = now.getFullYear()
+    const m1 = cur - 2
+    const m2 = cur - 1
+    const quarter = [
+      `${m1 <= 0 ? y - 1 : y}-${String(m1 <= 0 ? m1 + 12 : m1).padStart(2, "0")}`,
+      `${m2 <= 0 ? y - 1 : y}-${String(m2 <= 0 ? m2 + 12 : m2).padStart(2, "0")}`,
+      `${y}-${String(cur).padStart(2, "0")}`,
+    ].sort()
     if (sorted.length === current.length && sorted.every((m, i) => m === current[i])) return "current"
     if (sorted.length === quarter.length && sorted.every((m, i) => m === quarter[i])) return "quarter"
     if (sorted.length === fullYear.length && sorted.every((m, i) => m === fullYear[i])) return "year"
     return "custom"
-  }, [draft, year])
+  }, [draft, year, currentMonth, now])
 
   const applyPreset = (preset: "current" | "quarter" | "year") => {
     if (preset === "current") setDraft(getCurrentMonth())

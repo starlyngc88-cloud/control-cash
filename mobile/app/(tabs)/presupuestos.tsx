@@ -2,18 +2,19 @@ import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getBudgetTemplates, createBudgetTemplate, deleteBudgetTemplate, getBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, getMonthlyBudgets, createMonthlyBudget, deleteMonthlyBudget } from "@/services/api"
+import { getBudgetTemplates, createBudgetTemplate, deleteBudgetTemplate, getBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, getMonthlyBudgets, createMonthlyBudget, type MonthlyBudgetWithTotals } from "@/services/api"
 import { formatCurrency, formatMonth, getMonthId } from "@/utils/format"
 import { Plus, LayoutTemplate, Pencil, Trash2, X, Calendar, ChevronRight, ChevronLeft } from "lucide-react-native"
+import type { BudgetTemplate, BudgetCategory } from "@/types/database"
 
 export default function PresupuestosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
   const [year, setYear] = useState(new Date().getFullYear())
-  const [templates, setTemplates] = useState<any[]>([])
+  const [templates, setTemplates] = useState<BudgetTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
-  const [categories, setCategories] = useState<any[]>([])
-  const [monthlyBudgets, setMonthlyBudgets] = useState<any[]>([])
+  const [categories, setCategories] = useState<BudgetCategory[]>([])
+  const [monthlyBudgets, setMonthlyBudgets] = useState<MonthlyBudgetWithTotals[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [templateModalOpen, setTemplateModalOpen] = useState(false)
@@ -25,7 +26,7 @@ export default function PresupuestosScreen() {
   const [catName, setCatName] = useState("")
   const [catBudgeted, setCatBudgeted] = useState("")
   const [catParentId, setCatParentId] = useState<string | null>(null)
-  const [editingCat, setEditingCat] = useState<any>(null)
+  const [editingCat, setEditingCat] = useState<BudgetCategory | null>(null)
 
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date()
@@ -35,15 +36,17 @@ export default function PresupuestosScreen() {
   const load = useCallback(async () => {
     const [tmpl, monthly] = await Promise.all([getBudgetTemplates(), getMonthlyBudgets()])
     setTemplates(tmpl); setMonthlyBudgets(monthly)
-    if (tmpl.length > 0 && !selectedTemplate) setSelectedTemplate(tmpl[0].id)
+    setSelectedTemplate((cur) => cur ?? (tmpl.length > 0 ? tmpl[0].id : null))
     setLoading(false); setRefreshing(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   useEffect(() => {
-    if (selectedTemplate) getBudgetCategories(selectedTemplate).then(setCategories)
-    else setCategories([])
+    void (async () => {
+      if (selectedTemplate) setCategories(await getBudgetCategories(selectedTemplate))
+      else setCategories([])
+    })()
   }, [selectedTemplate])
 
   const openNewTemplate = () => { setTemplateName(""); setTemplateModalOpen(true) }
@@ -59,7 +62,7 @@ export default function PresupuestosScreen() {
     setEditingCat(null); setCatName(""); setCatBudgeted(""); setCatParentId(parentId); setCatModalOpen(true)
   }
 
-  const openEditCat = (cat: any) => {
+  const openEditCat = (cat: BudgetCategory) => {
     setEditingCat(cat); setCatName(cat.name); setCatBudgeted(String(cat.budgeted)); setCatParentId(cat.parent_id); setCatModalOpen(true)
   }
 
@@ -70,7 +73,7 @@ export default function PresupuestosScreen() {
       const data = { template_id: selectedTemplate, name: catName.trim(), budgeted: parseFloat(catBudgeted) || 0, parent_id: catParentId }
       if (editingCat) await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: parseFloat(catBudgeted) || 0, parent_id: catParentId })
       else await createBudgetCategory(data)
-      setCatModalOpen(false); getBudgetCategories(selectedTemplate).then(setCategories)
+      setCatModalOpen(false); void getBudgetCategories(selectedTemplate).then(setCategories)
     } catch { Alert.alert("Error", "No se pudo guardar.") }
     finally { setSubmitting(false) }
   }
@@ -78,7 +81,7 @@ export default function PresupuestosScreen() {
   const handleDeleteCat = (id: string) => {
     Alert.alert("Eliminar categoría", "¿Estás segura?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive", onPress: async () => { await deleteBudgetCategory(id); getBudgetCategories(selectedTemplate!).then(setCategories) }},
+      { text: "Eliminar", style: "destructive", onPress: async () => { await deleteBudgetCategory(id); void getBudgetCategories(selectedTemplate!).then(setCategories) }},
     ])
   }
 
@@ -95,8 +98,8 @@ export default function PresupuestosScreen() {
 
   const selectedMonthStr = getMonthId(monthCursor)
   const selectedMonthLabel = formatMonth(selectedMonthStr + "-01")
-  const selectedTemplateName = templates.find((t: any) => t.id === selectedTemplate)?.name ?? ""
-  const monthAlreadyOpen = monthlyBudgets.some((mb: any) => String(mb.month ?? "").slice(0, 7) === selectedMonthStr)
+  const selectedTemplateName = templates.find((t: BudgetTemplate) => t.id === selectedTemplate)?.name ?? ""
+  const monthAlreadyOpen = monthlyBudgets.some((mb: MonthlyBudgetWithTotals) => String(mb.month ?? "").slice(0, 7) === selectedMonthStr)
 
   const createMonth = async () => {
     if (!selectedTemplate) { Alert.alert("Error", "Creá una plantilla primero."); return }
@@ -108,13 +111,13 @@ export default function PresupuestosScreen() {
     else { setMonthModalOpen(false); load() }
   }
 
-  const parentCats = categories.filter((c: any) => !c.parent_id)
-  const childCats = (parentId: string) => categories.filter((c: any) => c.parent_id === parentId)
+  const parentCats = categories.filter((c: BudgetCategory) => !c.parent_id)
+  const childCats = (parentId: string) => categories.filter((c: BudgetCategory) => c.parent_id === parentId)
 
-  const parentIds = new Set(categories.filter((c: any) => c.parent_id).map((c: any) => c.parent_id))
-  const totalBudgeted = categories.filter((c: any) => !parentIds.has(c.id)).reduce((s: number, c: any) => s + Number(c.budgeted), 0)
+  const parentIds = new Set(categories.filter((c: BudgetCategory) => c.parent_id).map((c: BudgetCategory) => c.parent_id))
+  const totalBudgeted = categories.filter((c: BudgetCategory) => !parentIds.has(c.id)).reduce((s: number, c: BudgetCategory) => s + Number(c.budgeted), 0)
 
-  const yearMonths = monthlyBudgets.filter((mb: any) => {
+  const yearMonths = monthlyBudgets.filter((mb: MonthlyBudgetWithTotals) => {
     const mbMonth = String(mb.month ?? "").slice(0, 7)
     return parseInt(mbMonth.slice(0, 4), 10) === year
   })
@@ -157,7 +160,7 @@ export default function PresupuestosScreen() {
               <Text className="text-[10px] text-slate-400">No hay meses abiertos en {year}.</Text>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row gap-1.5">
-                {yearMonths.map((mb: any) => (
+                {yearMonths.map((mb: MonthlyBudgetWithTotals) => (
                   <TouchableOpacity key={mb.id} onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })} className="bg-white px-3 py-2 rounded-lg border border-slate-200 min-w-[92px]">
                     <Text className="text-[10px] font-semibold text-slate-700 capitalize">{monthShort(mb.month)}</Text>
                     <Text className="text-[10px] text-slate-400 tabular-nums">{formatCurrency(Number(mb.totalBudgeted ?? 0))}</Text>
@@ -177,7 +180,7 @@ export default function PresupuestosScreen() {
             </View>
             <ScrollView horizontal className="mb-2" showsHorizontalScrollIndicator={false}>
               <View className="flex-row gap-2">
-                {templates.map((t: any) => (
+                {templates.map((t: BudgetTemplate) => (
                   <TouchableOpacity key={t.id} onPress={() => setSelectedTemplate(t.id)}
                     className={`px-3 py-1.5 rounded-xl border ${selectedTemplate === t.id ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
                     <Text className={`text-xs font-medium ${selectedTemplate === t.id ? "text-white" : "text-slate-600"}`}>{t.name}</Text>
@@ -185,7 +188,7 @@ export default function PresupuestosScreen() {
                 ))}
               </View>
             </ScrollView>
-            {selectedTemplate && templates.find((t: any) => t.id === selectedTemplate) && (
+            {selectedTemplate && templates.find((t: BudgetTemplate) => t.id === selectedTemplate) && (
               <View className="flex-row items-center justify-between mb-2">
                 <Text className="text-xs text-slate-500">Presupuestado base: {formatCurrency(totalBudgeted)}</Text>
                 <TouchableOpacity onPress={() => handleDeleteTemplate(selectedTemplate)}><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
@@ -194,14 +197,14 @@ export default function PresupuestosScreen() {
           </View>
         )}
 
-        {!selectedTemplate || !templates.find((t: any) => t.id === selectedTemplate) ? (
+        {!selectedTemplate || !templates.find((t: BudgetTemplate) => t.id === selectedTemplate) ? (
           <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
             <LayoutTemplate size={32} color="#cbd5e1" />
             <Text className="text-xs text-slate-400 mt-2">Seleccioná o creá una plantilla</Text>
           </View>
         ) : (
           <View className="space-y-3">
-            {parentCats.map((parent: any) => {
+            {parentCats.map((parent: BudgetCategory) => {
               const children = childCats(parent.id)
               const hasChildren = children.length > 0
               return (
@@ -221,7 +224,7 @@ export default function PresupuestosScreen() {
                   </View>
                   {hasChildren && (
                     <View className="bg-slate-50 px-4 py-2 space-y-1.5">
-                      {children.map((child: any) => (
+                      {children.map((child: BudgetCategory) => (
                         <View key={child.id} className="flex-row items-center justify-between">
                           <Text className="text-xs text-slate-600">{child.name}</Text>
                           <View className="flex-row items-center gap-2">
@@ -273,7 +276,7 @@ export default function PresupuestosScreen() {
                 <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={catBudgeted} onChangeText={setCatBudgeted} keyboardType="decimal-pad" />
               </View>
               {catParentId && (
-                <Text className="text-[10px] text-indigo-500">Subcategoría de: {parentCats.find((c: any) => c.id === catParentId)?.name}</Text>
+                <Text className="text-[10px] text-indigo-500">Subcategoría de: {parentCats.find((c: BudgetCategory) => c.id === catParentId)?.name}</Text>
               )}
             </View>
             <TouchableOpacity onPress={handleCatSubmit} disabled={submitting} className="h-11 rounded-xl bg-indigo-600 items-center justify-center mt-4">

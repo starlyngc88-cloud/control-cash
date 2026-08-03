@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -37,7 +36,11 @@ export default function GastosPage() {
   const activeMonth = sorted[0] ?? ""
   const startDate = months.length > 0 ? sorted[0] + "-01" : ""
   const endDate = months.length > 0
-    ? new Date(parseInt(sorted[sorted.length - 1].split("-")[0]), parseInt(sorted[sorted.length - 1].split("-")[1]), 0).toISOString().split("T")[0]
+    ? (() => {
+        const [y, m] = sorted[sorted.length - 1].split("-").map((p) => parseInt(p, 10))
+        if (!y || !m || Number.isNaN(y) || Number.isNaN(m)) return ""
+        return new Date(y, m, 0).toISOString().split("T")[0]
+      })()
     : ""
 
   const [personId, setPersonId] = useState("")
@@ -63,6 +66,24 @@ export default function GastosPage() {
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
   const { setActions } = useHeaderActions()
+
+  const openNew = () => {
+    setEditing(null)
+    setPersonId("")
+    setAmount("")
+    setDescription("")
+    setDate(new Date().toISOString().split("T")[0])
+    setExpenseCategoryId("")
+    setBudgetCategoryId("")
+    setOpen(true)
+  }
+
+  const openNewCat = (selectAfter = false) => {
+    setEditingCat(null)
+    setCatName("")
+    setCatSelectionPending(selectAfter)
+    setOpenCat(true)
+  }
 
   useEffect(() => {
     setActions(
@@ -102,26 +123,20 @@ export default function GastosPage() {
   }, [headerDropdownOpen, setActions])
 
   const load = useCallback(async () => {
-    const [e, p, cats, bCats] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([])])
-    setExpenses(e)
-    setPeople(p)
-    setExpenseCategories(cats)
-    setBudgetCategories(bCats)
-    setLoading(false)
+    try {
+      const [e, p, cats, bCats] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([])])
+      setExpenses(e)
+      setPeople(p)
+      setExpenseCategories(cats)
+      setBudgetCategories(bCats)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
   }, [startDate, endDate, activeMonth])
 
-  useEffect(() => { load() }, [load])
-
-  const openNew = () => {
-    setEditing(null)
-    setPersonId("")
-    setAmount("")
-    setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
-    setExpenseCategoryId("")
-    setBudgetCategoryId("")
-    setOpen(true)
-  }
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null }) => {
     setEditing(exp)
@@ -178,19 +193,6 @@ export default function GastosPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const openNewCat = (selectAfter = false) => {
-    setEditingCat(null)
-    setCatName("")
-    setCatSelectionPending(selectAfter)
-    setOpenCat(true)
-  }
-
-  const openEditCat = (cat: ExpenseCategory) => {
-    setEditingCat(cat)
-    setCatName(cat.name)
-    setOpenCat(true)
   }
 
   const handleCatSubmit = async (e: React.FormEvent) => {

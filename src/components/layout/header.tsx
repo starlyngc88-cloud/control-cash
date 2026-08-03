@@ -5,7 +5,9 @@ import { useLanguage } from "@/i18n/useLanguage"
 import { DateFilter } from "@/components/DateFilter"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 
-const pageTitleMap: Record<string, string> = {
+type PageKey = "dashboard" | "presupuestos" | "ingresos" | "gastos" | "ahorros" | "compromisos" | "gastosFuturos" | "personalizacion" | "personas" | "guia"
+
+const pageTitleMap: Record<string, PageKey> = {
   "/": "dashboard",
   "/presupuestos": "presupuestos",
   "/ingresos": "ingresos",
@@ -26,8 +28,8 @@ export function Header() {
   if (pathname === "/login") return null
 
   const basePath = "/" + (pathname.split("/")[1] ?? "")
-  const titleKey = pageTitleMap[basePath] ?? pageTitleMap["/"]
-  const title = (t as any)[titleKey]?.title ?? t.nav[titleKey as keyof typeof t.nav] ?? t.app.name
+  const titleKey: PageKey = pageTitleMap[basePath] ?? pageTitleMap["/"]
+  const title = t[titleKey].title ?? t.nav[titleKey] ?? t.app.name
   const isDashboard = basePath === "/"
 
   return (

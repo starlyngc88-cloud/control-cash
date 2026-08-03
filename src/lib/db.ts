@@ -2,7 +2,6 @@ import { supabase } from "./supabase"
 import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
 import { personSchema, incomeSchema, expenseSchema, expenseCategorySchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, incomeCategorySchema } from "./validation"
 import { sanitizeInput } from "./sanitize"
-import { logError } from "./errors"
 
 /* ---- People ---- */
 
@@ -137,8 +136,8 @@ export async function getExpenses(options?: { person_id?: string; limit?: number
     supabase.from("people").select("id, name").in("id", personIds),
     expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : Promise.resolve({ data: [] }),
   ])
-  const peopleMap = new Map((people?.data ?? []).map((p: any) => [p.id, { name: p.name }]))
-  const expCatMap = new Map((expCats?.data ?? []).map((c: any) => [c.id, { id: c.id, name: c.name }]))
+  const peopleMap = new Map((people?.data ?? []).map((p: { id: string; name: string }) => [p.id, { name: p.name }]))
+  const expCatMap = new Map((expCats?.data ?? []).map((c: { id: string; name: string }) => [c.id, { id: c.id, name: c.name }]))
   const result = expenses.map((e) => ({
     ...e,
     people: peopleMap.get(e.person_id) ?? null,

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useLanguage } from "@/i18n/useLanguage"
-import { Palette, DollarSign, Key, Users, Shield, ShieldCheck, Loader2, Languages, Lock } from "lucide-react"
+import { DollarSign, Users, Shield, ShieldCheck, Loader2, Languages, Lock } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { supabase } from "@/lib/supabase"
 import { friendlyError } from "@/lib/errors"
@@ -15,11 +15,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { AllowedUser, UserRole } from "@/types"
+import type { AllowedUser } from "@/types"
 
 export default function PersonalizacionPage() {
   const { t, language, setLanguage, currency, setCurrency } = useLanguage()
-  const { user, isAdmin, refreshRole } = useAuth()
+  const { isAdmin } = useAuth()
   const p = t.personalizacion
 
   return (
@@ -45,7 +45,7 @@ export default function PersonalizacionPage() {
                 <input
                   type="radio" name="language" value={opt.value}
                   checked={language === opt.value}
-                  onChange={() => setLanguage(opt.value as any)}
+                  onChange={() => setLanguage(opt.value as "standard" | "kellycaribe")}
                   className="size-3.5 accent-primary"
                 />
                 <div>
@@ -76,7 +76,7 @@ export default function PersonalizacionPage() {
                 <input
                   type="radio" name="currency" value={opt.value}
                   checked={currency === opt.value}
-                  onChange={() => setCurrency(opt.value as any)}
+                  onChange={() => setCurrency(opt.value as "COP" | "EUR")}
                   className="size-3.5 accent-primary"
                 />
                 <div>
@@ -221,25 +221,30 @@ function UserManagementSection() {
   const [error, setError] = useState("")
   const [deleteTarget, setDeleteTarget] = useState<AllowedUser | null>(null)
 
-  const loadUsers = async () => {
-    const { data: users } = await supabase.from("allowed_users").select("*").order("created_at", { ascending: true })
-    if (users) {
-      const withRoles = await Promise.all(
-        users.map(async (u) => {
-          const { data: roleData } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", u.id)
-            .maybeSingle()
-          return { ...u, role: roleData?.role as string | undefined }
-        })
-      )
-      setAllowedUsers(withRoles)
+  const loadUsers = useCallback(async () => {
+    try {
+      const { data: users } = await supabase.from("allowed_users").select("*").order("created_at", { ascending: true })
+      if (users) {
+        const withRoles = await Promise.all(
+          users.map(async (u) => {
+            const { data: roleData } = await supabase
+              .from("user_roles")
+              .select("role")
+              .eq("user_id", u.id)
+              .maybeSingle()
+            return { ...u, role: roleData?.role as string | undefined }
+          })
+        )
+        setAllowedUsers(withRoles)
+      }
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { loadUsers() }, [])
+  useEffect(() => { void (async () => { await loadUsers() })() }, [loadUsers])
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault()

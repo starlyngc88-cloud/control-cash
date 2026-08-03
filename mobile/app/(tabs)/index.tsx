@@ -40,7 +40,9 @@ export default function DashboardScreen() {
     }
   }, [months])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
 
   useRealtimeSubscription("expenses", () => load(), () => load(), () => load())
   useRealtimeSubscription("income", () => load(), () => load(), () => load())
@@ -109,9 +111,9 @@ export default function DashboardScreen() {
     },
   ]
 
-  const recentMovements = [
-    ...(data?.recentIncomes?.map((i) => ({ ...i, tipo: "ingreso" })) ?? []),
-    ...(data?.recentExpenses?.map((e) => ({ ...e, tipo: "gasto" })) ?? []),
+  const recentMovements: { id: string; date: string; amount: number; description: string | null; tipo: "ingreso" | "gasto" }[] = [
+    ...(data?.recentIncomes?.map((i) => ({ ...i, tipo: "ingreso" as const })) ?? []),
+    ...(data?.recentExpenses?.map((e) => ({ ...e, tipo: "gasto" as const })) ?? []),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   if (loading) {
@@ -199,7 +201,7 @@ export default function DashboardScreen() {
           </View>
         ) : (
           <View style={{ backgroundColor: "white", borderRadius: 12, borderWidth: 1, borderColor: "#f1f5f9", overflow: "hidden" }}>
-            {recentMovements.slice(0, 8).map((mov: any) => (
+            {recentMovements.slice(0, 8).map((mov) => (
               <View
                 key={`${mov.tipo}-${mov.id}`}
                 style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#f1f5f9" }}

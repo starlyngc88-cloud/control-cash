@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +5,6 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envContent = readFileSync(join(__dirname, '..', '.env.local'), 'utf-8');
 const supabaseUrl = envContent.match(/NEXT_PUBLIC_SUPABASE_URL=(.+)/)?.[1]?.trim();
-const supabaseKey = envContent.match(/NEXT_PUBLIC_SUPABASE_ANON_KEY=(.+)/)?.[1]?.trim();
 
 // Try to get DB password from env
 const dbPassword = process.env.SUPABASE_DB_PASSWORD;

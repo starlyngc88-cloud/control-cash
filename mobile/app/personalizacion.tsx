@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, Switch } from "react-native"
+import { View, Text, ScrollView, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, Switch } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { useAuth } from "@/providers/AuthProvider"
@@ -40,14 +40,22 @@ export default function PersonalizacionScreen() {
   }
 
   const load = useCallback(async () => {
-    if (!user) return
-    const [users, role] = await Promise.all([getAllowedUsers(), getUserRole(user.id)])
-    setAllowedUsers(users)
-    setUserRole(role)
-    setLoading(false)
+    if (!user) {
+      setLoading(false)
+      return
+    }
+    try {
+      const [users, role] = await Promise.all([getAllowedUsers(), getUserRole(user.id)])
+      setAllowedUsers(users)
+      setUserRole(role)
+    } catch (error) {
+      console.error("[KellyCash][Mobile][Personalizacion] load failed", error)
+    } finally {
+      setLoading(false)
+    }
   }, [user])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const toggleActive = async (au: AllowedUser) => {
     await updateAllowedUser(au.id, { active: !au.active })

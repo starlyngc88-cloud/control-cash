@@ -2,24 +2,25 @@ import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories } from "@/services/api"
+import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories, type CommitmentWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
 import { Plus, CircleDollarSign, Pencil, Trash2, X, ArrowDownCircle, History, Search } from "lucide-react-native"
+import type { CommitmentPayment } from "@/types/database"
 
 export default function CompromisosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const [commitments, setCommitments] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  const [commitments, setCommitments] = useState<CommitmentWithRelations[]>([])
+  const [categories, setCategories] = useState<BudgetCategoryWithTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
   const [historyModalOpen, setHistoryModalOpen] = useState(false)
-  const [historyData, setHistoryData] = useState<any[]>([])
+  const [historyData, setHistoryData] = useState<CommitmentPayment[]>([])
   const [historyTitle, setHistoryTitle] = useState("")
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<CommitmentWithRelations | null>(null)
   const [paymentCommId, setPaymentCommId] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -36,17 +37,17 @@ export default function CompromisosScreen() {
   const load = useCallback(async () => {
     const [com, cats] = await Promise.all([getCommitments(), getAllBudgetCategories()])
     setCommitments(com)
-    setCategories(cats.filter((c: any) => !c.parent_id))
+    setCategories(cats.filter((c) => !c.parent_id))
     setLoading(false); setRefreshing(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const openNew = () => {
     setEditing(null); setName(""); setDescrip(""); setTotalAmount(""); setCurrentBalance(""); setCommCategoryId(""); setModalOpen(true)
   }
 
-  const openEdit = (c: any) => {
+  const openEdit = (c: CommitmentWithRelations) => {
     setEditing(c); setName(c.name); setDescrip(c.description ?? ""); setTotalAmount(String(c.total_amount)); setCurrentBalance(String(c.current_balance)); setCommCategoryId(c.category_id ?? ""); setModalOpen(true)
   }
 
@@ -83,7 +84,7 @@ export default function CompromisosScreen() {
     finally { setSubmitting(false) }
   }
 
-  const openHistory = async (comm: any) => {
+  const openHistory = async (comm: CommitmentWithRelations) => {
     setHistoryTitle(comm.name)
     const payments = await getCommitmentPayments(comm.id)
     setHistoryData(payments)
@@ -96,8 +97,8 @@ export default function CompromisosScreen() {
     </View>
   )
 
-  const totalDeuda = commitments.reduce((s: number, c: any) => s + Number(c.current_balance), 0)
-  const totalOriginal = commitments.reduce((s: number, c: any) => s + Number(c.total_amount), 0)
+  const totalDeuda = commitments.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.current_balance), 0)
+  const totalOriginal = commitments.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.total_amount), 0)
 
   const filtered = commitments.filter((c) =>
     !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.description?.toLowerCase().includes(search.toLowerCase())
@@ -162,7 +163,7 @@ export default function CompromisosScreen() {
             </View>
           ) : (
             <View className="space-y-3">
-              {filtered.map((c: any) => {
+              {filtered.map((c: CommitmentWithRelations) => {
                 const progress = Number(c.total_amount) > 0 ? ((Number(c.total_amount) - Number(c.current_balance)) / Number(c.total_amount)) * 100 : 0
                 return (
                   <View key={c.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
@@ -197,7 +198,7 @@ export default function CompromisosScreen() {
         <View className="bg-white border-t border-slate-200 px-4 py-3 shadow-lg" style={{ paddingBottom: insets.bottom + 8 }}>
           <View className="flex-row items-center justify-between">
             <Text className="text-xs font-medium text-slate-500">Saldo restante total</Text>
-            <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, c: any) => s + Number(c.current_balance), 0))}</Text>
+            <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.current_balance), 0))}</Text>
           </View>
         </View>
       </View>
@@ -234,7 +235,7 @@ export default function CompromisosScreen() {
                     <TouchableOpacity onPress={() => setCommCategoryId("")} className={`px-3 py-1.5 rounded-xl border ${!commCategoryId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
                       <Text className={`text-xs ${!commCategoryId ? "text-white" : "text-slate-400"}`}>Sin rubro</Text>
                     </TouchableOpacity>
-                    {categories.map((cat: any) => (
+                    {categories.map((cat: BudgetCategoryWithTemplate) => (
                       <TouchableOpacity key={cat.id} onPress={() => setCommCategoryId(cat.id)} className={`px-3 py-1.5 rounded-xl border ${commCategoryId === cat.id ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
                         <Text className={`text-xs ${commCategoryId === cat.id ? "text-white" : "text-slate-600"}`}>{cat.name}</Text>
                       </TouchableOpacity>
@@ -296,7 +297,7 @@ export default function CompromisosScreen() {
                 <Text className="text-xs text-slate-400 text-center py-4">Sin pagos registrados</Text>
               ) : (
                 <View className="space-y-2">
-                  {historyData.map((p: any) => (
+                  {historyData.map((p: CommitmentPayment) => (
                     <View key={p.id} className="flex-row items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
                       <View>
                         <Text className="text-xs font-medium text-slate-800">{formatCurrency(Number(p.amount))}</Text>

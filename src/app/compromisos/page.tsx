@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -79,6 +78,23 @@ export default function CompromisosPage() {
   const headerDropdownRef = useRef<HTMLDivElement>(null)
   const { setActions } = useHeaderActions()
 
+  const openNew = () => {
+    setEditing(null)
+    setName("")
+    setDescrip("")
+    setTotalAmount("")
+    setCurrentBalance("")
+    setCommCategoryId("")
+    setOpen(true)
+  }
+
+  const openNewCat = () => {
+    setEditingCat(null)
+    setCatName("")
+    setCatBudgeted("")
+    setOpenCat(true)
+  }
+
   useEffect(() => {
     setActions(
       <div className="relative" ref={headerDropdownRef}>
@@ -116,29 +132,34 @@ export default function CompromisosPage() {
     return () => setActions(null)
   }, [headerDropdownOpen, setActions])
 
-  const load = async () => {
-    const [comms, pays, templates] = await Promise.all([
-      getCommitments(),
-      getCommitmentPayments(),
-      getBudgetTemplates(),
-    ])
-    const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
-    const tid = base?.id ?? ""
-    setTemplateId(tid)
-    const bc = tid ? await getBudgetCategories(tid) : []
-    setBudgetCategories(bc)
-    setCommitments(comms)
+  const load = useCallback(async () => {
+    try {
+      const [comms, pays, templates] = await Promise.all([
+        getCommitments(),
+        getCommitmentPayments(),
+        getBudgetTemplates(),
+      ])
+      const base = templates.find((t) => t.name.toLowerCase() === "modelo base")
+      const tid = base?.id ?? ""
+      setTemplateId(tid)
+      const bc = tid ? await getBudgetCategories(tid) : []
+      setBudgetCategories(bc)
+      setCommitments(comms)
 
-    const map: Record<string, CommitmentPayment[]> = {}
-    for (const p of pays) {
-      if (!map[p.commitment_id]) map[p.commitment_id] = []
-      map[p.commitment_id].push(p)
+      const map: Record<string, CommitmentPayment[]> = {}
+      for (const p of pays) {
+        if (!map[p.commitment_id]) map[p.commitment_id] = []
+        map[p.commitment_id].push(p)
+      }
+      setPaymentsMap(map)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
     }
-    setPaymentsMap(map)
-    setLoading(false)
-  }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const toggleComm = (id: string) => {
     setExpandedComm((prev) => {
@@ -147,16 +168,6 @@ export default function CompromisosPage() {
       else next.add(id)
       return next
     })
-  }
-
-  const openNew = () => {
-    setEditing(null)
-    setName("")
-    setDescrip("")
-    setTotalAmount("")
-    setCurrentBalance("")
-    setCommCategoryId("")
-    setOpen(true)
   }
 
   const openEdit = (comm: Commitment) => {
@@ -245,20 +256,6 @@ export default function CompromisosPage() {
     }
   }
 
-  const openNewCat = () => {
-    setEditingCat(null)
-    setCatName("")
-    setCatBudgeted("")
-    setOpenCat(true)
-  }
-
-  const openEditCat = (cat: BudgetCategory) => {
-    setEditingCat(cat)
-    setCatName(cat.name)
-    setCatBudgeted(String(cat.budgeted))
-    setOpenCat(true)
-  }
-
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim() || !templateId) return
@@ -282,11 +279,6 @@ export default function CompromisosPage() {
   const catDeleteExpenses = catToDelete
     ? commitments.filter((c) => c.category_id === catToDelete.id)
     : []
-
-  const handleDeleteCat = (id: string) => {
-    const cat = budgetCategories.find((c) => c.id === id)
-    if (cat) setCatToDelete({ id: cat.id, name: cat.name })
-  }
 
   const confirmDeleteCat = async () => {
     if (!catToDelete) return

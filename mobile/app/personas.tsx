@@ -4,15 +4,16 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getPeople, createPerson, updatePerson, deletePerson } from "@/services/api"
 import { Plus, Users, Pencil, Trash2, X } from "lucide-react-native"
+import type { Person } from "@/types/database"
 
 export default function PersonasScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const [people, setPeople] = useState<any[]>([])
+  const [people, setPeople] = useState<Person[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<Person | null>(null)
   const [name, setName] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -21,11 +22,11 @@ export default function PersonasScreen() {
     setPeople(p); setLoading(false); setRefreshing(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const openNew = () => { setEditing(null); setName(""); setModalOpen(true) }
 
-  const openEdit = (p: any) => { setEditing(p); setName(p.name); setModalOpen(true) }
+  const openEdit = (p: Person) => { setEditing(p); setName(p.name); setModalOpen(true) }
 
   const handleSubmit = async () => {
     if (!name.trim()) { Alert.alert("Error", "Ingresá un nombre."); return }
@@ -71,7 +72,7 @@ export default function PersonasScreen() {
           </View>
         ) : (
           <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            {people.map((p: any) => (
+            {people.map((p: Person) => (
               <View key={p.id} className="flex-row items-center px-4 py-3.5 border-b border-slate-100 last:border-b-0">
                 <View className="size-8 rounded-full bg-indigo-100 items-center justify-center">
                   <Users size={14} color="#4f46e5" />

@@ -69,30 +69,30 @@ export default function DateFilter({ months, onChange }: DateFilterProps) {
 
   const handleMonthClick = (monthStr: string) => {
     const key = `${year}-${monthStr}`
-    setDraft((prev) => {
-      if (prev.includes(key)) {
-        setRangeStart(null)
-        return prev.filter((m) => m !== key)
+    if (draft.includes(key)) {
+      setRangeStart(null)
+      setDraft((prev) => prev.filter((m) => m !== key))
+      return
+    }
+    if (rangeStart) {
+      const sorted = [rangeStart, key].sort()
+      const [y1, m1] = sorted[0].split("-").map(Number)
+      const [y2, m2] = sorted[1].split("-").map(Number)
+      const start = y1 * 12 + m1
+      const end = y2 * 12 + m2
+      const range: string[] = []
+      for (let i = start; i <= end; i++) {
+        const y = Math.floor((i - 1) / 12)
+        const m = ((i - 1) % 12) + 1
+        range.push(`${y}-${String(m).padStart(2, "0")}`)
       }
-      if (rangeStart) {
-        const sorted = [rangeStart, key].sort()
-        const [y1, m1] = sorted[0].split("-").map(Number)
-        const [y2, m2] = sorted[1].split("-").map(Number)
-        const start = y1 * 12 + m1
-        const end = y2 * 12 + m2
-        const range: string[] = []
-        for (let i = start; i <= end; i++) {
-          const y = Math.floor((i - 1) / 12)
-          const m = ((i - 1) % 12) + 1
-          range.push(`${y}-${String(m).padStart(2, "0")}`)
-        }
-        const merged = [...new Set([...prev, ...range])].sort()
-        setRangeStart(null)
-        return merged
-      }
-      setRangeStart(key)
-      return [...prev, key].sort()
-    })
+      const merged = [...new Set([...draft, ...range])].sort()
+      setRangeStart(null)
+      setDraft(merged)
+      return
+    }
+    setRangeStart(key)
+    setDraft([...draft, key].sort())
   }
 
   const label = useMemo(() => {

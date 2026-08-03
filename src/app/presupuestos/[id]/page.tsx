@@ -559,7 +559,7 @@ export default function MonthlyBudgetPage() {
       <Dialog open={!!catToDelete} onOpenChange={(v) => { if (!v) setCatToDelete(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>¿Eliminar "{catToDelete?.name}"?</DialogTitle>
+            <DialogTitle>¿Eliminar &ldquo;{catToDelete?.name}&rdquo;?</DialogTitle>
             <p className="text-xs text-slate-500 mt-1">Los gastos asociados a este rubro quedarán sin rubro. Solo afecta a este mes.</p>
           </DialogHeader>
           <div className="flex justify-end gap-2">

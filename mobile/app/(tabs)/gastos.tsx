@@ -1,26 +1,27 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, deleteExpenseCategory } from "@/services/api"
-import { formatCurrency, formatDate } from "@/utils/format"
+import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, deleteExpenseCategory, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
+import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
 import DatePickerModal from "@/components/DatePickerModal"
 import { Plus, TrendingUp, Pencil, Trash2, Search, X, Calendar } from "lucide-react-native"
+import type { Person, ExpenseCategory } from "@/types/database"
 
 export default function GastosScreen() {
   const insets = useSafeAreaInsets()
-  const [expenses, setExpenses] = useState<any[]>([])
-  const [people, setPeople] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
-  const [budgetCategories, setBudgetCategories] = useState<any[]>([])
+  const [expenses, setExpenses] = useState<ExpenseWithRelations[]>([])
+  const [people, setPeople] = useState<Person[]>([])
+  const [categories, setCategories] = useState<ExpenseCategory[]>([])
+  const [budgetCategories, setBudgetCategories] = useState<BudgetCategoryWithTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<ExpenseWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const { months, setMonths } = useMonthFilter()
@@ -65,7 +66,9 @@ export default function GastosScreen() {
     }
   }, [months])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
 
   useRealtimeSubscription("expenses", () => load(), () => load(), () => load())
 
@@ -80,7 +83,7 @@ export default function GastosScreen() {
     setModalOpen(true)
   }
 
-  const openEdit = (exp: any) => {
+  const openEdit = (exp: ExpenseWithRelations) => {
     setEditing(exp)
     setPersonId(exp.person_id)
     setAmount(String(exp.amount))
@@ -113,7 +116,7 @@ export default function GastosScreen() {
       }
       setModalOpen(false)
       load()
-    } catch (err) {
+    } catch {
       Alert.alert("Error", "No se pudo guardar el gasto.")
     } finally {
       setSubmitting(false)
@@ -187,7 +190,7 @@ export default function GastosScreen() {
       <View className="flex-row gap-2 mx-4 mb-3">
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-rose-500 mb-0.5">Total gastado</Text>
-          <Text className="text-sm font-bold text-rose-600">{formatCurrency(expenses.reduce((s: number, e: any) => s + Number(e.amount), 0))}</Text>
+          <Text className="text-sm font-bold text-rose-600">{formatCurrency(expenses.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0))}</Text>
         </View>
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Registros</Text>
@@ -195,7 +198,7 @@ export default function GastosScreen() {
         </View>
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Categorías</Text>
-          <Text className="text-sm font-bold text-slate-800">{new Set(expenses.map((e: any) => e.expense_category_id).filter(Boolean)).size}</Text>
+          <Text className="text-sm font-bold text-slate-800">{new Set(expenses.map((e: ExpenseWithRelations) => e.expense_category_id).filter(Boolean)).size}</Text>
         </View>
       </View>
 
@@ -243,7 +246,7 @@ export default function GastosScreen() {
       <View className="px-4 py-3 border-t border-slate-200 bg-white" style={{ paddingBottom: insets.bottom + 12 }}>
         <View className="flex-row items-center justify-between">
           <Text className="text-sm font-medium text-slate-600">Total</Text>
-          <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, e: any) => s + Number(e.amount), 0))}</Text>
+          <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0))}</Text>
         </View>
       </View>
 

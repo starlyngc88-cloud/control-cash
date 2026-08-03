@@ -21,26 +21,27 @@ export function DateFilter() {
 
   const now = new Date()
   const currentMonth = getMonthId(now)
+  const nowYear = now.getFullYear()
 
   const prevDate = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const previousMonth = getMonthId(prevDate)
 
   const yearMonths = useMemo(() => {
-    const y = now.getFullYear()
+    const y = nowYear
     return Array.from({ length: 12 }, (_, i) =>
       `${y}-${String(i + 1).padStart(2, "0")}`
     )
-  }, [now.getFullYear()])
+  }, [nowYear])
 
   const isCurrentMonth = months.length === 1 && months[0] === currentMonth
   const isPreviousMonth = months.length === 1 && months[0] === previousMonth
   const isThisYear = months.length === 12 && months.every((m, i) => m === yearMonths[i])
 
-  const label = months.length === 0
-    ? "Seleccionar"
-    : months.length === 1
-    ? formatMonth(months[0])
-    : `${formatMonth(months[0])} - ${formatMonth(months[months.length - 1])}`
+  const label = useMemo(() => {
+    if (months.length === 0) return "Seleccionar"
+    if (months.length === 1) return formatMonth(months[0])
+    return `${formatMonth(months[0])} - ${formatMonth(months[months.length - 1])}`
+  }, [months])
 
   return (
     <div suppressHydrationWarning className="flex items-center bg-slate-100 p-0.5 rounded-lg border border-slate-200">

@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Wallet, Loader2, Mail, Lock } from "lucide-react"
+import { Loader2, Mail, Lock } from "lucide-react"
 import { useAuth } from "@/components/auth/AuthProvider"
 import { friendlyError } from "@/lib/errors"
 
@@ -79,8 +80,15 @@ export default function LoginPage() {
       <div className="hidden lg:flex lg:w-1/2 bg-[#0f172a] flex-col items-center justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent" />
         <div className="relative z-10 text-center px-12">
-          <div className="flex items-center justify-center size-20 rounded-2xl bg-indigo-500/10 text-indigo-400 mx-auto mb-8 ring-1 ring-indigo-500/20">
-            <Wallet className="size-10" />
+          <div className="size-24 mx-auto mb-8 overflow-hidden rounded-3xl shadow-2xl shadow-indigo-900/50 ring-1 ring-white/10">
+            <Image
+              src="/logo.png"
+              alt="KellyCash"
+              width={96}
+              height={96}
+              className="size-full object-cover"
+              priority
+            />
           </div>
           <h1 className="text-4xl font-bold text-white tracking-wide mb-3">KellyCash</h1>
           <p className="text-slate-400 text-lg">La platica bajo control</p>
@@ -92,8 +100,14 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
-            <div className="flex items-center justify-center size-12 rounded-xl bg-indigo-50 text-indigo-600">
-              <Wallet className="size-6" />
+            <div className="size-12 rounded-xl overflow-hidden">
+              <Image
+                src="/logo.png"
+                alt="KellyCash"
+                width={48}
+                height={48}
+                className="size-full object-cover"
+              />
             </div>
             <span className="text-2xl font-bold text-slate-800 tracking-wide">KellyCash</span>
           </div>

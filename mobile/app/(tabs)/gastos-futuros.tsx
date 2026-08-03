@@ -2,26 +2,27 @@ import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, deleteFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus } from "@/services/api"
-import { formatCurrency, formatDate } from "@/utils/format"
-import { Plus, CalendarClock, Pencil, Trash2, Search, X, Circle, CheckCircle2, Ban } from "lucide-react-native"
+import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus, type FutureExpenseWithRelations } from "@/services/api"
+import { formatCurrency } from "@/utils/format"
+import { Plus, CalendarClock, Pencil, Trash2, Search, X, Circle, CheckCircle2, Ban, type LucideIcon } from "lucide-react-native"
+import type { FutureExpenseCategory } from "@/types/database"
 
-const STATUS_ICONS: Record<string, any> = { planned: Circle, completed: CheckCircle2, cancelled: Ban }
+const STATUS_ICONS: Record<string, LucideIcon> = { planned: Circle, completed: CheckCircle2, cancelled: Ban }
 const STATUS_COLORS: Record<string, string> = { planned: "#f59e0b", completed: "#059669", cancelled: "#94a3b8" }
 const STATUS_LABELS: Record<string, string> = { planned: "Planeado", completed: "Completado", cancelled: "Cancelado" }
 
 export default function GastosFuturosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
-  const [items, setItems] = useState<any[]>([])
-  const [categories, setCategories] = useState<any[]>([])
+  const [items, setItems] = useState<FutureExpenseWithRelations[]>([])
+  const [categories, setCategories] = useState<FutureExpenseCategory[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [catModalOpen, setCatModalOpen] = useState(false)
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<FutureExpenseWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const [title, setTitle] = useState("")
@@ -46,15 +47,17 @@ export default function GastosFuturosScreen() {
     }
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
 
-  const catNameMap = Object.fromEntries(categories.map((c: any) => [c.id, c.name]))
+  const catNameMap = Object.fromEntries(categories.map((c: FutureExpenseCategory) => [c.id, c.name]))
 
   const openNew = () => {
     setEditing(null); setTitle(""); setDescription(""); setCategoryId(""); setExpectedAmount(""); setExpectedDate(new Date().toISOString().split("T")[0]); setModalOpen(true)
   }
 
-  const openEdit = (item: any) => {
+  const openEdit = (item: FutureExpenseWithRelations) => {
     setEditing(item); setTitle(item.title); setDescription(item.description ?? ""); setCategoryId(item.category_id ?? ""); setExpectedAmount(String(item.expected_amount)); setExpectedDate(item.expected_date); setModalOpen(true)
   }
 
@@ -107,9 +110,9 @@ export default function GastosFuturosScreen() {
   const now = new Date()
   const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   const in90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
-  const dueSoon30 = items.filter((fe: any) => fe.expected_date && new Date(fe.expected_date) <= in30 && fe.status === "planned")
-  const dueSoon90 = items.filter((fe: any) => fe.expected_date && new Date(fe.expected_date) <= in90 && fe.status === "planned")
-  const filtered = items.filter((fe: any) => !search || fe.title?.toLowerCase().includes(search.toLowerCase()) || fe.description?.toLowerCase().includes(search.toLowerCase()))
+  const dueSoon30 = items.filter((fe: FutureExpenseWithRelations) => fe.expected_date && new Date(fe.expected_date) <= in30 && fe.status === "planned")
+  const dueSoon90 = items.filter((fe: FutureExpenseWithRelations) => fe.expected_date && new Date(fe.expected_date) <= in90 && fe.status === "planned")
+  const filtered = items.filter((fe: FutureExpenseWithRelations) => !search || fe.title?.toLowerCase().includes(search.toLowerCase()) || fe.description?.toLowerCase().includes(search.toLowerCase()))
 
   if (loading) return (
     <View className="flex-1 bg-background items-center justify-center" style={{ paddingTop: insets.top }}>
@@ -159,11 +162,11 @@ export default function GastosFuturosScreen() {
         <View className="flex-row gap-3">
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total previsto</Text>
-            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.reduce((s: number, i: any) => s + Number(i.expected_amount), 0))}</Text>
+            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
           </View>
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pendientes</Text>
-            <Text className="text-sm font-bold text-amber-600">{items.filter((i: any) => i.status === "planned").length}</Text>
+            <Text className="text-sm font-bold text-amber-600">{items.filter((i: FutureExpenseWithRelations) => i.status === "planned").length}</Text>
           </View>
         </View>
         <View className="flex-row gap-3">
@@ -191,7 +194,7 @@ export default function GastosFuturosScreen() {
           </View>
         ) : (
           <View className="space-y-2">
-            {filtered.map((item: any) => {
+            {filtered.map((item: FutureExpenseWithRelations) => {
               const urgency = getUrgency(item.expected_date)
               const StatusIcon = STATUS_ICONS[item.status] ?? Circle
               const statusColor = STATUS_COLORS[item.status] ?? "#94a3b8"
@@ -237,7 +240,7 @@ export default function GastosFuturosScreen() {
       {/* Footer total */}
       <View className="bg-white border-t border-slate-200 px-4 py-3 flex-row items-center justify-between" style={{ paddingBottom: insets.bottom + 12 }}>
         <Text className="text-xs font-medium text-slate-500">Total visible</Text>
-        <Text className="text-sm font-bold text-slate-800">{formatCurrency(filtered.reduce((s: number, i: any) => s + Number(i.expected_amount), 0))}</Text>
+        <Text className="text-sm font-bold text-slate-800">{formatCurrency(filtered.reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
       </View>
 
       {/* Item Modal */}
@@ -264,7 +267,7 @@ export default function GastosFuturosScreen() {
                     <TouchableOpacity onPress={() => setCategoryId("")} className={`px-3 py-1.5 rounded-xl border ${!categoryId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
                       <Text className={`text-xs ${!categoryId ? "text-white" : "text-slate-400"}`}>Sin categoría</Text>
                     </TouchableOpacity>
-                    {categories.map((cat: any) => (
+                    {categories.map((cat: FutureExpenseCategory) => (
                       <TouchableOpacity key={cat.id} onPress={() => setCategoryId(cat.id)} className={`px-3 py-1.5 rounded-xl border ${categoryId === cat.id ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
                         <Text className={`text-xs ${categoryId === cat.id ? "text-white" : "text-slate-600"}`}>{cat.name}</Text>
                       </TouchableOpacity>

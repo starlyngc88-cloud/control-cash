@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { useAuth } from "@/providers/AuthProvider"
@@ -11,7 +11,8 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const [isLogin, setIsLogin] = useState(true)
+  const passwordInputRef = useRef<TextInput>(null)
+  const isLogin = true
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -37,7 +38,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={{ flex: 1, backgroundColor: "#f8fafc" }}
     >
       <ScrollView
@@ -69,18 +70,23 @@ export default function LoginScreen() {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoCorrect={false}
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
             </View>
 
             <View>
               <Text style={{ fontSize: 12, fontWeight: "500", color: "#475569", marginBottom: 6 }}>Contraseña</Text>
               <TextInput
+                ref={passwordInputRef}
                 style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "white", fontSize: 14, color: "#1e293b" }}
                 placeholder="••••••••"
                 placeholderTextColor="#94a3b8"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                returnKeyType="go"
+                onSubmitEditing={handleSubmit}
               />
             </View>
 
@@ -99,7 +105,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
 
             {isLogin && (
-              <TouchableOpacity onPress={() => router.push("/forgot-password" as any)} style={{ alignItems: "center", marginTop: 12 }}>
+              <TouchableOpacity onPress={() => router.push("/forgot-password")} style={{ alignItems: "center", marginTop: 12 }}>
                 <Text style={{ fontSize: 12, color: "#4f46e5", fontWeight: "500" }}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
             )}

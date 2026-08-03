@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react"
+import { createContext, useContext, useState, useCallback, useMemo, useEffect } from "react"
 import type { Dictionary, Language, Currency } from "./index"
 import { registerLanguage, getDictionary, CURRENCY_CONFIG } from "./index"
 import standard from "./standard"
@@ -39,8 +39,18 @@ const LanguageContext = createContext<LanguageContextValue | null>(null)
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>("standard")
-  const [t, setT] = useState<Dictionary>(getDictionary("standard"))
+  const [t, setT] = useState<Dictionary>(() => getDictionary("standard"))
   const [currency, setCurrencyState] = useState<Currency>("COP")
+
+  useEffect(() => {
+    const lang = getInitialLanguage()
+    const cur = getInitialCurrency()
+    queueMicrotask(() => {
+      setLanguageState(lang)
+      setCurrencyState(cur)
+      if (lang !== "standard") setT(getDictionary(lang))
+    })
+  }, [])
 
   const setLanguage = useCallback((lang: Language) => {
     setLanguageState(lang)
@@ -64,15 +74,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       return currency === "EUR" ? `${formatted} ${cfg.symbol}` : `${cfg.symbol}${formatted}`
     }
   }, [currency])
-
-  useEffect(() => {
-    const stored = getInitialLanguage()
-    if (stored !== "standard") {
-      setLanguageState(stored)
-      setT(getDictionary(stored))
-    }
-    setCurrencyState(getInitialCurrency())
-  }, [])
 
   return (
     <LanguageContext.Provider value={{ t, language, setLanguage, currency, setCurrency, fmt }}>

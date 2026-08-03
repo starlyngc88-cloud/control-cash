@@ -1,19 +1,19 @@
 import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, countAllSavingMovements } from "@/services/api"
+import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, countAllSavingMovements, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { Plus, PiggyBank, Pencil, Trash2, ArrowDownCircle, ArrowUpCircle, Search, X } from "lucide-react-native"
 
 export default function HuchaScreen() {
   const insets = useSafeAreaInsets()
-  const [savings, setSavings] = useState<any[]>([])
+  const [savings, setSavings] = useState<SavingWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [savingModalOpen, setSavingModalOpen] = useState(false)
   const [movementModalOpen, setMovementModalOpen] = useState(false)
-  const [editing, setEditing] = useState<any>(null)
+  const [editing, setEditing] = useState<SavingWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [movementSavingId, setMovementSavingId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
@@ -35,14 +35,16 @@ export default function HuchaScreen() {
     setRefreshing(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    void (async () => { await load() })()
+  }, [load])
   useRealtimeSubscription("savings", () => load(), () => load(), () => load())
 
   const openNew = () => {
     setEditing(null); setName(""); setDescription(""); setTargetAmount(""); setSavingModalOpen(true)
   }
 
-  const openEdit = (s: any) => {
+  const openEdit = (s: SavingWithRelations) => {
     setEditing(s); setName(s.name); setDescription(s.description ?? ""); setTargetAmount(String(s.target_amount)); setSavingModalOpen(true)
   }
 
@@ -77,6 +79,7 @@ export default function HuchaScreen() {
     setSubmitting(true)
     try {
       const saving = savings.find((s) => s.id === movementSavingId)
+      if (!saving) { Alert.alert("Error", "No se encontró la meta."); return }
       const amountNum = parseFloat(movAmount)
       const newCurrent = movType === "income"
         ? Number(saving.current_amount) + amountNum
@@ -88,7 +91,7 @@ export default function HuchaScreen() {
           type: movType,
           amount: amountNum,
           notes: movNotes.trim() || null,
-          date: new Date().toISOString().split("T")[0],
+          movement_date: new Date().toISOString().split("T")[0],
         }),
         updateSaving(movementSavingId, { current_amount: newCurrent }),
       ])
@@ -97,7 +100,7 @@ export default function HuchaScreen() {
     finally { setSubmitting(false) }
   }
 
-  const totalAhorrado = savings.reduce((s: number, sv: any) => s + Number(sv.current_amount), 0)
+  const totalAhorrado = savings.reduce((s: number, sv: SavingWithRelations) => s + Number(sv.current_amount), 0)
   const filtered = savings.filter((s) => !search || s.name?.toLowerCase().includes(search.toLowerCase()) || s.description?.toLowerCase().includes(search.toLowerCase()))
 
   if (loading) {

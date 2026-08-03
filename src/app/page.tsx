@@ -1,9 +1,10 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
 import { getDashboardData, getMonthlyBudgets, getYearlyData } from "@/lib/db"
 import type { YearlyMonth } from "@/lib/db"
+import type { Income, Expense, Person } from "@/types"
 import { PiggyBank, Wallet, TrendingDown, TrendingUp, MoreHorizontal, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { useMonthFilter } from "@/components/MonthFilterContext"
@@ -19,17 +20,20 @@ import {
   Legend,
   Filler,
 } from "chart.js"
-import { Line, Doughnut } from "react-chartjs-2"
+import { Line } from "react-chartjs-2"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler)
+
+type RecentIncome = Income & { people: Pick<Person, "name"> | null }
+type RecentExpense = Expense & { people: Pick<Person, "name"> | null }
 
 type DashboardData = {
   totalIngresos: number
   totalGastos: number
   totalBudgeted: number
   balance: number
-  recentIncomes: any[]
-  recentExpenses: any[]
+  recentIncomes: RecentIncome[]
+  recentExpenses: RecentExpense[]
 }
 
 export default function DashboardPage() {
@@ -65,7 +69,7 @@ export default function DashboardPage() {
     }
   }, [])
 
-  useEffect(() => { load(months) }, [months, load])
+  useEffect(() => { void (async () => { await load(months) })() }, [months, load])
 
   const cashflowChartData = useMemo(() => {
     if (!filteredYearly.length) return null

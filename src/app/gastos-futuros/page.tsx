@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -65,9 +64,9 @@ export default function GastosFuturosPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<FutureExpense | null>(null)
   const [loading, setLoading] = useState(true)
-  const [successMsg, setSuccessMsg] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
+  const [successMsg, setSuccessMsg] = useState(false)
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.gastosFuturos
@@ -96,6 +95,23 @@ export default function GastosFuturosPage() {
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
   const { setActions } = useHeaderActions()
+
+  const openNew = () => {
+    setEditing(null)
+    setTitle("")
+    setDescription("")
+    setCategoryId("")
+    setExpectedAmount("")
+    setExpectedDate("")
+    setPlanCuota("")
+    setOpen(true)
+  }
+
+  const openNewCat = () => {
+    setEditingCat(null)
+    setCatName("")
+    setOpenCat(true)
+  }
 
   useEffect(() => {
     setActions(
@@ -134,24 +150,29 @@ export default function GastosFuturosPage() {
     return () => setActions(null)
   }, [headerDropdownOpen, setActions])
 
-  const load = async () => {
-    const [e, cats, dash] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard()])
-    setExpenses(e)
-    setCategories(cats)
-    const { totalPrevisto, numPendientes, next30, next90 } = dash
-    setDashboard({ totalPrevisto, numPendientes, next30: next30.length, next90: next90.length })
-    setLoading(false)
-  }
-
-  useEffect(() => { load() }, [])
-
-  const getAllExpenses = async () => {
+  const getAllExpenses = useCallback(async () => {
     const { data } = await (await import("@/lib/supabase")).supabase
       .from("future_expenses")
       .select("*, future_expense_categories(name)")
       .order("expected_date", { ascending: true })
     return (data ?? []) as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
-  }
+  }, [])
+
+  const load = useCallback(async () => {
+    try {
+      const [e, cats, dash] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard()])
+      setExpenses(e)
+      setCategories(cats)
+      const { totalPrevisto, numPendientes, next30, next90 } = dash
+      setDashboard({ totalPrevisto, numPendientes, next30: next30.length, next90: next90.length })
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [getAllExpenses])
+
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const grouped = useMemo(() => {
     const map = new Map<string, { id: string | null; name: string; items: typeof expenses }>()
@@ -166,17 +187,6 @@ export default function GastosFuturosPage() {
     }
     return map
   }, [filtered, categories])
-
-  const openNew = () => {
-    setEditing(null)
-    setTitle("")
-    setDescription("")
-    setCategoryId("")
-    setExpectedAmount("")
-    setExpectedDate("")
-    setPlanCuota("")
-    setOpen(true)
-  }
 
   const openEdit = (fe: FutureExpense) => {
     setEditing(fe)
@@ -215,6 +225,8 @@ export default function GastosFuturosPage() {
       setExpectedAmount("")
       setExpectedDate("")
       setPlanCuota("")
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
       setError(friendlyError(err))
@@ -228,6 +240,8 @@ export default function GastosFuturosPage() {
     setSubmitting(true)
     try {
       await deleteFutureExpense(id)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
       setError(friendlyError(err))
@@ -240,18 +254,14 @@ export default function GastosFuturosPage() {
     setSubmitting(true)
     try {
       await updateFutureExpenseStatus(id, "completed")
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
       setError(friendlyError(err))
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const openNewCat = () => {
-    setEditingCat(null)
-    setCatName("")
-    setOpenCat(true)
   }
 
   const openEditCat = (cat: FutureExpenseCategory) => {
@@ -272,6 +282,8 @@ export default function GastosFuturosPage() {
       }
       setOpenCat(false)
       setEditingCat(null)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
       setError(friendlyError(err))
@@ -297,6 +309,8 @@ export default function GastosFuturosPage() {
       await Promise.all(ids.map((id) => deleteFutureExpense(id)))
       await deleteFutureExpenseCategory(catToDelete.id)
       setCatToDelete(null)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
       setError(friendlyError(err))
@@ -326,7 +340,7 @@ export default function GastosFuturosPage() {
       return { meses, type: "cuota" as const, fechaEst: end.toLocaleDateString("es-DO") }
     }
     return null
-  }, [expectedAmount, expectedDate, planCuota])
+  }, [expectedAmount, expectedDate, planCuota, fmt])
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 

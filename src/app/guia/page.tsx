@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, ArrowDownCircle, ArrowUpCircle, Users, PiggyBank, Target, CheckCircle2, Wallet, BookOpen, Goal, Crosshair, ShieldCheck, Settings2 } from "lucide-react"
+import { ArrowRight, ArrowDownCircle, ArrowUpCircle, Users, PiggyBank, Target, CheckCircle2, Wallet, Goal, Crosshair, ShieldCheck, Settings2 } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 
 export default function GuiaPage() {

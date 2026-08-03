@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -8,7 +8,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -77,6 +76,20 @@ export default function AhorrosPage() {
   const headerDropdownRef = useRef<HTMLDivElement>(null)
   const { setActions } = useHeaderActions()
 
+  const openNewSaving = () => {
+    setEditing(null)
+    setName("")
+    setDescription("")
+    setSavingCategoryId("")
+    setOpenSaving(true)
+  }
+
+  const openNewCat = () => {
+    setEditingCat(null)
+    setCatName("")
+    setOpenCat(true)
+  }
+
   useEffect(() => {
     setActions(
       <div className="relative" ref={headerDropdownRef}>
@@ -114,15 +127,20 @@ export default function AhorrosPage() {
     return () => setActions(null)
   }, [headerDropdownOpen, setActions])
 
-  const load = async () => {
-    const [s, d, cats] = await Promise.all([getSavings(), getSavingsDashboard(), getSavingCategories()])
-    setSavings(s)
-    setDashboard(d)
-    setCategories(cats)
-    setLoading(false)
-  }
+  const load = useCallback(async () => {
+    try {
+      const [s, d, cats] = await Promise.all([getSavings(), getSavingsDashboard(), getSavingCategories()])
+      setSavings(s)
+      setDashboard(d)
+      setCategories(cats)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const grouped = useMemo(() => {
     const map = new Map<string, { id: string | null; name: string; items: (Saving & { saving_categories: Pick<SavingCategory, "name"> | null })[] }>()
@@ -137,14 +155,6 @@ export default function AhorrosPage() {
     }
     return map
   }, [filtered, categories])
-
-  const openNewSaving = () => {
-    setEditing(null)
-    setName("")
-    setDescription("")
-    setSavingCategoryId("")
-    setOpenSaving(true)
-  }
 
   const openEditSaving = (s: Saving) => {
     setEditing(s)
@@ -226,12 +236,6 @@ export default function AhorrosPage() {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const openNewCat = () => {
-    setEditingCat(null)
-    setCatName("")
-    setOpenCat(true)
   }
 
   const openEditCat = (cat: SavingCategory) => {

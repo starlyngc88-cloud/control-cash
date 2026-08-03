@@ -12,7 +12,26 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Generados / no código fuente:
+    ".expo/**",
+    ".expo-test/**",
+    ".expo-shared/**",
+    "_design_reference/**",
+    "mobile/.expo/**",
+    "mobile/.expo-test/**",
+    "mobile/.expo-shared/**",
+    "mobile/android/**",
+    "mobile/ios/**",
+    "mobile/dist/**",
   ]),
+  // Los archivos de configuración de bundlers/builders usan require().
+  {
+    files: ["**/*.config.js", "**/*.config.mjs", "scripts/*.mjs", "src/proxy.ts"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "import/no-anonymous-default-export": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

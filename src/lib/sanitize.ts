@@ -1,6 +1,5 @@
 const HTML_TAG_RE = /<[^>]*>/g
 const SCRIPT_RE = /javascript\s*:/gi
-const ON_EVENT_RE = /^\s*on\w+\s*=/i
 
 export function sanitize(value: string): string {
   return value

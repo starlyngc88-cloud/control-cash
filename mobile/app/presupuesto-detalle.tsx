@@ -35,7 +35,11 @@ export default function PresupuestoDetalleScreen() {
   const [subBudgeted, setSubBudgeted] = useState("")
 
   const load = useCallback(async () => {
-    if (!id) return
+    if (!id) {
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
     try {
       setLoadError(null)
       const data = await getMonthlyBudgetDashboard(id)
@@ -52,7 +56,7 @@ export default function PresupuestoDetalleScreen() {
     }
   }, [id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void (async () => { await load() })() }, [load])
 
   const toggle = (catId: string) => {
     setExpanded((prev) => {
