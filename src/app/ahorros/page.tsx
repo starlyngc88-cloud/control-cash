@@ -77,7 +77,6 @@ export default function AhorrosPage() {
   const [movDate, setMovDate] = useState(new Date().toISOString().split("T")[0])
   const [movPersonId, setMovPersonId] = useState("")
   const [movOrigin, setMovOrigin] = useState<"rubro" | "disponible">("disponible")
-  const [movDestination, setMovDestination] = useState<"rubro" | "disponible">("disponible")
   const [movBudgetCategoryId, setMovBudgetCategoryId] = useState("")
 
   const [people, setPeople] = useState<Person[]>([])
@@ -237,7 +236,6 @@ export default function AhorrosPage() {
     setMovDate(new Date().toISOString().split("T")[0])
     setMovPersonId("")
     setMovOrigin("disponible")
-    setMovDestination("disponible")
     setMovBudgetCategoryId("")
     setOpenMovement(true)
   }
@@ -246,7 +244,7 @@ export default function AhorrosPage() {
     e.preventDefault()
     if (!movementSavingId || !movAmount) return
     if (!movPersonId) return
-    if ((movType === "income" && movOrigin === "rubro" && !movBudgetCategoryId) || (movType === "withdrawal" && movDestination === "rubro" && !movBudgetCategoryId)) return
+    if (movType === "income" && movOrigin === "rubro" && !movBudgetCategoryId) return
     setSubmitting(true)
     try {
       const amount = parseFloat(movAmount)
@@ -266,16 +264,6 @@ export default function AhorrosPage() {
           expense_category_id: null,
           budget_category_id: movOrigin === "rubro" ? movBudgetCategoryId : null,
           saving_id: null,
-        })
-      } else if (movDestination === "rubro") {
-        await createExpense({
-          person_id: movPersonId,
-          amount,
-          description: movNotes,
-          date: movDate,
-          expense_category_id: null,
-          budget_category_id: movBudgetCategoryId,
-          saving_id: movementSavingId,
         })
       } else {
         await createIncome({
@@ -684,42 +672,6 @@ export default function AhorrosPage() {
                     </Button>
                   </div>
                   {movOrigin === "rubro" && (
-                    <select
-                      value={movBudgetCategoryId}
-                      onChange={(e) => setMovBudgetCategoryId(e.target.value)}
-                      required
-                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                    >
-                      <option value="">{dict.rubroPlaceholder}</option>
-                      {budgetCategories.map((bc) => (
-                        <option key={bc.id} value={bc.id}>{bc.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-              )}
-              {movType === "withdrawal" && (
-                <div className="space-y-1.5">
-                  <Label className="text-sm font-medium text-slate-700">{dict.destino}</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={movDestination === "disponible" ? "default" : "outline"}
-                      className="flex-1 text-xs"
-                      onClick={() => { setMovDestination("disponible"); setMovBudgetCategoryId("") }}
-                    >
-                      {dict.origenDisponible}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={movDestination === "rubro" ? "default" : "outline"}
-                      className="flex-1 text-xs"
-                      onClick={() => setMovDestination("rubro")}
-                    >
-                      {dict.origenRubro}
-                    </Button>
-                  </div>
-                  {movDestination === "rubro" && (
                     <select
                       value={movBudgetCategoryId}
                       onChange={(e) => setMovBudgetCategoryId(e.target.value)}

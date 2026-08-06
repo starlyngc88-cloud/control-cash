@@ -225,7 +225,6 @@ const kellycaribe: Dictionary = {
     origen: "¿De dónde viene la plata?",
     origenRubro: "De un rubro del PPTO",
     origenDisponible: "Del disponible pa' gastar",
-    destino: "¿Pa' dónde va la plata?",
     rubro: "Rubro",
     rubroPlaceholder: "Elige el rubro",
     monto: "Plata",

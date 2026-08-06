@@ -225,7 +225,6 @@ const standard: Dictionary = {
     origen: "El dinero viene de",
     origenRubro: "Rubro del PPTO",
     origenDisponible: "Disponible para gastar",
-    destino: "El dinero se destina a",
     rubro: "Rubro",
     rubroPlaceholder: "Selecciona el rubro",
     monto: "Monto",

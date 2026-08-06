@@ -233,7 +233,6 @@ export interface Dictionary {
     origen: string
     origenRubro: string
     origenDisponible: string
-    destino: string
     rubro: string
     rubroPlaceholder: string
     monto: string
