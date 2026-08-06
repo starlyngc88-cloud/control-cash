@@ -132,22 +132,26 @@ export async function getExpenses(options?: { person_id?: string; limit?: number
   const expenses = data as Expense[]
   const personIds = [...new Set(expenses.map((e) => e.person_id))]
   const expCatIds = [...new Set(expenses.map((e) => e.expense_category_id).filter(Boolean) as string[])]
-  const [people, expCats] = await Promise.all([
+  const savingIds = [...new Set(expenses.map((e) => e.saving_id).filter(Boolean) as string[])]
+  const [people, expCats, savings] = await Promise.all([
     supabase.from("people").select("id, name").in("id", personIds),
     expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : Promise.resolve({ data: [] }),
+    savingIds.length > 0 ? supabase.from("savings").select("id, name").in("id", savingIds) : Promise.resolve({ data: [] }),
   ])
   const peopleMap = new Map((people?.data ?? []).map((p: { id: string; name: string }) => [p.id, { name: p.name }]))
   const expCatMap = new Map((expCats?.data ?? []).map((c: { id: string; name: string }) => [c.id, { id: c.id, name: c.name }]))
+  const savingMap = new Map((savings?.data ?? []).map((s: { id: string; name: string }) => [s.id, { id: s.id, name: s.name }]))
   const result = expenses.map((e) => ({
     ...e,
     people: peopleMap.get(e.person_id) ?? null,
     budget_categories: null,
     expense_categories: e.expense_category_id ? (expCatMap.get(e.expense_category_id) ?? null) : null,
+    savings: e.saving_id ? (savingMap.get(e.saving_id) ?? null) : null,
   }))
-  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null })[]
+  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<Saving, "id" | "name"> | null })[]
 }
 
-export async function createExpense(input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null }) {
+export async function createExpense(input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null; saving_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
   const { data, error } = await supabase.from("expenses").insert(parsed).select().single()
   if (error) throw error
@@ -159,7 +163,7 @@ export async function deleteExpense(id: string) {
   if (error) throw error
 }
 
-export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null }) {
+export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null; saving_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
   const { error } = await supabase.from("expenses").update(parsed).eq("id", id)
   if (error) throw error
@@ -168,20 +172,21 @@ export async function updateExpense(id: string, input: { person_id: string; amou
 /* ---- Dashboard totals ---- */
 
 export async function getDashboardData(months: string[]) {
-  if (months.length === 0) return { totalIngresos: 0, totalGastos: 0, totalBudgeted: 0, balance: 0, recentIncomes: [], recentExpenses: [] }
+  if (months.length === 0) return { totalIngresos: 0, totalGastos: 0, totalBudgeted: 0, totalGastosSinRubro: 0, balance: 0, recentIncomes: [], recentExpenses: [] }
   const sorted = [...months].sort()
   const startOfMonth = sorted[0] + "-01"
   const lastMonth = sorted[sorted.length - 1]
   const endOfMonth = new Date(parseInt(lastMonth.split("-")[0]), parseInt(lastMonth.split("-")[1]), 0).toISOString().split("T")[0]
   const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
-    supabase.from("expenses").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
+    supabase.from("expenses").select("amount, budget_category_id").gte("date", startOfMonth).lte("date", endOfMonth),
     getIncomes({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     getExpenses({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     supabase.from("monthly_budgets").select("id, template_id").eq("month", startOfMonth).maybeSingle(),
   ])
   const totalIngresos = incomeResult.data?.reduce((sum, i) => sum + Number(i.amount), 0) ?? 0
   const totalGastos = expenseResult.data?.reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
+  const totalGastosSinRubro = expenseResult.data?.filter(e => !e.budget_category_id).reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
   let totalBudgeted = 0
   try {
     if (mbResult.data) {
@@ -189,7 +194,7 @@ export async function getDashboardData(months: string[]) {
       totalBudgeted = sumBudgetLeaves(cats)
     }
   } catch { totalBudgeted = 0 }
-  return { totalIngresos, totalGastos, totalBudgeted, balance: totalIngresos - totalGastos, recentIncomes, recentExpenses }
+  return { totalIngresos, totalGastos, totalBudgeted, totalGastosSinRubro, balance: totalIngresos - totalGastos, recentIncomes, recentExpenses }
 }
 
 export type YearlyMonth = { month: string; ingresos: number; gastos: number; presupuesto: number; balance: number }
@@ -325,9 +330,14 @@ export async function deleteBudgetCategory(id: string) {
   if (error) throw error
 }
 
-export async function updateBudgetCategory(id: string, input: { name: string; budgeted: number; parent_id?: string | null }) {
+export async function updateBudgetCategory(id: string, input: { name: string; budgeted: number; parent_id?: string | null; is_paid?: boolean }) {
   const parsed = budgetCategorySchema.partial().parse(sanitizeInput(input))
   const { error } = await supabase.from("budget_categories").update(parsed).eq("id", id)
+  if (error) throw error
+}
+
+export async function setBudgetCategoryPaid(id: string, isPaid: boolean) {
+  const { error } = await supabase.from("budget_categories").update({ is_paid: isPaid }).eq("id", id)
   if (error) throw error
 }
 
@@ -389,7 +399,7 @@ export async function deleteMonthlyBudget(id: string) {
 /* ---- Monthly Budget Dashboard ---- */
 
 export type CategoryStatus = "green" | "yellow" | "red"
-export interface DashboardCategory { id: string; name: string; budgeted: number; spent: number; available: number; excess: number; percentage: number; status: CategoryStatus; parent_id: string | null }
+export interface DashboardCategory { id: string; name: string; budgeted: number; spent: number; available: number; excess: number; percentage: number; status: CategoryStatus; parent_id: string | null; is_paid: boolean }
 export interface MonthlyBudgetDashboard { month: string; templateName: string; totalIngresos: number; totalBudgeted: number; totalGastos: number; balance: number; categories: DashboardCategory[] }
 export type CategoryTreeNode = BudgetCategory & { children: CategoryTreeNode[] }
 
@@ -597,16 +607,21 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
     if (node.children.length === 0) return categorySpent[node.id] ?? 0
     return node.children.reduce((s, c) => s + nodeSpent(c), 0)
   }
+  function nodeExcess(node: TreeNode): number {
+    if (node.children.length === 0) return Math.max(0, nodeSpent(node) - nodeBudgeted(node))
+    return node.children.reduce((s, c) => s + nodeExcess(c), 0)
+  }
   function flattenTree(node: TreeNode): DashboardCategory[] {
     const budgeted = nodeBudgeted(node)
     const spent = nodeSpent(node)
     const available = Math.max(0, budgeted - spent)
-    const excess = Math.max(0, spent - budgeted)
-    const percentage = budgeted > 0 ? (spent / budgeted) * 100 : spent > 0 ? Infinity : 0
+    const excess = nodeExcess(node)
+    const isPaid = Boolean(node.is_paid)
+    const percentage = isPaid ? 100 : budgeted > 0 ? (spent / budgeted) * 100 : spent > 0 ? Infinity : 0
     let status: CategoryStatus = "green"
     if (percentage > 100) status = "red"
     else if (percentage >= 80) status = "yellow"
-    const result: DashboardCategory = { id: node.id, name: node.name, budgeted, spent, available, excess, percentage, status, parent_id: node.parent_id ?? null }
+    const result: DashboardCategory = { id: node.id, name: node.name, budgeted, spent, available, excess, percentage, status, parent_id: node.parent_id ?? null, is_paid: isPaid }
     const children = node.children.flatMap((c: TreeNode) => flattenTree(c))
     return [result, ...children]
   }

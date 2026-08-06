@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
-import { getMonthlyBudgetDashboard, getPeople, createExpense, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory } from "@/lib/db"
+import { getMonthlyBudgetDashboard, getPeople, createExpense, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, setBudgetCategoryPaid, getMonthlyBudgets } from "@/lib/db"
 import type { DashboardCategory } from "@/lib/db"
 import type { Person } from "@/types"
 import {
@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ArrowLeft, Circle, ChevronDown, ChevronRight, Pencil, Plus, Trash2 } from "lucide-react"
+import { ArrowLeft, Circle, ChevronDown, ChevronRight, Pencil, Plus, Trash2, CheckCircle2, ChevronLeft } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -25,6 +25,7 @@ export default function MonthlyBudgetPage() {
   const id = params.id as string
   const [data, setData] = useState<Awaited<ReturnType<typeof getMonthlyBudgetDashboard>> | null>(null)
   const [people, setPeople] = useState<Person[]>([])
+  const [allMonths, setAllMonths] = useState<{ id: string; month: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [submitting, setSubmitting] = useState(false)
@@ -67,9 +68,10 @@ export default function MonthlyBudgetPage() {
     if (!id) return
     ;(async () => {
       try {
-        const [res, p] = await Promise.all([getMonthlyBudgetDashboard(id), getPeople()])
+        const [res, p, months] = await Promise.all([getMonthlyBudgetDashboard(id), getPeople(), getMonthlyBudgets()])
         setData(res)
         setPeople(p)
+        setAllMonths(months.map(m => ({ id: m.id, month: m.month })))
       } catch (err) {
         setError(friendlyError(err))
       } finally {
@@ -86,8 +88,14 @@ export default function MonthlyBudgetPage() {
     return d.toLocaleDateString("es-CO", { month: "long", year: "numeric" })
   }
 
+  const sortedMonths = [...allMonths].sort((a, b) => a.month.localeCompare(b.month))
+  const currentIndex = sortedMonths.findIndex(m => m.id === id)
+  const prevMonth = currentIndex > 0 ? sortedMonths[currentIndex - 1] : null
+  const nextMonth = currentIndex >= 0 && currentIndex < sortedMonths.length - 1 ? sortedMonths[currentIndex + 1] : null
+
   const parents = data.categories.filter(c => !c.parent_id)
   const totalExcess = parents.reduce((s, p) => s + p.excess, 0)
+  const totalRemanente = data.categories.reduce((s, c) => s + (Math.round(c.percentage) === 100 && c.available > 0 ? c.available : 0), 0)
   const totalAvailable = data.totalBudgeted - data.totalGastos
   const childrenMap = new Map<string, DashboardCategory[]>()
   for (const cat of data.categories) {
@@ -217,6 +225,18 @@ export default function MonthlyBudgetPage() {
     }
   }
 
+  const togglePaid = async (cat: DashboardCategory) => {
+    setSubmitting(true)
+    try {
+      await setBudgetCategoryPaid(cat.id, !cat.is_paid)
+      await reload()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const toggle = (id: string) => {
     setExpanded(prev => {
       const next = new Set(prev)
@@ -226,9 +246,18 @@ export default function MonthlyBudgetPage() {
     })
   }
 
-  const actionsCell = (cat: DashboardCategory, isChild = false) => (
+  const actionsCell = (cat: DashboardCategory, isChild = false, isPaid = false, showPaid = true) => (
     <td className={`py-1 px-2 ${isChild ? "py-0.5" : ""}`}>
       <div className="flex items-center justify-end gap-0.5">
+        {showPaid && (
+          <button
+            onClick={() => togglePaid(cat)}
+            className={`p-0.5 rounded hover:bg-accent ${isPaid ? "text-green-600" : "text-slate-400 hover:text-green-600"}`}
+            title={isPaid ? "Quitar pago completo" : "Marcar pago completo"}
+          >
+            <CheckCircle2 className="size-3" />
+          </button>
+        )}
         <button onClick={() => openAddSubDialog(cat)} className="p-0.5 rounded hover:bg-accent text-slate-400 hover:text-indigo-600" title="Agregar subcategoría">
           <Plus className="size-3" />
         </button>
@@ -249,8 +278,24 @@ export default function MonthlyBudgetPage() {
         <Link href="/presupuestos" className="flex items-center justify-center size-7 rounded hover:bg-muted">
           <ArrowLeft className="size-4" />
         </Link>
-        <h2 className="text-lg font-bold capitalize">{formatMonth(data.month)}</h2>
-        <span className="text-xs text-muted-foreground">· {data.templateName}</span>
+        <div className="flex items-center gap-1">
+          {prevMonth ? (
+            <Link href={`/presupuestos/${prevMonth.id}`} className="flex items-center justify-center size-7 rounded hover:bg-muted text-slate-500 hover:text-foreground" title={`Mes anterior: ${formatMonth(prevMonth.month)}`}>
+              <ChevronLeft className="size-4" />
+            </Link>
+          ) : (
+            <span className="flex items-center justify-center size-7 text-slate-300 cursor-not-allowed"><ChevronLeft className="size-4" /></span>
+          )}
+          <h2 className="text-lg font-bold capitalize">{formatMonth(data.month)}</h2>
+          <span className="text-xs text-muted-foreground">· {data.templateName}</span>
+          {nextMonth ? (
+            <Link href={`/presupuestos/${nextMonth.id}`} className="flex items-center justify-center size-7 rounded hover:bg-muted text-slate-500 hover:text-foreground" title={`Mes siguiente: ${formatMonth(nextMonth.month)}`}>
+              <ChevronRight className="size-4" />
+            </Link>
+          ) : (
+            <span className="flex items-center justify-center size-7 text-slate-300 cursor-not-allowed"><ChevronRight className="size-4" /></span>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs border rounded-lg px-3 py-2 bg-muted/30">
@@ -285,6 +330,9 @@ export default function MonthlyBudgetPage() {
         <Tooltip content="Disponible del presupuesto: presupuestado − gastado">
           <span><span className="text-muted-foreground">{d.disponible}</span> <b className={data.totalBudgeted - data.totalGastos >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.totalBudgeted - data.totalGastos)}</b></span>
         </Tooltip>
+        <Tooltip content="Remanente del presupuesto: sumatoria del disponible de rubros marcados como pago completo">
+          <span><span className="text-muted-foreground">{d.remanente}</span> <b className="text-green-700">{fmt(totalRemanente)}</b></span>
+        </Tooltip>
         <Tooltip content="Balance del mes: ingresos − gastos">
           <span><span className="text-muted-foreground">{d.balance}</span> <b className={data.balance >= 0 ? "text-green-600" : "text-red-600"}>{fmt(data.balance)}</b></span>
         </Tooltip>
@@ -316,6 +364,7 @@ export default function MonthlyBudgetPage() {
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.ppto}</th>
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.gastado}</th>
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.disponible}</th>
+                <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.remanente}</th>
                 <th className="text-right py-1.5 px-2 font-medium text-muted-foreground bg-muted/50">{d.exceso}</th>
                 <th className="text-center py-1.5 px-2 font-medium text-muted-foreground w-16 bg-muted/50">{d.estado}</th>
                 <th className="py-1.5 px-2 bg-muted/50 w-24"></th>
@@ -331,6 +380,7 @@ export default function MonthlyBudgetPage() {
                   ppct === 0 ? "text-green-700 bg-green-100 dark:bg-green-900/40" :
                   ppct >= 100 ? "text-red-700 bg-red-100 dark:bg-red-900/40" :
                   "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
+                const parentPaidClass = parent.is_paid ? "text-green-700 bg-green-100 dark:bg-green-900/40" : ppctClass
 
                 const parentRow = (
                   <tr key={parent.id} className="border-b bg-slate-50/70 hover:bg-indigo-50/70 transition-colors">
@@ -356,14 +406,17 @@ export default function MonthlyBudgetPage() {
                     <td className="py-1 px-2 text-right tabular-nums font-semibold">{fmt(parent.spent)}</td>
                     <td className={`py-1 px-2 text-right tabular-nums font-semibold ${parent.available <= 0 ? "text-red-600" : ""}`}>{fmt(parent.available)}</td>
                     <td className="py-1 px-2 text-right tabular-nums font-semibold">
+                      {Math.round(parent.percentage) === 100 && parent.available > 0 ? <span className="text-green-700">{fmt(parent.available)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                    </td>
+                    <td className="py-1 px-2 text-right tabular-nums font-semibold">
                       {parent.excess > 0 ? <span className="text-red-600">{fmt(parent.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
                     </td>
                     <td className="py-1 px-2 text-center">
-                      <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${ppctClass}`}>
-                        {ppct > 0 ? `${ppct}%` : d.emDash}
+                      <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${parentPaidClass}`}>
+                        {parent.is_paid ? "100%" : ppct > 0 ? `${ppct}%` : d.emDash}
                       </span>
                     </td>
-                    {actionsCell(parent)}
+                    {actionsCell(parent, false, parent.is_paid, children.length === 0)}
                   </tr>
                 )
 
@@ -373,6 +426,7 @@ export default function MonthlyBudgetPage() {
                     cpct === 0 ? "text-green-700 bg-green-100 dark:bg-green-900/40" :
                     cpct >= 100 ? "text-red-700 bg-red-100 dark:bg-red-900/40" :
                     "text-yellow-700 bg-yellow-100 dark:bg-yellow-900/40"
+                  const childPaidClass = child.is_paid ? "text-green-700 bg-green-100 dark:bg-green-900/40" : cpctClass
                   return (
                     <tr key={child.id} className="border-b hover:bg-indigo-50/40 transition-colors bg-muted/5">
                       <td className="py-0.5 px-2 pl-8">
@@ -391,14 +445,17 @@ export default function MonthlyBudgetPage() {
                       <td className="py-0.5 px-2 text-right tabular-nums font-medium">{fmt(child.spent)}</td>
                       <td className={`py-0.5 px-2 text-right tabular-nums ${child.available <= 0 ? "text-red-600 font-medium" : ""}`}>{fmt(child.available)}</td>
                       <td className="py-0.5 px-2 text-right tabular-nums">
+                        {Math.round(child.percentage) === 100 && child.available > 0 ? <span className="text-green-700 font-medium">{fmt(child.available)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                      </td>
+                      <td className="py-0.5 px-2 text-right tabular-nums">
                         {child.excess > 0 ? <span className="text-red-600 font-medium">{fmt(child.excess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
                       </td>
                       <td className="py-0.5 px-2 text-center">
-                        <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${cpctClass}`}>
-                          {cpct > 0 ? `${cpct}%` : d.emDash}
+                        <span className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${childPaidClass}`}>
+                          {child.is_paid ? "100%" : cpct > 0 ? `${cpct}%` : d.emDash}
                         </span>
                       </td>
-                      {actionsCell(child, true)}
+                      {actionsCell(child, true, child.is_paid)}
                     </tr>
                   )
                 }) : []
@@ -412,6 +469,9 @@ export default function MonthlyBudgetPage() {
                 <td className="py-1.5 px-2 text-right tabular-nums font-bold text-slate-800">{fmt(data.totalBudgeted)}</td>
                 <td className="py-1.5 px-2 text-right tabular-nums font-bold text-slate-800">{fmt(data.totalGastos)}</td>
                 <td className={`py-1.5 px-2 text-right tabular-nums font-bold ${totalAvailable < 0 ? "text-red-600" : "text-slate-800"}`}>{fmt(totalAvailable)}</td>
+                <td className="py-1.5 px-2 text-right tabular-nums font-bold">
+                  {totalRemanente > 0 ? <span className="text-green-700">{fmt(totalRemanente)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
+                </td>
                 <td className="py-1.5 px-2 text-right tabular-nums font-bold">
                   {totalExcess > 0 ? <span className="text-red-600">{fmt(totalExcess)}</span> : <span className="text-muted-foreground">{d.emDash}</span>}
                 </td>

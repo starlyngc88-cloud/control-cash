@@ -45,6 +45,13 @@ export interface Dictionary {
     fecha: string
     rubro: string
     sinRubro: string
+    asumirDisponible: string
+    rubroRequerido: string
+    hucha: string
+    sinHucha: string
+    viewCategoria: string
+    viewDisponible: string
+    viewHucha: string
     guardar: string
     guardarCambios: string
     total: string
@@ -123,6 +130,7 @@ export interface Dictionary {
     rubro: string
     ppto: string
     disponible: string
+    remanente: string
     exceso: string
     estado: string
     emDash: string
@@ -215,6 +223,8 @@ export interface Dictionary {
     deleteConfirm: string
     addMoney: string
     withdrawMoney: string
+    spendFromHucha: string
+    spendFromHuchaTitle: string
     movementTitle: string
     movementType: string
     ingreso: string

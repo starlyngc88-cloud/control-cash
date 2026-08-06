@@ -11,17 +11,18 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from "@/lib/db"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings } from "@/lib/db"
 import type { Person, Expense, ExpenseCategory, BudgetCategory } from "@/types"
-import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight, X } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { useMonthFilter } from "@/components/MonthFilterContext"
+import { useSearchParams } from "next/navigation"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function GastosPage() {
-  const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null })[]>([])
+  const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
@@ -31,6 +32,7 @@ export default function GastosPage() {
   const { t, fmt } = useLanguage()
   const g = t.gastos
   const { months } = useMonthFilter()
+  const searchParams = useSearchParams()
 
   const sorted = [...months].sort()
   const activeMonth = sorted[0] ?? ""
@@ -49,11 +51,17 @@ export default function GastosPage() {
   const [date, setDate] = useState(new Date().toISOString().split("T")[0])
   const [expenseCategoryId, setExpenseCategoryId] = useState("")
   const [budgetCategoryId, setBudgetCategoryId] = useState("")
+  const [assumeAvailable, setAssumeAvailable] = useState(false)
+  const [savingId, setSavingId] = useState("")
+
+  const [savings, setSavings] = useState<import("@/types").Saving[]>([])
 
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<import("@/types").BudgetTemplate, "name"> })[]>([])
   const [search, setSearch] = useState("")
+  const [view, setView] = useState<"categoria" | "disponible" | "hucha">("categoria")
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
+  const [expandedSavings, setExpandedSavings] = useState<Set<string>>(new Set())
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<ExpenseCategory | null>(null)
@@ -75,6 +83,8 @@ export default function GastosPage() {
     setDate(new Date().toISOString().split("T")[0])
     setExpenseCategoryId("")
     setBudgetCategoryId("")
+    setAssumeAvailable(false)
+    setSavingId("")
     setOpen(true)
   }
 
@@ -124,11 +134,12 @@ export default function GastosPage() {
 
   const load = useCallback(async () => {
     try {
-      const [e, p, cats, bCats] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([])])
+      const [e, p, cats, bCats, s] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([]), getSavings()])
       setExpenses(e)
       setPeople(p)
       setExpenseCategories(cats)
       setBudgetCategories(bCats)
+      setSavings(s)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -138,7 +149,21 @@ export default function GastosPage() {
 
   useEffect(() => { void (async () => { await load() })() }, [load])
 
-  const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null }) => {
+  useEffect(() => {
+    const hucha = searchParams.get("hucha")
+    if (hucha && !open) {
+      const timer = setTimeout(() => {
+        setSavingId(hucha)
+        setAssumeAvailable(true)
+        setBudgetCategoryId("")
+        setView("hucha")
+        setOpen(true)
+      }, 0)
+      return () => clearTimeout(timer)
+    }
+  }, [searchParams, open])
+
+  const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }) => {
     setEditing(exp)
     setPersonId(exp.person_id)
     setAmount(String(exp.amount))
@@ -146,12 +171,18 @@ export default function GastosPage() {
     setDate(exp.date)
     setExpenseCategoryId(exp.expense_category_id ?? "")
     setBudgetCategoryId(exp.budget_category_id ?? "")
+    setAssumeAvailable(!exp.budget_category_id)
+    setSavingId(exp.saving_id ?? "")
     setOpen(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!personId || !amount) return
+    if (!budgetCategoryId && !assumeAvailable) {
+      setError(g.rubroRequerido)
+      return
+    }
     setSubmitting(true)
     try {
       const data = {
@@ -161,6 +192,7 @@ export default function GastosPage() {
         date,
         expense_category_id: expenseCategoryId || null,
         budget_category_id: budgetCategoryId || null,
+        saving_id: savingId || null,
       }
       if (editing) {
         await updateExpense(editing.id, data)
@@ -174,6 +206,7 @@ export default function GastosPage() {
       setDescription("")
       setDate(new Date().toISOString().split("T")[0])
       setExpenseCategoryId("")
+      setSavingId("")
       load()
     } catch (err) {
       setError(friendlyError(err))
@@ -257,7 +290,7 @@ export default function GastosPage() {
   }, [expenses, search])
 
   const grouped = useMemo(() => {
-    const map = new Map<string, { id: string | null; name: string; items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null })[] }>()
+    const map = new Map<string, { id: string | null; name: string; items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[] }>()
     for (const c of expenseCategories) {
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
@@ -270,6 +303,20 @@ export default function GastosPage() {
     return map
   }, [filtered, expenseCategories])
 
+  const disponible = useMemo(() => filtered.filter((e) => !e.budget_category_id && !e.saving_id), [filtered])
+
+  const porHucha = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[] }>()
+    for (const e of filtered) {
+      if (!e.saving_id) continue
+      const sId = e.saving_id
+      const sName = e.savings?.name || "Sin hucha"
+      if (!map.has(sId)) map.set(sId, { id: sId, name: sName, items: [] })
+      map.get(sId)!.items.push(e)
+    }
+    return map
+  }, [filtered])
+
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   const total = expenses.reduce((s, e) => s + Number(e.amount), 0)
@@ -278,6 +325,35 @@ export default function GastosPage() {
 
   const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
   const hasItems = expenses.length > 0 || expenseCategories.length > 0
+
+  const renderExpenseRow = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }) => (
+    <div key={exp.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+      <div className="flex items-center flex-1 min-w-0">
+        <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-rose-100 text-rose-600">
+          <TrendingUp className="size-3" />
+        </div>
+        <div className="ml-2.5 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</p>
+            <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+          </div>
+          {exp.people?.name && <p className="text-[10px] text-slate-500">{exp.people.name}</p>}
+        </div>
+      </div>
+      <div className="flex items-center gap-3 shrink-0 ml-3">
+        {exp.savings?.name && <span className="text-[10px] text-emerald-600 bg-emerald-50 rounded-full px-2 py-0.5">{exp.savings.name}</span>}
+        <span className="text-xs font-semibold text-rose-600 tabular-nums">- {fmt(Number(exp.amount))}</span>
+        <div className="flex items-center gap-0.5">
+          <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEdit(exp)}>
+            <Pencil className="size-3" />
+          </button>
+          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDelete(exp.id)}>
+            <Trash2 className="size-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div>
@@ -344,10 +420,11 @@ export default function GastosPage() {
                       <select
                         id="category"
                         value={budgetCategoryId}
-                        onChange={(e) => setBudgetCategoryId(e.target.value)}
-                        className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                        onChange={(e) => { setBudgetCategoryId(e.target.value); if (e.target.value) setAssumeAvailable(false) }}
+                        disabled={assumeAvailable}
+                        className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none disabled:opacity-60"
                       >
-                        <option value="">Sin rubro</option>
+                        <option value="" disabled>{g.sinRubro}</option>
                         {(() => {
                           const grouped = new Map<string, typeof budgetCategories>()
                           for (const bc of budgetCategories) {
@@ -365,6 +442,34 @@ export default function GastosPage() {
                         })()}
                       </select>
                     </div>
+                    <label className="flex items-center gap-2 text-xs cursor-pointer text-slate-600 select-none">
+                      <input
+                        type="checkbox"
+                        checked={assumeAvailable}
+                        onChange={(e) => { setAssumeAvailable(e.target.checked); if (e.target.checked) setBudgetCategoryId("") }}
+                        className="accent-indigo-600 rounded"
+                      />
+                      {g.asumirDisponible}
+                    </label>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">{g.hucha}</Label>
+                  <div className="flex gap-2">
+                    <select
+                      id="saving"
+                      value={savingId}
+                      onChange={(e) => { setSavingId(e.target.value); if (e.target.value) setBudgetCategoryId("") }}
+                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">{g.sinHucha}</option>
+                      {savings.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => { setSavingId(""); setAssumeAvailable(false) }} className="size-9 shrink-0 rounded-lg border border-input bg-white flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
+                      <X className="size-4" />
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -470,93 +575,162 @@ export default function GastosPage() {
         />
       </div>
 
+      {/* Views tabs */}
+      <div className="flex gap-1 mb-3 border-b border-slate-200 overflow-x-auto">
+        {([
+          { key: "categoria", label: g.viewCategoria, icon: <List className="size-4" /> },
+          { key: "disponible", label: g.viewDisponible, icon: <ArrowUpCircle className="size-4" /> },
+          { key: "hucha", label: g.viewHucha, icon: <TrendingUp className="size-4" /> },
+        ] as { key: "categoria" | "disponible" | "hucha"; label: string; icon: React.ReactNode }[]).map((v) => (
+          <button
+            key={v.key}
+            onClick={() => setView(v.key)}
+            className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              view === v.key ? "text-indigo-600 border-indigo-600" : "text-slate-500 border-transparent hover:text-slate-700"
+            }`}
+          >
+            {v.icon}
+            {v.label}
+          </button>
+        ))}
+      </div>
+
       {/* Grouped list */}
-      {!hasItems ? (
-        <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm text-center">
-          <p className="text-xs text-slate-500">{search ? "Sin resultados para la búsqueda" : g.empty}</p>
-        </div>
-      ) : (
+      {view === "categoria" && (
+        <>
+          {!hasItems ? (
+            <div className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm text-center">
+              <p className="text-xs text-slate-500">{search ? "Sin resultados para la búsqueda" : g.empty}</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos por categoría</span>
+                <button
+                  onClick={() => {
+                    if (allExpanded) setExpandedCats(new Set())
+                    else setExpandedCats(new Set([...grouped.keys()]))
+                  }}
+                  className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
+                >
+                  {allExpanded ? "Contraer todo" : "Expandir todo"}
+                </button>
+              </div>
+              <div>
+                {Array.from(grouped.entries()).map(([key, { id: catId, name: catName, items }]) => {
+                  const isExpanded = expandedCats.has(key)
+                  const catTotal = items.reduce((s, e) => s + Number(e.amount), 0)
+                  const cat = expenseCategories.find((c) => c.id === catId)
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                        <button onClick={() => setExpandedCats((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(key)) next.delete(key)
+                          else next.add(key)
+                          return next
+                        })} className="text-slate-400 hover:text-slate-600 mr-2">
+                          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                        </button>
+                        {cat && (
+                          <>
+                            <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 mr-0.5" onClick={() => { setEditingCat(cat); setCatName(cat.name); setOpenCat(true) }}>
+                              <Pencil className="size-3" />
+                            </button>
+                            <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 mr-0.5" onClick={() => handleDeleteCat(cat.id, cat.name)}>
+                              <Trash2 className="size-3" />
+                            </button>
+                          </>
+                        )}
+                        <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{catName}</span>
+                        <span className="text-[10px] text-slate-400 ml-1.5">({items.length})</span>
+                        <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(catTotal)}</span>
+                      </div>
+
+                      {isExpanded && items.map(renderExpenseRow)}
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-semibold text-rose-600">Total: {fmt(total)}</span>
+                <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
+                  <Plus className="size-3" /> {g.newGasto}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {view === "disponible" && (
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
-            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos por categoría</span>
-            <button
-              onClick={() => {
-                if (allExpanded) setExpandedCats(new Set())
-                else setExpandedCats(new Set([...grouped.keys()]))
-              }}
-              className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2"
-            >
-              {allExpanded ? "Contraer todo" : "Expandir todo"}
-            </button>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos sin rubro</span>
+            <span className="text-xs text-slate-400">{disponible.length} gastos</span>
           </div>
-          <div>
-              {Array.from(grouped.entries()).map(([key, { id: catId, name: catName, items }]) => {
-              const isExpanded = expandedCats.has(key)
-              const catTotal = items.reduce((s, e) => s + Number(e.amount), 0)
-              const cat = expenseCategories.find((c) => c.id === catId)
-              return (
-                <div key={key}>
-                  <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                    <button onClick={() => setExpandedCats((prev) => {
-                      const next = new Set(prev)
-                      if (next.has(key)) next.delete(key)
-                      else next.add(key)
-                      return next
-                    })} className="text-slate-400 hover:text-slate-600 mr-2">
-                      {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
-                    </button>
-                    {cat && (
-                      <>
-                        <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5 mr-0.5" onClick={() => { setEditingCat(cat); setCatName(cat.name); setOpenCat(true) }}>
-                          <Pencil className="size-3" />
-                        </button>
-                        <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5 mr-0.5" onClick={() => handleDeleteCat(cat.id, cat.name)}>
-                          <Trash2 className="size-3" />
-                        </button>
-                      </>
-                    )}
-                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{catName}</span>
-                    <span className="text-[10px] text-slate-400 ml-1.5">({items.length})</span>
-                    <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(catTotal)}</span>
-                  </div>
+          {disponible.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-xs text-slate-500">No hay gastos asumidos del disponible para gastar.</p>
+            </div>
+          ) : (
+            <>
+              <div>{disponible.map(renderExpenseRow)}</div>
+              <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-semibold text-rose-600">Total: {fmt(disponible.reduce((s, e) => s + Number(e.amount), 0))}</span>
+                <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
+                  <Plus className="size-3" /> {g.newGasto}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-                  {isExpanded && items.map((exp) => (
-                    <div key={exp.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
-                      <div className="flex items-center flex-1 min-w-0">
-                        <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-rose-100 text-rose-600">
-                          <TrendingUp className="size-3" />
-                        </div>
-                        <div className="ml-2.5 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</p>
-                            <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
-                          </div>
-                          {exp.people?.name && <p className="text-[10px] text-slate-500">{exp.people.name}</p>}
-                        </div>
+      {view === "hucha" && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos por hucha</span>
+            <span className="text-xs text-slate-400">{porHucha.size} huchas</span>
+          </div>
+          {porHucha.size === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-xs text-slate-500">No hay gastos vinculados a una hucha.</p>
+            </div>
+          ) : (
+            <>
+              <div>
+                {Array.from(porHucha.entries()).map(([key, { name: hName, items }]) => {
+                  const isExpanded = expandedSavings.has(key)
+                  const groupTotal = items.reduce((s, e) => s + Number(e.amount), 0)
+                  return (
+                    <div key={key}>
+                      <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                        <button onClick={() => setExpandedSavings((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(key)) next.delete(key)
+                          else next.add(key)
+                          return next
+                        })} className="text-slate-400 hover:text-slate-600 mr-2">
+                          {isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
+                        </button>
+                        <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">{hName}</span>
+                        <span className="text-[10px] text-slate-400 ml-1.5">({items.length})</span>
+                        <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(groupTotal)}</span>
                       </div>
-                      <div className="flex items-center gap-3 shrink-0 ml-3">
-                        <span className="text-xs font-semibold text-rose-600 tabular-nums">- {fmt(Number(exp.amount))}</span>
-                        <div className="flex items-center gap-0.5">
-                          <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEdit(exp)}>
-                            <Pencil className="size-3" />
-                          </button>
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDelete(exp.id)}>
-                            <Trash2 className="size-3" />
-                          </button>
-                        </div>
-                      </div>
+                      {isExpanded && items.map(renderExpenseRow)}
                     </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-          <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between">
-            <span className="text-xs font-semibold text-rose-600">Total: {fmt(total)}</span>
-            <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
-              <Plus className="size-3" /> {g.newGasto}
-            </button>
-          </div>
+                  )
+                })}
+              </div>
+              <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-semibold text-rose-600">Total: {fmt(porHucha.size > 0 ? Array.from(porHucha.values()).reduce((s, g) => s + g.items.reduce((a, e) => a + Number(e.amount), 0), 0) : 0)}</span>
+                <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors" onClick={openNew}>
+                  <Plus className="size-3" /> {g.newGasto}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

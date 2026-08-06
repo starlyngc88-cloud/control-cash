@@ -35,6 +35,7 @@ export interface Expense {
   created_at: string
   budget_category_id?: string | null
   expense_category_id?: string | null
+  saving_id?: string | null
 }
 
 export interface BudgetTemplate {
@@ -50,6 +51,7 @@ export interface BudgetCategory {
   name: string
   budgeted: number
   parent_id: string | null
+  is_paid?: boolean
 }
 
 export interface MonthlyBudget {

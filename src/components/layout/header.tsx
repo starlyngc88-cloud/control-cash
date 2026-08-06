@@ -31,14 +31,17 @@ export function Header() {
   const titleKey: PageKey = pageTitleMap[basePath] ?? pageTitleMap["/"]
   const title = t[titleKey].title ?? t.nav[titleKey] ?? t.app.name
   const isDashboard = basePath === "/"
+  const isBudgetDetail = basePath === "/presupuestos" && pathname.split("/").length > 2
 
   return (
     <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-10 shadow-sm shrink-0">
       <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
 
-      <div className={`flex-1 flex ${isDashboard ? "justify-center" : "justify-center"} ${actions ? "ml-0" : ""}`}>
-        <DateFilter />
-      </div>
+      {!isBudgetDetail && (
+        <div className={`flex-1 flex ${isDashboard ? "justify-center" : "justify-center"} ${actions ? "ml-0" : ""}`}>
+          <DateFilter />
+        </div>
+      )}
 
       {actions && <div className="shrink-0">{actions}</div>}
     </header>

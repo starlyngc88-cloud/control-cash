@@ -30,6 +30,7 @@ export const expenseSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
   budget_category_id: z.string().uuid().nullable().optional(),
   expense_category_id: z.string().uuid().nullable().optional(),
+  saving_id: z.string().uuid().nullable().optional(),
 })
 
 export const budgetTemplateSchema = z.object({
@@ -42,6 +43,7 @@ export const budgetCategorySchema = z.object({
   name: z.string().trim().min(1).max(MAX_STR),
   budgeted: z.number().min(0, "El valor presupuestado no puede ser negativo").finite(),
   parent_id: z.string().uuid().nullable().optional(),
+  is_paid: z.boolean().optional(),
 })
 
 export const monthlyBudgetSchema = z.object({

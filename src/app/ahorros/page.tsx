@@ -25,10 +25,11 @@ import {
   deleteSavingCategory,
 } from "@/lib/db"
 import type { Saving, SavingMovement, SavingCategory } from "@/types"
-import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search } from "lucide-react"
+import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search, TrendingDown } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
+import { useRouter } from "next/navigation"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function AhorrosPage() {
@@ -50,6 +51,7 @@ export default function AhorrosPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.ahorros
+  const router = useRouter()
 
   const [search, setSearch] = useState("")
 
@@ -522,6 +524,9 @@ export default function AhorrosPage() {
                         <div className="flex items-center gap-0.5">
                           <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.addMoney} onClick={() => openNewMovement(s.id)}>
                             <ArrowDownCircle className="size-3" />
+                          </button>
+                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" title={dict.spendFromHuchaTitle} onClick={() => router.push(`/gastos?hucha=${s.id}`)}>
+                            <TrendingDown className="size-3" />
                           </button>
                           <button className="text-slate-400 hover:text-amber-600 transition-colors p-0.5" title={dict.withdrawMoney} onClick={() => { setMovementSavingId(s.id); setMovType("withdrawal"); setMovAmount(""); setMovNotes(""); setMovDate(new Date().toISOString().split("T")[0]); setOpenMovement(true) }}>
                             <ArrowUpCircle className="size-3" />
