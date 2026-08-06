@@ -113,10 +113,10 @@ function GastosPageInner() {
     setOpen(true)
   }, [])
 
-  const openNewCat = useCallback((selectAfter = false) => {
+  const openNewCat = useCallback((selectAfter = false, tab?: "categoria" | "disponible" | "hucha") => {
     setEditingCat(null)
     setCatName("")
-    setCatTab(view)
+    setCatTab(tab ?? view)
     setCatSelectionPending(selectAfter)
     setOpenCat(true)
   }, [view])
@@ -320,9 +320,17 @@ function GastosPageInner() {
 
   const huchaItems = useMemo(() => filtered.filter((e) => !!e.saving_id), [filtered])
 
-  const grouped = useMemo(() => buildGrouped("categoria", expenseCategories, filtered), [filtered, expenseCategories])
+  const categoriaItems = useMemo(() => filtered.filter((e) => !!e.budget_category_id), [filtered])
+
+  const grouped = useMemo(() => buildGrouped("categoria", expenseCategories, categoriaItems), [categoriaItems, expenseCategories])
   const groupedDisponible = useMemo(() => buildGrouped("disponible", expenseCategories, disponibleItems), [disponibleItems, expenseCategories])
   const groupedHucha = useMemo(() => buildGrouped("hucha", expenseCategories, huchaItems), [huchaItems, expenseCategories])
+
+  const formTab: "categoria" | "disponible" | "hucha" = savingId ? "hucha" : assumeAvailable ? "disponible" : "categoria"
+  const formCategories = useMemo(
+    () => expenseCategories.filter((c) => (c.tab === "disponible" || c.tab === "hucha") ? c.tab === formTab : formTab === "categoria"),
+    [expenseCategories, formTab]
+  )
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
@@ -502,11 +510,11 @@ function GastosPageInner() {
                       className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
                     >
                       <option value="">Sin categoría</option>
-                      {expenseCategories.map((cat) => (
+                      {formCategories.map((cat) => (
                         <option key={cat.id} value={cat.id}>{cat.name}</option>
                       ))}
                     </select>
-                    <button type="button" onClick={() => openNewCat(true)} className="size-9 shrink-0 rounded-lg border border-input bg-white flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
+                    <button type="button" onClick={() => openNewCat(true, formTab)} className="size-9 shrink-0 rounded-lg border border-input bg-white flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-300 transition-colors">
                       <Plus className="size-4" />
                     </button>
                   </div>
@@ -638,7 +646,7 @@ function GastosPageInner() {
               newLabel={g.newGasto}
               renderRow={renderExpenseRow}
               fmt={fmt}
-              total={total}
+              total={categoriaItems.reduce((s, e) => s + Number(e.amount), 0)}
             />
           )}
         </>
