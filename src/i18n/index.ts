@@ -224,12 +224,19 @@ export interface Dictionary {
     deleteConfirm: string
     addMoney: string
     withdrawMoney: string
-    spendFromHucha: string
-    spendFromHuchaTitle: string
     movementTitle: string
     movementType: string
     ingreso: string
     retirada: string
+    persona: string
+    personaPlaceholder: string
+    origen: string
+    origenRubro: string
+    origenDisponible: string
+    rubro: string
+    rubroPlaceholder: string
+    categoriaGasto: string
+    categoriaGastoPlaceholder: string
     monto: string
     montoPlaceholder: string
     notas: string

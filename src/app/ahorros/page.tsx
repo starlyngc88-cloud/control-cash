@@ -23,13 +23,17 @@ import {
   createSavingCategory,
   updateSavingCategory,
   deleteSavingCategory,
+  getPeople,
+  getExpenseCategories,
+  getBudgetCategoriesForMonth,
+  createExpense,
 } from "@/lib/db"
-import type { Saving, SavingMovement, SavingCategory } from "@/types"
-import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search, TrendingDown } from "lucide-react"
+import type { Saving, SavingMovement, SavingCategory, Person, ExpenseCategory, BudgetCategory, BudgetTemplate } from "@/types"
+import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
-import { useRouter } from "next/navigation"
+import { useMonthFilter } from "@/components/MonthFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function AhorrosPage() {
@@ -51,7 +55,10 @@ export default function AhorrosPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.ahorros
-  const router = useRouter()
+
+  const { months } = useMonthFilter()
+  const sorted = [...months].sort()
+  const activeMonth = sorted[0] ?? ""
 
   const [search, setSearch] = useState("")
 
@@ -68,6 +75,14 @@ export default function AhorrosPage() {
   const [movAmount, setMovAmount] = useState("")
   const [movNotes, setMovNotes] = useState("")
   const [movDate, setMovDate] = useState(new Date().toISOString().split("T")[0])
+  const [movPersonId, setMovPersonId] = useState("")
+  const [movOrigin, setMovOrigin] = useState<"rubro" | "disponible">("disponible")
+  const [movBudgetCategoryId, setMovBudgetCategoryId] = useState("")
+  const [movExpenseCategoryId, setMovExpenseCategoryId] = useState("")
+
+  const [people, setPeople] = useState<Person[]>([])
+  const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<SavingCategory | null>(null)
@@ -131,16 +146,26 @@ export default function AhorrosPage() {
 
   const load = useCallback(async () => {
     try {
-      const [s, d, cats] = await Promise.all([getSavings(), getSavingsDashboard(), getSavingCategories()])
+      const [s, d, cats, p, bCats, eCats] = await Promise.all([
+        getSavings(),
+        getSavingsDashboard(),
+        getSavingCategories(),
+        getPeople(),
+        activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([]),
+        getExpenseCategories(),
+      ])
       setSavings(s)
       setDashboard(d)
       setCategories(cats)
+      setPeople(p)
+      setBudgetCategories(bCats)
+      setExpenseCategories(eCats)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [activeMonth])
 
   useEffect(() => { void (async () => { await load() })() }, [load])
 
@@ -207,27 +232,55 @@ export default function AhorrosPage() {
     }
   }
 
-  const openNewMovement = (savingId: string) => {
+  const openNewMovement = (savingId: string, type: "income" | "withdrawal" = "income") => {
     setMovementSavingId(savingId)
-    setMovType("income")
+    setMovType(type)
     setMovAmount("")
     setMovNotes("")
     setMovDate(new Date().toISOString().split("T")[0])
+    setMovPersonId("")
+    setMovOrigin("disponible")
+    setMovBudgetCategoryId("")
+    setMovExpenseCategoryId("")
     setOpenMovement(true)
   }
 
   const handleMovementSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!movementSavingId || !movAmount) return
+    if (!movPersonId) return
+    if (movType === "income" && movOrigin === "rubro" && !movBudgetCategoryId) return
     setSubmitting(true)
     try {
+      const amount = parseFloat(movAmount)
       await createSavingMovement({
         saving_id: movementSavingId,
         type: movType,
-        amount: parseFloat(movAmount),
+        amount,
         notes: movNotes,
         movement_date: movDate,
       })
+      if (movType === "income") {
+        await createExpense({
+          person_id: movPersonId,
+          amount,
+          description: movNotes,
+          date: movDate,
+          expense_category_id: null,
+          budget_category_id: movOrigin === "rubro" ? movBudgetCategoryId : null,
+          saving_id: null,
+        })
+      } else {
+        await createExpense({
+          person_id: movPersonId,
+          amount,
+          description: movNotes,
+          date: movDate,
+          expense_category_id: movExpenseCategoryId || null,
+          budget_category_id: null,
+          saving_id: movementSavingId,
+        })
+      }
       setOpenMovement(false)
       setMovementSavingId(null)
       setSuccessMsg(true)
@@ -522,13 +575,10 @@ export default function AhorrosPage() {
                       <div className="flex items-center gap-3 shrink-0 ml-3">
                         <span className="text-xs font-semibold text-emerald-600 tabular-nums">{fmt(Number(s.current_amount))}</span>
                         <div className="flex items-center gap-0.5">
-                          <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.addMoney} onClick={() => openNewMovement(s.id)}>
+                          <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.addMoney} onClick={() => openNewMovement(s.id, "income")}>
                             <ArrowDownCircle className="size-3" />
                           </button>
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" title={dict.spendFromHuchaTitle} onClick={() => router.push(`/gastos?hucha=${s.id}`)}>
-                            <TrendingDown className="size-3" />
-                          </button>
-                          <button className="text-slate-400 hover:text-amber-600 transition-colors p-0.5" title={dict.withdrawMoney} onClick={() => { setMovementSavingId(s.id); setMovType("withdrawal"); setMovAmount(""); setMovNotes(""); setMovDate(new Date().toISOString().split("T")[0]); setOpenMovement(true) }}>
+                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" title={dict.withdrawMoney} onClick={() => openNewMovement(s.id, "withdrawal")}>
                             <ArrowUpCircle className="size-3" />
                           </button>
                           <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEditSaving(s)}>
@@ -563,6 +613,21 @@ export default function AhorrosPage() {
           <form onSubmit={handleMovementSubmit} className="space-y-5">
             <div className="bg-slate-50 rounded-lg p-4 space-y-4">
               <div className="space-y-1.5">
+                <Label htmlFor="movPerson" className="text-sm font-medium text-slate-700">{dict.persona}</Label>
+                <select
+                  id="movPerson"
+                  value={movPersonId}
+                  onChange={(e) => setMovPersonId(e.target.value)}
+                  required
+                  className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                >
+                  <option value="">{dict.personaPlaceholder}</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
                 <Label className="text-sm font-medium text-slate-700">{dict.movementType}</Label>
                 <div className="flex gap-2">
                   <Button
@@ -585,6 +650,58 @@ export default function AhorrosPage() {
                   </Button>
                 </div>
               </div>
+              {movType === "income" && (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">{dict.origen}</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={movOrigin === "disponible" ? "default" : "outline"}
+                      className="flex-1 text-xs"
+                      onClick={() => { setMovOrigin("disponible"); setMovBudgetCategoryId("") }}
+                    >
+                      {dict.origenDisponible}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={movOrigin === "rubro" ? "default" : "outline"}
+                      className="flex-1 text-xs"
+                      onClick={() => setMovOrigin("rubro")}
+                    >
+                      {dict.origenRubro}
+                    </Button>
+                  </div>
+                  {movOrigin === "rubro" && (
+                    <select
+                      value={movBudgetCategoryId}
+                      onChange={(e) => setMovBudgetCategoryId(e.target.value)}
+                      required
+                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">{dict.rubroPlaceholder}</option>
+                      {budgetCategories.map((bc) => (
+                        <option key={bc.id} value={bc.id}>{bc.name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+              {movType === "withdrawal" && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="movExpCat" className="text-sm font-medium text-slate-700">{dict.categoriaGasto}</Label>
+                  <select
+                    id="movExpCat"
+                    value={movExpenseCategoryId}
+                    onChange={(e) => setMovExpenseCategoryId(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                  >
+                    <option value="">{dict.categoriaGastoPlaceholder}</option>
+                    {expenseCategories.filter((c) => c.tab === "hucha").map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label htmlFor="movAmount" className="text-sm font-medium text-slate-700">{dict.monto}</Label>
                 <Input id="movAmount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={movAmount} onChange={(e) => setMovAmount(e.target.value)} required />
