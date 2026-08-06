@@ -24,11 +24,11 @@ import {
   updateSavingCategory,
   deleteSavingCategory,
   getPeople,
-  getExpenseCategories,
   getBudgetCategoriesForMonth,
   createExpense,
+  createIncome,
 } from "@/lib/db"
-import type { Saving, SavingMovement, SavingCategory, Person, ExpenseCategory, BudgetCategory, BudgetTemplate } from "@/types"
+import type { Saving, SavingMovement, SavingCategory, Person, BudgetCategory, BudgetTemplate } from "@/types"
 import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
@@ -77,12 +77,11 @@ export default function AhorrosPage() {
   const [movDate, setMovDate] = useState(new Date().toISOString().split("T")[0])
   const [movPersonId, setMovPersonId] = useState("")
   const [movOrigin, setMovOrigin] = useState<"rubro" | "disponible">("disponible")
+  const [movDestination, setMovDestination] = useState<"rubro" | "disponible">("disponible")
   const [movBudgetCategoryId, setMovBudgetCategoryId] = useState("")
-  const [movExpenseCategoryId, setMovExpenseCategoryId] = useState("")
 
   const [people, setPeople] = useState<Person[]>([])
   const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
-  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<SavingCategory | null>(null)
@@ -146,20 +145,18 @@ export default function AhorrosPage() {
 
   const load = useCallback(async () => {
     try {
-      const [s, d, cats, p, bCats, eCats] = await Promise.all([
+      const [s, d, cats, p, bCats] = await Promise.all([
         getSavings(),
         getSavingsDashboard(),
         getSavingCategories(),
         getPeople(),
         activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([]),
-        getExpenseCategories(),
       ])
       setSavings(s)
       setDashboard(d)
       setCategories(cats)
       setPeople(p)
       setBudgetCategories(bCats)
-      setExpenseCategories(eCats)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -240,8 +237,8 @@ export default function AhorrosPage() {
     setMovDate(new Date().toISOString().split("T")[0])
     setMovPersonId("")
     setMovOrigin("disponible")
+    setMovDestination("disponible")
     setMovBudgetCategoryId("")
-    setMovExpenseCategoryId("")
     setOpenMovement(true)
   }
 
@@ -249,7 +246,7 @@ export default function AhorrosPage() {
     e.preventDefault()
     if (!movementSavingId || !movAmount) return
     if (!movPersonId) return
-    if (movType === "income" && movOrigin === "rubro" && !movBudgetCategoryId) return
+    if ((movType === "income" && movOrigin === "rubro" && !movBudgetCategoryId) || (movType === "withdrawal" && movDestination === "rubro" && !movBudgetCategoryId)) return
     setSubmitting(true)
     try {
       const amount = parseFloat(movAmount)
@@ -270,15 +267,30 @@ export default function AhorrosPage() {
           budget_category_id: movOrigin === "rubro" ? movBudgetCategoryId : null,
           saving_id: null,
         })
-      } else {
+      } else if (movDestination === "rubro") {
         await createExpense({
           person_id: movPersonId,
           amount,
           description: movNotes,
           date: movDate,
-          expense_category_id: movExpenseCategoryId || null,
-          budget_category_id: null,
+          expense_category_id: null,
+          budget_category_id: movBudgetCategoryId,
           saving_id: movementSavingId,
+        })
+      } else {
+        await createIncome({
+          person_id: movPersonId,
+          amount,
+          description: movNotes,
+          date: movDate,
+          category_id: null,
+        })
+        await createSavingMovement({
+          saving_id: movementSavingId,
+          type: "withdrawal",
+          amount,
+          notes: movNotes,
+          movement_date: movDate,
         })
       }
       setOpenMovement(false)
@@ -688,18 +700,38 @@ export default function AhorrosPage() {
               )}
               {movType === "withdrawal" && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="movExpCat" className="text-sm font-medium text-slate-700">{dict.categoriaGasto}</Label>
-                  <select
-                    id="movExpCat"
-                    value={movExpenseCategoryId}
-                    onChange={(e) => setMovExpenseCategoryId(e.target.value)}
-                    className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
-                  >
-                    <option value="">{dict.categoriaGastoPlaceholder}</option>
-                    {expenseCategories.filter((c) => c.tab === "hucha").map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                  <Label className="text-sm font-medium text-slate-700">{dict.destino}</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={movDestination === "disponible" ? "default" : "outline"}
+                      className="flex-1 text-xs"
+                      onClick={() => { setMovDestination("disponible"); setMovBudgetCategoryId("") }}
+                    >
+                      {dict.origenDisponible}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={movDestination === "rubro" ? "default" : "outline"}
+                      className="flex-1 text-xs"
+                      onClick={() => setMovDestination("rubro")}
+                    >
+                      {dict.origenRubro}
+                    </Button>
+                  </div>
+                  {movDestination === "rubro" && (
+                    <select
+                      value={movBudgetCategoryId}
+                      onChange={(e) => setMovBudgetCategoryId(e.target.value)}
+                      required
+                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">{dict.rubroPlaceholder}</option>
+                      {budgetCategories.map((bc) => (
+                        <option key={bc.id} value={bc.id}>{bc.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
               <div className="space-y-1.5">

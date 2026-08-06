@@ -233,10 +233,9 @@ export interface Dictionary {
     origen: string
     origenRubro: string
     origenDisponible: string
+    destino: string
     rubro: string
     rubroPlaceholder: string
-    categoriaGasto: string
-    categoriaGastoPlaceholder: string
     monto: string
     montoPlaceholder: string
     notas: string
