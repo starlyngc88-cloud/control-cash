@@ -162,16 +162,31 @@ export async function createExpense(input: { person_id: string; amount: number; 
       amount: parsed.amount,
       notes: parsed.description,
       movement_date: parsed.date,
+      expense_id: (data as Expense).id,
     })
   }
   return data as Expense
 }
 
+async function recalcSavingBalance(savingId: string) {
+  const { data, error } = await supabase.from("saving_movements").select("type, amount").eq("saving_id", savingId)
+  if (error) throw error
+  const balance = (data ?? []).reduce((sum, m) => sum + (m.type === "income" ? Number(m.amount) : -Number(m.amount)), 0)
+  const { error: updateError } = await supabase.from("savings").update({ current_amount: Math.max(0, balance) }).eq("id", savingId)
+  if (updateError) throw updateError
+}
+
 export async function deleteExpense(id: string) {
   const { data: prev } = await supabase.from("expenses").select("saving_id, amount, description").eq("id", id).single()
+  const { data: linked } = await supabase.from("saving_movements").select("saving_id").eq("expense_id", id)
   const { error } = await supabase.from("expenses").delete().eq("id", id)
   if (error) throw error
-  if (prev?.saving_id) {
+  if (linked && linked.length > 0) {
+    for (const m of linked) {
+      await supabase.from("saving_movements").delete().eq("expense_id", id)
+      await recalcSavingBalance(m.saving_id)
+    }
+  } else if (prev?.saving_id) {
     await createSavingMovement({
       saving_id: prev.saving_id,
       type: "income",
@@ -518,7 +533,7 @@ export async function getSavingMovements(savingId: string) {
   return data as SavingMovement[]
 }
 
-export async function createSavingMovement(input: { saving_id: string; type: "income" | "withdrawal"; amount: number; notes: string; movement_date: string }) {
+export async function createSavingMovement(input: { saving_id: string; type: "income" | "withdrawal"; amount: number; notes: string; movement_date: string; expense_id?: string | null }) {
   const parsed = savingMovementSchema.parse(sanitizeInput(input))
   const { data: mov, error: movError } = await supabase.from("saving_movements").insert(parsed).select().single()
   if (movError) throw movError

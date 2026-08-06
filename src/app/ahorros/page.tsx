@@ -249,14 +249,7 @@ export default function AhorrosPage() {
     try {
       const amount = parseFloat(movAmount)
       if (movType === "income") {
-        await createSavingMovement({
-          saving_id: movementSavingId,
-          type: "income",
-          amount,
-          notes: movNotes,
-          movement_date: movDate,
-        })
-        await createExpense({
+        const expense = await createExpense({
           person_id: movPersonId,
           amount,
           description: movNotes,
@@ -264,6 +257,14 @@ export default function AhorrosPage() {
           expense_category_id: null,
           budget_category_id: movOrigin === "rubro" ? movBudgetCategoryId : null,
           saving_id: null,
+        })
+        await createSavingMovement({
+          saving_id: movementSavingId,
+          type: "income",
+          amount,
+          notes: movNotes,
+          movement_date: movDate,
+          expense_id: expense.id,
         })
       } else {
         await createIncome({

@@ -68,6 +68,7 @@ export const savingMovementSchema = z.object({
   amount: z.number().positive("El importe debe ser positivo").finite(),
   notes: z.string().trim().max(MAX_DESC).default(""),
   movement_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
+  expense_id: z.string().uuid().nullable().optional(),
 })
 
 export const futureExpenseCategorySchema = z.object({

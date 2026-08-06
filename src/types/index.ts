@@ -104,6 +104,7 @@ export interface SavingMovement {
   amount: number
   notes: string
   movement_date: string
+  expense_id?: string | null
   created_at: string
 }
 
