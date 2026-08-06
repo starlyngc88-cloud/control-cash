@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -22,6 +22,14 @@ import { useSearchParams } from "next/navigation"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function GastosPage() {
+  return (
+    <Suspense fallback={<p className="text-muted-foreground">Cargando...</p>}>
+      <GastosPageInner />
+    </Suspense>
+  )
+}
+
+function GastosPageInner() {
   const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [open, setOpen] = useState(false)
