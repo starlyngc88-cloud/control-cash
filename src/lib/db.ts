@@ -155,18 +155,59 @@ export async function createExpense(input: { person_id: string; amount: number; 
   const parsed = expenseSchema.parse(sanitizeInput(input))
   const { data, error } = await supabase.from("expenses").insert(parsed).select().single()
   if (error) throw error
+  if (parsed.saving_id) {
+    await createSavingMovement({
+      saving_id: parsed.saving_id,
+      type: "withdrawal",
+      amount: parsed.amount,
+      notes: parsed.description,
+      movement_date: parsed.date,
+    })
+  }
   return data as Expense
 }
 
 export async function deleteExpense(id: string) {
+  const { data: prev } = await supabase.from("expenses").select("saving_id, amount, description").eq("id", id).single()
   const { error } = await supabase.from("expenses").delete().eq("id", id)
   if (error) throw error
+  if (prev?.saving_id) {
+    await createSavingMovement({
+      saving_id: prev.saving_id,
+      type: "income",
+      amount: Number(prev.amount),
+      notes: `Reversión de gasto ${prev.description ?? ""}`.trim(),
+      movement_date: new Date().toISOString().split("T")[0],
+    })
+  }
 }
 
 export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null; saving_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
+  const { data: prev } = await supabase.from("expenses").select("saving_id, amount").eq("id", id).single()
   const { error } = await supabase.from("expenses").update(parsed).eq("id", id)
   if (error) throw error
+  const prevSaving = prev?.saving_id ?? null
+  const newSaving = parsed.saving_id ?? null
+  const prevAmount = Number(prev?.amount ?? 0)
+  if (prevSaving) {
+    await createSavingMovement({
+      saving_id: prevSaving,
+      type: "income",
+      amount: prevAmount,
+      notes: "Ajuste de gasto",
+      movement_date: new Date().toISOString().split("T")[0],
+    })
+  }
+  if (newSaving) {
+    await createSavingMovement({
+      saving_id: newSaving,
+      type: "withdrawal",
+      amount: parsed.amount,
+      notes: parsed.description,
+      movement_date: parsed.date,
+    })
+  }
 }
 
 /* ---- Dashboard totals ---- */

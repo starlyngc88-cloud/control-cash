@@ -253,14 +253,14 @@ export default function AhorrosPage() {
     setSubmitting(true)
     try {
       const amount = parseFloat(movAmount)
-      await createSavingMovement({
-        saving_id: movementSavingId,
-        type: movType,
-        amount,
-        notes: movNotes,
-        movement_date: movDate,
-      })
       if (movType === "income") {
+        await createSavingMovement({
+          saving_id: movementSavingId,
+          type: "income",
+          amount,
+          notes: movNotes,
+          movement_date: movDate,
+        })
         await createExpense({
           person_id: movPersonId,
           amount,
