@@ -21,6 +21,7 @@ export const incomeSchema = z.object({
 
 export const expenseCategorySchema = z.object({
   name: z.string().trim().min(1).max(MAX_STR),
+  tab: z.enum(["categoria", "disponible", "hucha"]).default("categoria"),
 })
 
 export const expenseSchema = z.object({

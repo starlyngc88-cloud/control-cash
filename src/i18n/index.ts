@@ -49,6 +49,7 @@ export interface Dictionary {
     rubroRequerido: string
     hucha: string
     sinHucha: string
+    catPerteneceA: string
     viewCategoria: string
     viewDisponible: string
     viewHucha: string

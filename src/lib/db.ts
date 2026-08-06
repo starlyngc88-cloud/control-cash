@@ -1,5 +1,5 @@
 import { supabase } from "./supabase"
-import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
+import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, ExpenseCategoryTab, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
 import { personSchema, incomeSchema, expenseSchema, expenseCategorySchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, incomeCategorySchema } from "./validation"
 import { sanitizeInput } from "./sanitize"
 
@@ -100,14 +100,14 @@ export async function getExpenseCategories() {
   return data as ExpenseCategory[]
 }
 
-export async function createExpenseCategory(input: { name: string }) {
+export async function createExpenseCategory(input: { name: string; tab?: ExpenseCategoryTab | null }) {
   const parsed = expenseCategorySchema.parse(sanitizeInput(input))
   const { data, error } = await supabase.from("expense_categories").insert(parsed).select().single()
   if (error) throw error
   return data as ExpenseCategory
 }
 
-export async function updateExpenseCategory(id: string, input: { name: string }) {
+export async function updateExpenseCategory(id: string, input: { name: string; tab?: ExpenseCategoryTab | null }) {
   const parsed = expenseCategorySchema.parse(sanitizeInput(input))
   const { error } = await supabase.from("expense_categories").update(parsed).eq("id", id)
   if (error) throw error
