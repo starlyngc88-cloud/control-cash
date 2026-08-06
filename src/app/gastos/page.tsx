@@ -242,7 +242,15 @@ function GastosPageInner() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm(g.deleteConfirm)) return
+    // Obtener información del gasto para el diálogo
+    const expense = expenses.find((e) => e.id === id)
+    const hasSavingMovement = expense?.saving_id ? true : false
+
+    const confirmMsg = hasSavingMovement
+      ? `${g.deleteConfirm}\nEliminará también el/los movimiento(s) de hucha asociado(s) con este gasto.`
+      : g.deleteConfirm
+
+    if (!confirm(confirmMsg)) return
     setSubmitting(true)
     try {
       await deleteExpense(id)
