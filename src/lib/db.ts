@@ -278,6 +278,76 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
   return months
 }
 
+export type CashflowGranularity = "day" | "week" | "month" | "year"
+
+export type CashflowPoint = { label: string; key: string; ingresos: number; gastos: number }
+
+const pad = (n: number) => String(n).padStart(2, "0")
+const toYmd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+function bucketKey(date: string, granularity: CashflowGranularity): string {
+  const d = new Date(date + "T00:00:00")
+  const y = d.getFullYear()
+  const m = pad(d.getMonth() + 1)
+  if (granularity === "year") return String(y)
+  if (granularity === "month") return `${y}-${m}`
+  if (granularity === "week") {
+    const dow = (d.getDay() + 6) % 7
+    const start = new Date(d)
+    start.setDate(d.getDate() - dow)
+    return toYmd(start)
+  }
+  return date
+}
+
+function labelFor(key: string, granularity: CashflowGranularity): string {
+  if (granularity === "year") return key
+  if (granularity === "month") {
+    return new Date(key + "-01T00:00:00").toLocaleDateString("es-CO", { month: "short", year: "numeric" }).replace(".", "")
+  }
+  return new Date(key + "T00:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" }).replace(".", "")
+}
+
+function nextBucket(cursor: Date, granularity: CashflowGranularity): Date {
+  const next = new Date(cursor)
+  if (granularity === "day") next.setDate(next.getDate() + 1)
+  else if (granularity === "week") next.setDate(next.getDate() + 7)
+  else if (granularity === "month") next.setMonth(next.getMonth() + 1)
+  else next.setFullYear(next.getFullYear() + 1)
+  return next
+}
+
+export async function getCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<CashflowPoint[]> {
+  const [incomeRes, expenseRes] = await Promise.all([
+    supabase.from("income").select("date, amount").gte("date", startDate).lte("date", endDate),
+    supabase.from("expenses").select("date, amount").gte("date", startDate).lte("date", endDate),
+  ])
+  const byKey = new Map<string, { key: string; ingresos: number; gastos: number }>()
+  for (const i of incomeRes.data ?? []) {
+    const key = bucketKey(i.date, granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    cur.ingresos += Number(i.amount)
+    byKey.set(key, cur)
+  }
+  for (const e of expenseRes.data ?? []) {
+    const key = bucketKey(e.date, granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    cur.gastos += Number(e.amount)
+    byKey.set(key, cur)
+  }
+  const points: CashflowPoint[] = []
+  let cursor = new Date(startDate + "T00:00:00")
+  const end = new Date(endDate + "T00:00:00")
+  const guard = 0
+  while (cursor <= end && guard < 10000) {
+    const key = bucketKey(toYmd(cursor), granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    points.push({ key, label: labelFor(key, granularity), ingresos: cur.ingresos, gastos: cur.gastos })
+    cursor = nextBucket(cursor, granularity)
+  }
+  return points
+}
+
 /* ---- Budget Templates ---- */
 
 export async function getBudgetTemplates() {

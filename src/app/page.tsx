@@ -2,10 +2,10 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { getDashboardData, getMonthlyBudgets, getYearlyData } from "@/lib/db"
-import type { YearlyMonth } from "@/lib/db"
+import { getDashboardData, getMonthlyBudgets, getCashflowData } from "@/lib/db"
+import type { CashflowGranularity, CashflowPoint } from "@/lib/db"
 import type { Income, Expense, Person } from "@/types"
-import { PiggyBank, Wallet, TrendingDown, TrendingUp, MoreHorizontal, ClipboardList } from "lucide-react"
+import { PiggyBank, Wallet, TrendingDown, TrendingUp, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { useMonthFilter } from "@/components/MonthFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -37,25 +37,39 @@ type DashboardData = {
   recentExpenses: RecentExpense[]
 }
 
+const pad2 = (n: number) => String(n).padStart(2, "0")
+const toYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+const todayStr = () => toYmd(new Date())
+
+function defaultRange(g: CashflowGranularity): { start: string; end: string } {
+  const now = new Date()
+  if (g === "month") return { start: `${now.getFullYear()}-01-01`, end: toYmd(new Date(now.getFullYear(), 11, 31)) }
+  if (g === "year") return { start: `${now.getFullYear() - 4}-01-01`, end: toYmd(new Date(now.getFullYear(), 11, 31)) }
+  if (g === "week") {
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 90)
+    return { start: `${now.getFullYear()}-01-01`, end: toYmd(end) }
+  }
+  // day: el mes actual
+  return { start: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`, end: toYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }
+}
+
 export default function DashboardPage() {
   const { months } = useMonthFilter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [monthlyBudgetId, setMonthlyBudgetId] = useState<string | null>(null)
-  const [yearlyData, setYearlyData] = useState<YearlyMonth[]>([])
+  const [cashflowData, setCashflowData] = useState<CashflowPoint[]>([])
+  const [granularity, setGranularity] = useState<CashflowGranularity>("day")
+  const [startDate, setStartDate] = useState(() => todayStr())
+  const [endDate, setEndDate] = useState(() => todayStr())
   const [loading, setLoading] = useState(true)
   const { t, fmt } = useLanguage()
   const d = t.dashboard
-  const filteredYearly = useMemo(() => {
-    if (!months.length) return yearlyData
-    return yearlyData.filter(m => months.includes(m.month))
-  }, [yearlyData, months])
 
   const load = useCallback(async (m: string[]) => {
     setLoading(true)
     try {
-      const [res, budgets, yearly] = await Promise.all([getDashboardData(m), getMonthlyBudgets(), getYearlyData(new Date().getFullYear())])
+      const [res, budgets] = await Promise.all([getDashboardData(m), getMonthlyBudgets()])
       setData(res)
-      setYearlyData(yearly)
       if (m.length === 1) {
         const firstDay = m[0] + "-01"
         const mb = budgets.find((b) => b.month === firstDay)
@@ -72,16 +86,31 @@ export default function DashboardPage() {
 
   useEffect(() => { void (async () => { await load(months) })() }, [months, load])
 
+  const applyCashflowRange = useCallback(async (g: CashflowGranularity, start: string, end: string) => {
+    setGranularity(g)
+    setStartDate(start)
+    setEndDate(end)
+    setCashflowData(await getCashflowData(start, end, g).catch(() => []))
+  }, [])
+
+  const changeGranularity = useCallback((g: CashflowGranularity) => {
+    const r = defaultRange(g)
+    void applyCashflowRange(g, r.start, r.end)
+  }, [applyCashflowRange])
+
+  useEffect(() => {
+    const r = defaultRange("day")
+    getCashflowData(r.start, r.end, "day").then(setCashflowData).catch(() => setCashflowData([]))
+  }, [])
+
   const cashflowChartData = useMemo(() => {
-    if (!filteredYearly.length) return null
+    if (!cashflowData.length) return null
     return {
-      labels: filteredYearly.map((m) =>
-        new Date(m.month + "-01").toLocaleDateString("es-CO", { month: "short" }).replace(".", "")
-      ),
+      labels: cashflowData.map((p) => p.label),
       datasets: [
         {
           label: "Ingresos",
-          data: filteredYearly.map((m) => m.ingresos),
+          data: cashflowData.map((p) => p.ingresos),
           borderColor: "#10b981",
           backgroundColor: "rgba(16, 185, 129, 0.1)",
           borderWidth: 2,
@@ -91,7 +120,7 @@ export default function DashboardPage() {
         },
         {
           label: "Gastos",
-          data: filteredYearly.map((m) => m.gastos),
+          data: cashflowData.map((p) => p.gastos),
           borderColor: "#f43f5e",
           backgroundColor: "transparent",
           borderWidth: 2,
@@ -101,7 +130,7 @@ export default function DashboardPage() {
         },
       ],
     }
-  }, [filteredYearly])
+  }, [cashflowData])
 
   const cashflowOptions = {
     responsive: true,
@@ -201,11 +230,42 @@ export default function DashboardPage() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm font-semibold text-slate-800">Flujo de Caja Mensual</h3>
-            <button className="text-slate-400 hover:text-indigo-600 transition-colors">
-              <MoreHorizontal className="size-4" />
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">Flujo de Caja</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
+                {(["day", "week", "month", "year"] as CashflowGranularity[]).map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => changeGranularity(g)}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${granularity === g ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
+                  >
+                    {g === "day" ? "Día" : g === "week" ? "Semana" : g === "month" ? "Mes" : "Año"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                />
+                <span className="text-xs text-slate-400">a</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+                />
+                <button
+                  onClick={() => void applyCashflowRange(granularity, startDate, endDate)}
+                  className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
           </div>
           <div className="relative h-64">
             {cashflowChartData ? (
