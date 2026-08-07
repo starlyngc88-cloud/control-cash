@@ -17,6 +17,7 @@ export type IncomeWithRelations = Income & {
 
 export type FutureExpenseWithRelations = FutureExpense & {
   future_expense_categories: Pick<FutureExpenseCategory, "name"> | null
+  savings: Pick<Saving, "id" | "name" | "current_amount"> | null
 }
 
 export type CommitmentWithRelations = Commitment & {
@@ -279,20 +280,68 @@ export async function deleteFutureExpenseCategory(id: string) {
 }
 
 export async function getFutureExpenses(): Promise<FutureExpenseWithRelations[]> {
-  const { data } = await supabase.from("future_expenses").select("*, future_expense_categories(name)").order("expected_date")
+  const { data } = await supabase.from("future_expenses").select("*, future_expense_categories(name), savings(id, name, current_amount)").order("expected_date")
   return (data ?? []) as FutureExpenseWithRelations[]
 }
 export async function createFutureExpense(data: Partial<FutureExpense>) {
-  return supabase.from("future_expenses").insert(data).select().single()
+  const result = await supabase.from("future_expenses").insert({ ...data, saving_id: data.saving_id ?? null }).select("*, future_expense_categories(name), savings(id, name, current_amount)").single()
+  if (result.error) throw result.error
+  return result.data as FutureExpenseWithRelations
 }
 export async function updateFutureExpense(id: string, data: Partial<FutureExpense>) {
-  return supabase.from("future_expenses").update(data).eq("id", id)
+  const { data: existing } = await supabase.from("future_expenses").select("saving_id").eq("id", id).single()
+  const result = await supabase.from("future_expenses").update(data).eq("id", id)
+  if (result.error) throw result.error
+  if (existing?.saving_id && data.title) {
+    await supabase.from("savings").update({ name: data.title, description: data.description || "Gasto futuro" }).eq("id", existing.saving_id)
+  }
+  return result
 }
 export async function deleteFutureExpense(id: string) {
-  return supabase.from("future_expenses").delete().eq("id", id)
+  const { data: existing } = await supabase.from("future_expenses").select("saving_id").eq("id", id).single()
+  const result = await supabase.from("future_expenses").delete().eq("id", id)
+  if (result.error) throw result.error
+  if (existing?.saving_id) {
+    await supabase.from("saving_movements").delete().eq("saving_id", existing.saving_id)
+    await supabase.from("savings").delete().eq("id", existing.saving_id)
+  }
+  return result
 }
 export async function updateFutureExpenseStatus(id: string, status: "planned" | "completed" | "cancelled") {
   return supabase.from("future_expenses").update({ status }).eq("id", id)
+}
+export async function getFutureExpenseBySaving(savingId: string): Promise<FutureExpense | null> {
+  const { data } = await supabase.from("future_expenses").select("*, savings(id, name, current_amount)").eq("saving_id", savingId).maybeSingle()
+  return (data as FutureExpense | null) ?? null
+}
+export async function completeFutureExpense(id: string, personId: string): Promise<void> {
+  const { data: fe } = await supabase.from("future_expenses").select("*, savings(id, name, current_amount)").eq("id", id).single()
+  if (!fe?.saving_id) throw new Error("Este gasto futuro no tiene hucha vinculada")
+  const balance = Number((fe as FutureExpense & { savings: Pick<Saving, "current_amount"> | null }).savings?.current_amount ?? 0)
+  const target = Number(fe.expected_amount)
+  if (balance < target) throw new Error(`El objetivo aún no está completo (llevas ${balance.toFixed(2)} de ${target.toFixed(2)})`)
+  const today = new Date().toISOString().split("T")[0]
+  await createSavingMovement({
+    saving_id: fe.saving_id,
+    type: "withdrawal",
+    amount: balance,
+    notes: `Objetivo completado: ${fe.title}`,
+    movement_date: today,
+  })
+  await createIncome({
+    person_id: personId,
+    amount: balance,
+    description: `Gasto futuro completado: ${fe.title}`,
+    date: today,
+    category_id: null,
+  })
+  const { error } = await supabase.from("future_expenses").update({ status: "completed" }).eq("id", id)
+  if (error) throw error
+}
+export async function completeFutureExpenseBySaving(savingId: string, personId: string): Promise<void> {
+  const fe = await getFutureExpenseBySaving(savingId)
+  if (!fe) throw new Error("No hay un gasto futuro vinculado a esta hucha")
+  await completeFutureExpense(fe.id, personId)
 }
 
 export async function getCommitments(): Promise<CommitmentWithRelations[]> {

@@ -29,8 +29,8 @@ const links = [
   { href: "/ingresos", key: "ingresos" as const },
   { href: "/gastos", key: "gastos" as const },
   { href: "/ahorros", key: "ahorros" as const },
-  { href: "/compromisos", key: "compromisos" as const },
   { href: "/gastos-futuros", key: "gastosFuturos" as const },
+  { href: "/compromisos", key: "compromisos" as const },
 ]
 
 export function Sidebar() {

@@ -94,6 +94,7 @@ export interface FutureExpense {
   expected_amount: number
   expected_date: string
   status: "planned" | "completed" | "cancelled"
+  saving_id?: string | null
   created_at: string
 }
 

@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus, type FutureExpenseWithRelations } from "@/services/api"
+import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus, completeFutureExpense, getPeople, getSavings, type FutureExpenseWithRelations, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { Plus, CalendarClock, Pencil, Trash2, Search, X, Circle, CheckCircle2, Ban, type LucideIcon } from "lucide-react-native"
-import type { FutureExpenseCategory } from "@/types/database"
+import type { FutureExpenseCategory, Person } from "@/types/database"
 
 const STATUS_ICONS: Record<string, LucideIcon> = { planned: Circle, completed: CheckCircle2, cancelled: Ban }
 const STATUS_COLORS: Record<string, string> = { planned: "#f59e0b", completed: "#059669", cancelled: "#94a3b8" }
@@ -16,6 +16,8 @@ export default function GastosFuturosScreen() {
   const router = useRouter()
   const [items, setItems] = useState<FutureExpenseWithRelations[]>([])
   const [categories, setCategories] = useState<FutureExpenseCategory[]>([])
+  const [people, setPeople] = useState<Person[]>([])
+  const [savings, setSavings] = useState<SavingWithRelations[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -24,6 +26,8 @@ export default function GastosFuturosScreen() {
   const [catModalOpen, setCatModalOpen] = useState(false)
   const [editing, setEditing] = useState<FutureExpenseWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [completeId, setCompleteId] = useState<string | null>(null)
+  const [completePersonId, setCompletePersonId] = useState("")
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -31,6 +35,7 @@ export default function GastosFuturosScreen() {
   const [expectedAmount, setExpectedAmount] = useState("")
   const [expectedDate, setExpectedDate] = useState(new Date().toISOString().split("T")[0])
   const [catName, setCatName] = useState("")
+  const [savingId, setSavingId] = useState("")
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +43,8 @@ export default function GastosFuturosScreen() {
       const [fe, cats] = await Promise.all([getFutureExpenses(), getFutureExpenseCategories()])
       setItems(fe)
       setCategories(cats)
+      getSavings().then((s) => setSavings(s)).catch(() => {})
+      getPeople().then((p) => setPeople(p)).catch(() => {})
     } catch (error) {
       console.error("[KellyCash][Mobile][GastosFuturos] load failed", error)
       setLoadError("No se pudieron cargar los gastos futuros desde Supabase.")
@@ -54,11 +61,11 @@ export default function GastosFuturosScreen() {
   const catNameMap = Object.fromEntries(categories.map((c: FutureExpenseCategory) => [c.id, c.name]))
 
   const openNew = () => {
-    setEditing(null); setTitle(""); setDescription(""); setCategoryId(""); setExpectedAmount(""); setExpectedDate(new Date().toISOString().split("T")[0]); setModalOpen(true)
+    setEditing(null); setTitle(""); setDescription(""); setCategoryId(""); setExpectedAmount(""); setExpectedDate(new Date().toISOString().split("T")[0]); setSavingId(""); setModalOpen(true)
   }
 
   const openEdit = (item: FutureExpenseWithRelations) => {
-    setEditing(item); setTitle(item.title); setDescription(item.description ?? ""); setCategoryId(item.category_id ?? ""); setExpectedAmount(String(item.expected_amount)); setExpectedDate(item.expected_date); setModalOpen(true)
+    setEditing(item); setTitle(item.title); setDescription(item.description ?? ""); setCategoryId(item.category_id ?? ""); setExpectedAmount(String(item.expected_amount)); setExpectedDate(item.expected_date); setSavingId(item.saving_id ?? ""); setModalOpen(true)
   }
 
   const handleSubmit = async () => {
@@ -66,7 +73,7 @@ export default function GastosFuturosScreen() {
     setSubmitting(true)
     try {
       const catName = categoryId ? catNameMap[categoryId] ?? "" : ""
-      const data = { title: title.trim(), description: description.trim(), category: catName, category_id: categoryId || null, expected_amount: parseFloat(expectedAmount), expected_date: expectedDate }
+      const data = { title: title.trim(), description: description.trim(), category: catName, category_id: categoryId || null, expected_amount: parseFloat(expectedAmount), expected_date: expectedDate, saving_id: savingId || null }
       if (editing) await updateFutureExpense(editing.id, data)
       else await createFutureExpense(data)
       setModalOpen(false); load()
@@ -82,10 +89,30 @@ export default function GastosFuturosScreen() {
   }
 
   const handleStatusChange = (id: string, status: "planned" | "completed" | "cancelled") => {
+    if (status === "completed") {
+      const item = items.find((i) => i.id === id)
+      if (!item?.saving_id) { Alert.alert("Error", "Este gasto futuro no tiene hucha vinculada."); return }
+      const balance = Number(item.savings?.current_amount ?? 0)
+      const target = Number(item.expected_amount)
+      if (balance < target) { Alert.alert("Objetivo incompleto", `El objetivo aún no está completo. Llevás ${formatCurrency(balance)} de ${formatCurrency(target)}.`); return }
+      setCompleteId(id); setCompletePersonId("")
+      return
+    }
     Alert.alert("Cambiar estado", `¿Marcar como "${STATUS_LABELS[status]}"?`, [
       { text: "Cancelar", style: "cancel" },
       { text: "OK", onPress: async () => { await updateFutureExpenseStatus(id, status); load() }},
     ])
+  }
+
+  const handleCompleteConfirm = async () => {
+    if (!completeId || !completePersonId) { Alert.alert("Error", "Seleccioná una persona."); return }
+    setSubmitting(true)
+    try {
+      await completeFutureExpense(completeId, completePersonId)
+      setCompleteId(null); setCompletePersonId(""); load()
+    } catch (error) {
+      Alert.alert("Error", error instanceof Error ? error.message : "No se pudo completar el objetivo.")
+    } finally { setSubmitting(false) }
   }
 
   const daysUntil = (dateStr: string) => {
@@ -162,7 +189,7 @@ export default function GastosFuturosScreen() {
         <View className="flex-row gap-3">
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total previsto</Text>
-            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
+            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.filter((i: FutureExpenseWithRelations) => i.status === "planned").reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
           </View>
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pendientes</Text>
@@ -199,6 +226,10 @@ export default function GastosFuturosScreen() {
               const StatusIcon = STATUS_ICONS[item.status] ?? Circle
               const statusColor = STATUS_COLORS[item.status] ?? "#94a3b8"
               const d = daysUntil(item.expected_date)
+              const linkedBalance = Number(item.savings?.current_amount ?? 0)
+              const target = Number(item.expected_amount)
+              const progress = target > 0 ? Math.min(linkedBalance / target, 1) : 0
+              const showProgress = Boolean(item.saving_id) && item.status === "planned"
               return (
                 <View key={item.id} className={`bg-white rounded-xl p-4 border border-slate-100 shadow-sm ${urgency.bg}`}>
                   <View className="flex-row items-start justify-between">
@@ -229,6 +260,17 @@ export default function GastosFuturosScreen() {
                       <><Text className="text-[10px] text-slate-300">·</Text><Text className="text-[10px] text-slate-400">{item.future_expense_categories.name}</Text></>
                     ) : null}
                   </View>
+                  {showProgress ? (
+                    <View className="mt-2">
+                      <View className="flex-row items-center justify-between mb-1">
+                        <Text className="text-[10px] text-slate-500">Hucha {formatCurrency(linkedBalance)}</Text>
+                        <Text className="text-[10px] text-slate-500">Meta {formatCurrency(target)}</Text>
+                      </View>
+                      <View className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                        <View className={`h-full rounded-full ${progress >= 1 ? "bg-emerald-500" : "bg-indigo-500"}`} style={{ width: `${progress * 100}%` }} />
+                      </View>
+                    </View>
+                  ) : null}
                 </View>
               )
             })}
@@ -282,6 +324,20 @@ export default function GastosFuturosScreen() {
                   <Text className="text-xs font-medium text-slate-600 mb-1">Fecha esperada</Text>
                   <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="YYYY-MM-DD" placeholderTextColor="#94a3b8" value={expectedDate} onChangeText={setExpectedDate} />
                 </View>
+                <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Hucha vinculada</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-1">
+                    <TouchableOpacity onPress={() => setSavingId("")} className={`mr-1.5 px-3 py-1.5 rounded-xl border ${!savingId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
+                      <Text className={`text-xs ${!savingId ? "text-white" : "text-slate-400"}`}>Sin hucha</Text>
+                    </TouchableOpacity>
+                    {savings.filter((s) => !s.saving_categories?.name || s.saving_categories.name !== "Gastos futuros").map((s) => (
+                      <TouchableOpacity key={s.id} onPress={() => setSavingId(s.id)} className={`mr-1.5 px-3 py-1.5 rounded-xl border ${savingId === s.id ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
+                        <Text className={`text-xs ${savingId === s.id ? "text-white" : "text-slate-600"}`}>{s.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <Text className="text-[10px] text-slate-400">Solo podés vincular huchas que ya creaste en la vista Hucha.</Text>
+                </View>
               </View>
             </ScrollView>
             <TouchableOpacity onPress={handleSubmit} disabled={submitting} className="h-11 rounded-xl bg-indigo-600 items-center justify-center mt-4">
@@ -302,6 +358,32 @@ export default function GastosFuturosScreen() {
             </TouchableOpacity>
           </View>
         </View>
+      </Modal>
+
+      {/* Complete Modal */}
+      <Modal visible={!!completeId} animationType="fade" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-center px-6">
+          <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xl">
+            <Text className="text-sm font-semibold text-slate-800 mb-1">Completar objetivo</Text>
+            <Text className="text-[11px] text-slate-500 mb-4">La hucha irá al disponible al confirmar.</Text>
+            <Text className="text-xs font-medium text-slate-600 mb-1">Persona (ingreso al disponible)</Text>
+            <View className="border border-slate-200 rounded-xl overflow-hidden mb-4">
+              {people.length === 0 ? (
+                <Text className="text-xs text-slate-400 px-3 py-3">Sin personas registradas.</Text>
+              ) : (
+                people.map((p) => (
+                  <TouchableOpacity key={p.id} onPress={() => setCompletePersonId(p.id)} className={`px-3 py-2.5 flex-row items-center justify-between ${completePersonId === p.id ? "bg-indigo-50" : ""}`}>
+                    <Text className={`text-sm ${completePersonId === p.id ? "text-indigo-700 font-semibold" : "text-slate-700"}`}>{p.name}</Text>
+                    {completePersonId === p.id ? <CheckCircle2 size={16} color="#4f46e5" /> : null}
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+            <TouchableOpacity onPress={handleCompleteConfirm} disabled={submitting || !completePersonId} className={`h-11 rounded-xl items-center justify-center ${submitting || !completePersonId ? "bg-slate-200" : "bg-emerald-600"}`}>
+              {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">Completar</Text>}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   )

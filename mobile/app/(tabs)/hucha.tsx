@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, countAllSavingMovements, type SavingWithRelations } from "@/services/api"
+import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, countAllSavingMovements, getFutureExpenses, getPeople, completeFutureExpenseBySaving, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Plus, PiggyBank, Pencil, Trash2, ArrowDownCircle, ArrowUpCircle, Search, X } from "lucide-react-native"
+import { Plus, PiggyBank, Pencil, Trash2, ArrowDownCircle, ArrowUpCircle, Search, X, CheckCircle2 } from "lucide-react-native"
+import type { FutureExpense, Person } from "@/types/database"
 
 export default function HuchaScreen() {
   const insets = useSafeAreaInsets()
@@ -18,6 +19,11 @@ export default function HuchaScreen() {
   const [movementSavingId, setMovementSavingId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [movementsCount, setMovementsCount] = useState(0)
+  const [futureExpenses, setFutureExpenses] = useState<FutureExpense[]>([])
+  const [people, setPeople] = useState<Person[]>([])
+  const [completeModalOpen, setCompleteModalOpen] = useState(false)
+  const [completeSavingId, setCompleteSavingId] = useState<string | null>(null)
+  const [completePersonId, setCompletePersonId] = useState("")
 
   // Form state
   const [name, setName] = useState("")
@@ -28,9 +34,11 @@ export default function HuchaScreen() {
   const [movNotes, setMovNotes] = useState("")
 
   const load = useCallback(async () => {
-    const [s, m] = await Promise.all([getSavings(), countAllSavingMovements()])
+    const [s, m, fes, p] = await Promise.all([getSavings(), countAllSavingMovements(), getFutureExpenses().catch(() => []), getPeople().catch(() => [])])
     setSavings(s)
     setMovementsCount(m)
+    setFutureExpenses(fes)
+    setPeople(p)
     setLoading(false)
     setRefreshing(false)
   }, [])
@@ -68,6 +76,30 @@ export default function HuchaScreen() {
       { text: "Cancelar", style: "cancel" },
       { text: "Eliminar", style: "destructive", onPress: async () => { await deleteSaving(id); load() }},
     ])
+  }
+
+  const linkedFutureBySaving = (savingId: string) => futureExpenses.find((fe) => fe.saving_id === savingId) ?? null
+
+  const openCompleteFromSaving = (saving: SavingWithRelations) => {
+    const fe = linkedFutureBySaving(saving.id)
+    if (!fe) return
+    if (fe.status === "completed") { Alert.alert("Completado", "Este gasto futuro ya fue completado."); return }
+    if (Number(saving.current_amount) < Number(fe.expected_amount)) {
+      Alert.alert("Objetivo incompleto", `El objetivo aún no está completo. Llevás ${formatCurrency(Number(saving.current_amount))} de ${formatCurrency(Number(fe.expected_amount))}.`)
+      return
+    }
+    setCompleteSavingId(saving.id); setCompletePersonId(""); setCompleteModalOpen(true)
+  }
+
+  const handleCompleteFromSaving = async () => {
+    if (!completeSavingId || !completePersonId) { Alert.alert("Error", "Seleccioná una persona."); return }
+    setSubmitting(true)
+    try {
+      await completeFutureExpenseBySaving(completeSavingId, completePersonId)
+      setCompleteModalOpen(false); setCompleteSavingId(null); setCompletePersonId(""); load()
+    } catch (error) {
+      Alert.alert("Error", error instanceof Error ? error.message : "No se pudo completar el objetivo.")
+    } finally { setSubmitting(false) }
   }
 
   const openMovement = (savingId: string, type: "income" | "withdrawal") => {
@@ -155,10 +187,30 @@ export default function HuchaScreen() {
           <View className="space-y-3">
             {filtered.map((s) => {
               const progress = Number(s.target_amount) > 0 ? Math.min(100, (Number(s.current_amount) / Number(s.target_amount)) * 100) : 0
+              const linkedFuture = linkedFutureBySaving(s.id)
+              const isFutureExpense = Boolean(linkedFuture)
+              const isCompleted = linkedFuture?.status === "completed"
+              const canComplete = isFutureExpense && !isCompleted && Number(s.current_amount) >= Number(linkedFuture?.expected_amount ?? 0)
               return (
                 <View key={s.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
                   <View className="flex-row items-center justify-between mb-2">
-                    <Text className="text-sm font-semibold text-slate-800" numberOfLines={1}>{s.name}</Text>
+                    <View className="flex-1 mr-2">
+                      <Text className="text-sm font-semibold text-slate-800" numberOfLines={1}>{s.name}</Text>
+                      {isFutureExpense ? (
+                        <View className="flex-row items-center gap-1 mt-1">
+                          {isCompleted ? (
+                            <View className="flex-row items-center gap-0.5 rounded-full bg-emerald-100 px-2 py-0.5">
+                              <CheckCircle2 size={10} color="#059669" />
+                              <Text className="text-[9px] font-medium text-emerald-700">Completado</Text>
+                            </View>
+                          ) : (
+                            <View className="rounded-full bg-indigo-100 px-2 py-0.5">
+                              <Text className="text-[9px] font-medium text-indigo-700">Gasto futuro</Text>
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
                     <View className="flex-row gap-1">
                       <TouchableOpacity onPress={() => openMovement(s.id, "income")} className="p-1.5 bg-emerald-100 rounded-lg">
                         <ArrowDownCircle size={14} color="#059669" />
@@ -180,8 +232,13 @@ export default function HuchaScreen() {
                   </View>
                   <View className="flex-row justify-between">
                     <Text className="text-xs font-semibold text-emerald-600">{formatCurrency(Number(s.current_amount))}</Text>
-                    <Text className="text-[10px] text-slate-400">Meta: {formatCurrency(Number(s.target_amount))}</Text>
+                    <Text className="text-[10px] text-slate-400">{isFutureExpense && linkedFuture ? `Meta: ${formatCurrency(Number(linkedFuture.expected_amount))}` : `Meta: ${formatCurrency(Number(s.target_amount))}`}</Text>
                   </View>
+                  {canComplete ? (
+                    <TouchableOpacity onPress={() => openCompleteFromSaving(s)} className="mt-3 h-9 rounded-xl bg-emerald-600 items-center justify-center">
+                      <Text className="text-xs font-semibold text-white">Completar objetivo</Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               )
             })}
@@ -256,6 +313,32 @@ export default function HuchaScreen() {
             </View>
             <TouchableOpacity onPress={handleMovementSubmit} disabled={submitting} className="h-11 rounded-xl bg-indigo-600 items-center justify-center mt-4">
               {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">{movType === "income" ? "Aportar" : "Retirar"}</Text>}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Complete from hucha Modal */}
+      <Modal visible={completeModalOpen} animationType="fade" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-center px-6">
+          <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xl">
+            <Text className="text-sm font-semibold text-slate-800 mb-1">Completar objetivo</Text>
+            <Text className="text-[11px] text-slate-500 mb-4">El dinero saldrá de esta hucha hacia el disponible.</Text>
+            <Text className="text-xs font-medium text-slate-600 mb-1">Persona (ingreso al disponible)</Text>
+            <View className="border border-slate-200 rounded-xl overflow-hidden mb-4">
+              {people.length === 0 ? (
+                <Text className="text-xs text-slate-400 px-3 py-3">Sin personas registradas.</Text>
+              ) : (
+                people.map((p) => (
+                  <TouchableOpacity key={p.id} onPress={() => setCompletePersonId(p.id)} className={`px-3 py-2.5 flex-row items-center justify-between ${completePersonId === p.id ? "bg-emerald-50" : ""}`}>
+                    <Text className={`text-sm ${completePersonId === p.id ? "text-emerald-700 font-semibold" : "text-slate-700"}`}>{p.name}</Text>
+                    {completePersonId === p.id ? <CheckCircle2 size={16} color="#059669" /> : null}
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+            <TouchableOpacity onPress={handleCompleteFromSaving} disabled={submitting || !completePersonId} className={`h-11 rounded-xl items-center justify-center ${submitting || !completePersonId ? "bg-slate-200" : "bg-emerald-600"}`}>
+              {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">Completar</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

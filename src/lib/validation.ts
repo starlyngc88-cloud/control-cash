@@ -82,6 +82,7 @@ export const futureExpenseSchema = z.object({
   category_id: z.string().uuid().nullable().optional(),
   expected_amount: z.number().positive("El importe debe ser positivo").finite(),
   expected_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida (YYYY-MM-DD)"),
+  saving_id: z.string().uuid().nullable().optional(),
 })
 
 export const commitmentSchema = z.object({

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
@@ -16,15 +16,17 @@ import {
   createFutureExpense,
   updateFutureExpense,
   deleteFutureExpense,
-  updateFutureExpenseStatus,
+  completeFutureExpense,
   getFutureExpensesDashboard,
   getFutureExpenseCategories,
   createFutureExpenseCategory,
   updateFutureExpenseCategory,
   deleteFutureExpenseCategory,
+  getPeople,
+  getSavings,
 } from "@/lib/db"
-import type { FutureExpense, FutureExpenseCategory } from "@/types"
-import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRight, List, Search } from "lucide-react"
+import type { FutureExpense, FutureExpenseCategory, Person, Saving } from "@/types"
+import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRight, List, Search, Link } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
@@ -53,8 +55,9 @@ function getUrgencyDot(expectedDate: string): string {
 }
 
 export default function GastosFuturosPage() {
-  const [expenses, setExpenses] = useState<(FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]>([])
+  const [expenses, setExpenses] = useState<(FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null; savings: Pick<import("@/types").Saving, "current_amount"> | null })[]>([])
   const [categories, setCategories] = useState<FutureExpenseCategory[]>([])
+  const [people, setPeople] = useState<Person[]>([])
   const [dashboard, setDashboard] = useState<{
     totalPrevisto: number
     numPendientes: number
@@ -84,6 +87,8 @@ export default function GastosFuturosPage() {
   const [categoryId, setCategoryId] = useState("")
   const [expectedAmount, setExpectedAmount] = useState("")
   const [expectedDate, setExpectedDate] = useState("")
+  const [savingId, setSavingId] = useState("")
+  const [savings, setSavings] = useState<(Saving & { saving_categories: Pick<import("@/types").SavingCategory, "name"> | null })[]>([])
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<FutureExpenseCategory | null>(null)
@@ -91,6 +96,10 @@ export default function GastosFuturosPage() {
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
 
   const [planCuota, setPlanCuota] = useState("")
+
+  const [completeFor, setCompleteFor] = useState<(FutureExpense & { savings: Pick<import("@/types").Saving, "current_amount"> | null }) | null>(null)
+  const [completePersonId, setCompletePersonId] = useState("")
+  const [completeError, setCompleteError] = useState("")
 
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
@@ -103,6 +112,7 @@ export default function GastosFuturosPage() {
     setCategoryId("")
     setExpectedAmount("")
     setExpectedDate("")
+setSavingId("")
     setPlanCuota("")
     setOpen(true)
   }
@@ -133,7 +143,7 @@ export default function GastosFuturosPage() {
                 onClick={() => { openNewCat(); setHeaderDropdownOpen(false) }}
               >
                 <List className="size-4 text-emerald-500" />
-                Nueva categoría
+Nueva categoría
               </button>
               <button
                 className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors text-left"
@@ -153,16 +163,18 @@ export default function GastosFuturosPage() {
   const getAllExpenses = useCallback(async () => {
     const { data } = await (await import("@/lib/supabase")).supabase
       .from("future_expenses")
-      .select("*, future_expense_categories(name)")
+      .select("*, future_expense_categories(name), savings(current_amount)")
       .order("expected_date", { ascending: true })
-    return (data ?? []) as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+    return (data ?? []) as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null; savings: Pick<import("@/types").Saving, "current_amount"> | null })[]
   }, [])
 
   const load = useCallback(async () => {
     try {
-      const [e, cats, dash] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard()])
+      const [e, cats, dash, p, sav] = await Promise.all([getAllExpenses(), getFutureExpenseCategories(), getFutureExpensesDashboard(), getPeople(), getSavings()])
       setExpenses(e)
       setCategories(cats)
+      setPeople(p)
+      setSavings(sav)
       const { totalPrevisto, numPendientes, next30, next90 } = dash
       setDashboard({ totalPrevisto, numPendientes, next30: next30.length, next90: next90.length })
     } catch (err) {
@@ -194,7 +206,8 @@ export default function GastosFuturosPage() {
     setDescription(fe.description)
     setCategoryId(fe.category_id ?? "")
     setExpectedAmount(String(fe.expected_amount))
-    setExpectedDate(fe.expected_date)
+setExpectedDate(fe.expected_date)
+    setSavingId(fe.saving_id ?? "")
     setOpen(true)
   }
 
@@ -211,6 +224,7 @@ export default function GastosFuturosPage() {
         category_id: categoryId || null,
         expected_amount: parseFloat(expectedAmount),
         expected_date: expectedDate,
+        saving_id: savingId || null,
       }
       if (editing) {
         await updateFutureExpense(editing.id, data)
@@ -224,6 +238,7 @@ export default function GastosFuturosPage() {
       setCategoryId("")
       setExpectedAmount("")
       setExpectedDate("")
+      setSavingId("")
       setPlanCuota("")
       setSuccessMsg(true)
       setTimeout(() => setSuccessMsg(false), 3000)
@@ -251,14 +266,31 @@ export default function GastosFuturosPage() {
   }
 
   const handleMarkCompleted = async (id: string) => {
+    const fe = expenses.find((e) => e.id === id)
+    if (!fe) return
+    const balance = Number(fe.savings?.current_amount ?? 0)
+    const target = Number(fe.expected_amount ?? 0)
+    if (balance < target) {
+      setError(`El objetivo aún no está completo: llevas ${fmt(balance)} de ${fmt(target)} en su hucha.`)
+      return
+    }
+    setCompleteFor(fe)
+    setCompletePersonId(people[0]?.id ?? "")
+    setCompleteError("")
+  }
+
+  const handleCompleteConfirm = async () => {
+    if (!completeFor) return
+    if (!completePersonId) { setCompleteError("Selecciona una persona."); return }
     setSubmitting(true)
     try {
-      await updateFutureExpenseStatus(id, "completed")
+      await completeFutureExpense(completeFor.id, completePersonId)
+      setCompleteFor(null)
       setSuccessMsg(true)
       setTimeout(() => setSuccessMsg(false), 3000)
       load()
     } catch (err) {
-      setError(friendlyError(err))
+      setCompleteError(friendlyError(err))
     } finally {
       setSubmitting(false)
     }
@@ -353,7 +385,7 @@ export default function GastosFuturosPage() {
       <Dialog open={openCat} onOpenChange={(v) => { if (!v) setEditingCat(null); setOpenCat(v) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
+<DialogTitle>{editingCat ? "Editar categoría" : "Nueva categoría"}</DialogTitle>
             <p className="text-xs text-slate-500 mt-1">Las categorías organizan tus gastos futuros.</p>
           </DialogHeader>
           <form onSubmit={handleCatSubmit} className="space-y-5">
@@ -448,6 +480,21 @@ export default function GastosFuturosPage() {
               <Input id="amount" type="number" step="0.01" min="0.01" placeholder={dict.montoPlaceholder} value={expectedAmount} onChange={(e) => setExpectedAmount(e.target.value)} required />
             </div>
             <div className="space-y-1.5">
+              <Label htmlFor="savingSelect" className="text-sm font-medium text-slate-700">Hucha vinculada</Label>
+              <select
+                id="savingSelect"
+                value={savingId}
+                onChange={(e) => setSavingId(e.target.value)}
+                className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+              >
+                <option value="">— Sin hucha —</option>
+                {savings.filter((s) => !s.saving_categories?.name || s.saving_categories.name !== "Gastos futuros").map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.saving_categories?.name ? ` · ${s.saving_categories.name}` : ""}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-slate-400">Solo podés vincular huchas que ya creaste en la vista Hucha.</p>
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="planCuota" className="text-sm font-medium text-slate-700">Ahorro mensual (opcional)</Label>
               <Input id="planCuota" type="number" step="0.01" min="0.01" placeholder="0.00" value={planCuota} onChange={(e) => setPlanCuota(e.target.value)} />
             </div>
@@ -466,6 +513,51 @@ export default function GastosFuturosPage() {
             <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : editing ? dict.guardarCambios : dict.guardar}</Button>
           </div>
         </form>
+      </DialogContent>
+      </Dialog>
+
+      <Dialog key={completeFor?.id ?? 'complete'} open={!!completeFor} onOpenChange={(v) => { if (!v) setCompleteFor(null) }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Completar objetivo</DialogTitle>
+          <p className="text-xs text-slate-500 mt-1">El dinero saldrá de la hucha de esta meta hacia el disponible.</p>
+        </DialogHeader>
+        <div className="space-y-4">
+          {completeFor && (
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Objetivo</span>
+                <span className="font-semibold text-slate-800">{completeFor.title}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-slate-500">Saldo en hucha</span>
+                <span className="font-semibold text-emerald-600 tabular-nums">{fmt(Number(completeFor.savings?.current_amount ?? 0))}</span>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="completePerson" className="text-sm font-medium text-slate-700">Persona (ingreso al disponible)</Label>
+                <select
+                  id="completePerson"
+                  value={completePersonId}
+                  onChange={(e) => setCompletePersonId(e.target.value)}
+                  required
+                  className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                >
+                  <option value="">— Seleccionar persona —</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              {completeError && <p className="text-xs text-red-600">{completeError}</p>}
+            </div>
+          )}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" type="button" onClick={() => setCompleteFor(null)}>Cancelar</Button>
+            <Button onClick={handleCompleteConfirm} disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
+              {submitting ? "Completando..." : "Completar objetivo"}
+            </Button>
+          </div>
+        </div>
       </DialogContent>
       </Dialog>
 
@@ -598,10 +690,33 @@ export default function GastosFuturosPage() {
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-slate-900 truncate">{fe.title}</p>
                             <p className="text-[10px] text-slate-500">{new Date(fe.expected_date).toLocaleDateString("es-CO")}{fe.status === "completed" ? ` · ${dict.statusCompleted}` : ""}</p>
+                            {fe.saving_id && (() => {
+                              const linkedSaving = savings.find((s) => s.id === fe.saving_id)
+                              return (
+                                <div className="flex items-center gap-1 mt-0.5 text-[10px] text-indigo-600">
+                                  <Link className="size-3" />
+                                  <span className="truncate">Hucha: {linkedSaving?.name ?? "vinculada"}</span>
+                                  {linkedSaving?.saving_categories?.name ? (
+                                    <span className="text-slate-400">· {linkedSaving.saving_categories.name}</span>
+                                  ) : null}
+                                </div>
+                              )
+                            })()}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 ml-3">
+                        {fe.status === "planned" && Number(fe.expected_amount) > 0 && (
+                          <div className="flex flex-col items-end">
+                            <span className="text-[10px] text-slate-400 tabular-nums">Abonado {fmt(Number(fe.savings?.current_amount ?? 0))} / {fmt(Number(fe.expected_amount))}</span>
+                            <div className="w-28 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${Number(fe.savings?.current_amount ?? 0) >= Number(fe.expected_amount) ? "bg-emerald-500" : "bg-indigo-500"}`}
+                                style={{ width: `${Math.min(100, (Number(fe.savings?.current_amount ?? 0) / Number(fe.expected_amount)) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                         <span className="text-xs font-semibold text-rose-600 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
                         <div className="flex items-center gap-0.5">
                           {fe.status === "planned" && (
@@ -636,3 +751,4 @@ export default function GastosFuturosPage() {
     </div>
   )
 }
+

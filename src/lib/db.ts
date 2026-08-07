@@ -588,27 +588,37 @@ export async function deleteFutureExpenseCategory(id: string) {
 /* ---- Future Expenses ---- */
 
 export async function getFutureExpenses() {
-  const { data, error } = await supabase.from("future_expenses").select("*, future_expense_categories(name)").order("expected_date", { ascending: true })
+  const { data, error } = await supabase.from("future_expenses").select("*, future_expense_categories(name), savings(current_amount)").order("expected_date", { ascending: true })
   if (error) throw error
-  return data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+  return data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null; savings: Pick<Saving, "current_amount"> | null })[]
 }
 
-export async function createFutureExpense(input: { title: string; description: string; category: string; category_id?: string | null; expected_amount: number; expected_date: string }) {
+export async function createFutureExpense(input: { title: string; description: string; category: string; category_id?: string | null; expected_amount: number; expected_date: string; saving_id?: string | null }) {
   const parsed = futureExpenseSchema.parse(sanitizeInput(input))
-  const { data, error } = await supabase.from("future_expenses").insert(parsed).select("*, future_expense_categories(name)").single()
+  const { data, error } = await supabase.from("future_expenses").insert({ ...parsed, saving_id: parsed.saving_id ?? null }).select("*, future_expense_categories(name), savings(current_amount)").single()
   if (error) throw error
-  return data as FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null }
+  return data as FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null; savings: Pick<Saving, "current_amount"> | null }
 }
 
-export async function updateFutureExpense(id: string, input: { title: string; description: string; category: string; category_id?: string | null; expected_amount: number; expected_date: string }) {
+export async function updateFutureExpense(id: string, input: { title: string; description: string; category: string; category_id?: string | null; expected_amount: number; expected_date: string; saving_id?: string | null }) {
   const parsed = futureExpenseSchema.parse(sanitizeInput(input))
-  const { error } = await supabase.from("future_expenses").update(parsed).eq("id", id)
+  const { data: existing } = await supabase.from("future_expenses").select("saving_id").eq("id", id).single()
+  const finalSavingId = parsed.saving_id ?? existing?.saving_id ?? null
+  const { error } = await supabase.from("future_expenses").update({ ...parsed, saving_id: finalSavingId }).eq("id", id)
   if (error) throw error
+  if (finalSavingId) {
+    await supabase.from("savings").update({ name: parsed.title, description: parsed.description || "Gasto futuro" }).eq("id", finalSavingId)
+  }
 }
 
 export async function deleteFutureExpense(id: string) {
+  const { data: existing } = await supabase.from("future_expenses").select("saving_id").eq("id", id).single()
   const { error } = await supabase.from("future_expenses").delete().eq("id", id)
   if (error) throw error
+  if (existing?.saving_id) {
+    await supabase.from("saving_movements").delete().eq("saving_id", existing.saving_id)
+    await supabase.from("savings").delete().eq("id", existing.saving_id)
+  }
 }
 
 export async function updateFutureExpenseStatus(id: string, status: "planned" | "completed" | "cancelled") {
@@ -616,15 +626,51 @@ export async function updateFutureExpenseStatus(id: string, status: "planned" | 
   if (error) throw error
 }
 
+export async function completeFutureExpense(id: string, personId: string) {
+  const { data: fe } = await supabase.from("future_expenses").select("*, savings(current_amount)").eq("id", id).single()
+  if (!fe?.saving_id) throw new Error("Este gasto futuro no tiene hucha vinculada")
+  const balance = Number((fe as FutureExpense & { savings: Pick<Saving, "current_amount"> | null }).savings?.current_amount ?? 0)
+  const target = Number(fe.expected_amount)
+  if (balance < target) throw new Error(`El objetivo aún no está completo (llevas ${balance.toFixed(2)} de ${target.toFixed(2)})`)
+  const today = new Date().toISOString().split("T")[0]
+  await createSavingMovement({
+    saving_id: fe.saving_id,
+    type: "withdrawal",
+    amount: balance,
+    notes: `Objetivo completado: ${fe.title}`,
+    movement_date: today,
+  })
+  await createIncome({
+    person_id: personId,
+    amount: balance,
+    description: `Gasto futuro completado: ${fe.title}`,
+    date: today,
+    category_id: null,
+  })
+  await supabase.from("future_expenses").update({ status: "completed" }).eq("id", id)
+}
+
 export async function getFutureExpensesDashboard() {
-  const { data, error } = await supabase.from("future_expenses").select("*, future_expense_categories(name)").order("expected_date", { ascending: true })
+  const { data, error } = await supabase.from("future_expenses").select("*, future_expense_categories(name), savings(current_amount)").order("expected_date", { ascending: true })
   if (error) throw error
-  const expenses = data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null })[]
+  const expenses = data as (FutureExpense & { future_expense_categories: Pick<FutureExpenseCategory, "name"> | null; savings: Pick<Saving, "current_amount"> | null })[]
   const now = new Date()
   const planned = expenses.filter((e) => e.status === "planned")
   const next30 = planned.filter((e) => { const d = new Date(e.expected_date); const diff = d.getTime() - now.getTime(); return diff >= 0 && diff <= 30 * 24 * 60 * 60 * 1000 })
   const next90 = planned.filter((e) => { const d = new Date(e.expected_date); const diff = d.getTime() - now.getTime(); return diff > 30 * 24 * 60 * 60 * 1000 && diff <= 90 * 24 * 60 * 60 * 1000 })
   return { expenses, next30, next90, totalPrevisto: planned.reduce((sum, e) => sum + Number(e.expected_amount), 0), numPendientes: planned.length }
+}
+
+export async function getFutureExpenseBySaving(savingId: string) {
+  const { data, error } = await supabase.from("future_expenses").select("*, savings(current_amount)").eq("saving_id", savingId).maybeSingle()
+  if (error) throw error
+  return data as (FutureExpense & { savings: Pick<Saving, "current_amount"> | null }) | null
+}
+
+export async function completeFutureExpenseBySaving(savingId: string, personId: string) {
+  const fe = await getFutureExpenseBySaving(savingId)
+  if (!fe) throw new Error("No hay un gasto futuro vinculado a esta hucha")
+  await completeFutureExpense(fe.id, personId)
 }
 
 /* ---- Monthly Budget Dashboard ---- */

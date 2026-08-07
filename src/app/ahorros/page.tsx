@@ -27,9 +27,11 @@ import {
   getBudgetCategoriesForMonth,
   createExpense,
   createIncome,
+  getFutureExpenses,
+  completeFutureExpenseBySaving,
 } from "@/lib/db"
-import type { Saving, SavingMovement, SavingCategory, Person, BudgetCategory, BudgetTemplate } from "@/types"
-import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search } from "lucide-react"
+import type { Saving, SavingMovement, SavingCategory, Person, BudgetCategory, BudgetTemplate, FutureExpense } from "@/types"
+import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, ChevronDown, ChevronRight, PiggyBank, Search, CheckCircle2 } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
@@ -81,6 +83,9 @@ export default function AhorrosPage() {
 
   const [people, setPeople] = useState<Person[]>([])
   const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<BudgetTemplate, "name"> })[]>([])
+  const [linkedFuture, setLinkedFuture] = useState<(FutureExpense & { savings: Pick<Saving, "current_amount"> | null })[]>([])
+  const [completeSavingId, setCompleteSavingId] = useState<string | null>(null)
+  const [completePersonId, setCompletePersonId] = useState("")
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<SavingCategory | null>(null)
@@ -144,18 +149,20 @@ export default function AhorrosPage() {
 
   const load = useCallback(async () => {
     try {
-      const [s, d, cats, p, bCats] = await Promise.all([
+      const [s, d, cats, p, bCats, f] = await Promise.all([
         getSavings(),
         getSavingsDashboard(),
         getSavingCategories(),
         getPeople(),
         activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([]),
+        getFutureExpenses(),
       ])
       setSavings(s)
       setDashboard(d)
       setCategories(cats)
       setPeople(p)
       setBudgetCategories(bCats)
+      setLinkedFuture(f)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -168,16 +175,18 @@ export default function AhorrosPage() {
   const grouped = useMemo(() => {
     const map = new Map<string, { id: string | null; name: string; items: (Saving & { saving_categories: Pick<SavingCategory, "name"> | null })[] }>()
     for (const c of categories) {
+      if (c.name === "Gastos futuros") continue
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
     for (const s of filtered) {
+      if (linkedFuture.some((f) => f.saving_id === s.id)) continue
       const catId = s.category_id ?? "__none__"
       const catName = s.saving_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: s.category_id, name: catName, items: [] })
       map.get(catId)!.items.push(s)
     }
     return map
-  }, [filtered, categories])
+  }, [filtered, categories, linkedFuture])
 
   const openEditSaving = (s: Saving) => {
     setEditing(s)
@@ -300,6 +309,28 @@ export default function AhorrosPage() {
     setOpenCat(true)
   }
 
+  const openCompleteFromSaving = (savingId: string) => {
+    setCompleteSavingId(savingId)
+    setCompletePersonId(people[0]?.id ?? "")
+    setError("")
+  }
+
+  const handleCompleteFromSaving = async () => {
+    if (!completeSavingId || !completePersonId) return
+    setSubmitting(true)
+    try {
+      await completeFutureExpenseBySaving(completeSavingId, completePersonId)
+      setCompleteSavingId(null)
+      setSuccessMsg(true)
+      setTimeout(() => setSuccessMsg(false), 3000)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleCatSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!catName.trim()) return
@@ -348,12 +379,63 @@ export default function AhorrosPage() {
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
-  const totalAhorrado = dashboard?.totalAhorrado ?? 0
-  const numHuchas = dashboard?.numHuchas ?? 0
+  const regularSavings = savings.filter((s) => !linkedFuture.some((f) => f.saving_id === s.id))
+  const totalAhorrado = regularSavings.reduce((sum, s) => sum + Number(s.current_amount), 0)
+  const numHuchas = regularSavings.length
   const recentMovements = dashboard?.recentMovements ?? []
-  const hasItems = savings.length > 0 || categories.length > 0
+  const hasItems = regularSavings.length > 0 || categories.some((c) => c.name !== "Gastos futuros")
 
   const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
+
+  const renderSavingRow = (s: Saving & { saving_categories: Pick<SavingCategory, "name"> | null }) => {
+    const linkedFe = linkedFuture.find((f) => f.saving_id === s.id && f.status === "planned")
+    const completedFe = linkedFuture.find((f) => f.saving_id === s.id && f.status === "completed")
+    const canComplete = linkedFe && Number(s.current_amount) >= Number(linkedFe.expected_amount)
+    return (
+      <div key={s.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+        <div className="flex items-center flex-1 min-w-0">
+          <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-amber-100 text-amber-600">
+            <PiggyBank className="size-3" />
+          </div>
+          <div className="ml-2.5 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-medium text-slate-900 truncate">{s.name}</p>
+              {linkedFe && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">Gasto futuro</span>}
+              {completedFe && <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100">Completado</span>}
+            </div>
+            {linkedFe && (
+              <p className="text-[10px] text-slate-500 tabular-nums">
+                Meta {fmt(Number(linkedFe.expected_amount))} · {fmt(Number(s.current_amount))} abonados
+              </p>
+            )}
+            {s.description && !linkedFe && <p className="text-[10px] text-slate-500">{s.description}</p>}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0 ml-3">
+          <span className="text-xs font-semibold text-emerald-600 tabular-nums">{fmt(Number(s.current_amount))}</span>
+          <div className="flex items-center gap-0.5">
+            {canComplete && (
+              <button className="text-slate-400 hover:text-emerald-600 transition-colors p-0.5" title="Completar objetivo" onClick={() => openCompleteFromSaving(s.id)}>
+                <CheckCircle2 className="size-3" />
+              </button>
+            )}
+            <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.addMoney} onClick={() => openNewMovement(s.id, "income")}>
+              <ArrowDownCircle className="size-3" />
+            </button>
+            <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" title={dict.withdrawMoney} onClick={() => openNewMovement(s.id, "withdrawal")}>
+              <ArrowUpCircle className="size-3" />
+            </button>
+            <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEditSaving(s)}>
+              <Pencil className="size-3" />
+            </button>
+            <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDeleteSaving(s.id)}>
+              <Trash2 className="size-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -562,36 +644,7 @@ export default function AhorrosPage() {
                     <span className="ml-auto text-xs font-semibold text-emerald-600 tabular-nums">{fmt(catTotal)}</span>
                   </div>
 
-                  {isExpanded && items.map((s) => (
-                    <div key={s.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
-                      <div className="flex items-center flex-1 min-w-0">
-                        <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-amber-100 text-amber-600">
-                          <PiggyBank className="size-3" />
-                        </div>
-                        <div className="ml-2.5 min-w-0">
-                          <p className="text-xs font-medium text-slate-900 truncate">{s.name}</p>
-                          {s.description && <p className="text-[10px] text-slate-500">{s.description}</p>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0 ml-3">
-                        <span className="text-xs font-semibold text-emerald-600 tabular-nums">{fmt(Number(s.current_amount))}</span>
-                        <div className="flex items-center gap-0.5">
-                          <button className="text-slate-400 hover:text-green-600 transition-colors p-0.5" title={dict.addMoney} onClick={() => openNewMovement(s.id, "income")}>
-                            <ArrowDownCircle className="size-3" />
-                          </button>
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" title={dict.withdrawMoney} onClick={() => openNewMovement(s.id, "withdrawal")}>
-                            <ArrowUpCircle className="size-3" />
-                          </button>
-                          <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEditSaving(s)}>
-                            <Pencil className="size-3" />
-                          </button>
-                          <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDeleteSaving(s.id)}>
-                            <Trash2 className="size-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {isExpanded && items.map((s) => renderSavingRow(s))}
                 </div>
               )
             })}
@@ -604,6 +657,62 @@ export default function AhorrosPage() {
           </div>
         </div>
       )}
+
+      <Dialog open={!!completeSavingId} onOpenChange={(v) => { if (!v) setCompleteSavingId(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Completar objetivo de gasto futuro</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">El dinero saldrá de esta hucha hacia el disponible.</p>
+          </DialogHeader>
+          <div className="space-y-4">
+            {completeSavingId && (() => {
+              const saving = savings.find((s) => s.id === completeSavingId)
+              const fe = linkedFuture.find((f) => f.saving_id === completeSavingId)
+              return (
+                <div className="bg-slate-50 rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-500">Hucha</span>
+                    <span className="font-semibold text-slate-800">{saving?.name}</span>
+                  </div>
+                  {fe && (
+                    <>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Saldo en hucha</span>
+                        <span className="font-semibold text-emerald-600 tabular-nums">{fmt(Number(saving?.current_amount ?? 0))}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-slate-500">Meta</span>
+                        <span className="font-semibold text-slate-800 tabular-nums">{fmt(Number(fe.expected_amount))}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="completePersonSaving" className="text-sm font-medium text-slate-700">Persona (ingreso al disponible)</Label>
+                    <select
+                      id="completePersonSaving"
+                      value={completePersonId}
+                      onChange={(e) => setCompletePersonId(e.target.value)}
+                      required
+                      className="flex h-9 w-full rounded-lg border border-input bg-white px-3 py-1.5 text-sm shadow-xs transition-colors appearance-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                    >
+                      <option value="">— Seleccionar persona —</option>
+                      {people.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )
+            })()}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" type="button" onClick={() => setCompleteSavingId(null)}>Cancelar</Button>
+              <Button onClick={handleCompleteFromSaving} disabled={submitting} className="bg-emerald-600 hover:bg-emerald-700">
+                {submitting ? "Completando..." : "Completar objetivo"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={openMovement} onOpenChange={(v) => { if (!v) setMovementSavingId(null); setOpenMovement(v) }}>
         <DialogContent className="sm:max-w-md">

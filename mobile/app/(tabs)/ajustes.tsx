@@ -5,8 +5,8 @@ import { useRouter, type Href } from "expo-router"
 import { LogOut, User, Mail, ShieldCheck, CalendarClock, CircleDollarSign, LayoutTemplate, Users, Settings, ChevronRight, type LucideIcon } from "lucide-react-native"
 
 const LINKS: { label: string; icon: LucideIcon; route: Href; color: string; bg: string }[] = [
-  { label: "Gastos Futuros", icon: CalendarClock, route: "/gastos-futuros", color: "#f59e0b", bg: "bg-amber-50" },
   { label: "Compromisos", icon: CircleDollarSign, route: "/compromisos", color: "#e11d48", bg: "bg-rose-50" },
+  { label: "Gastos Futuros", icon: CalendarClock, route: "/gastos-futuros", color: "#f59e0b", bg: "bg-amber-50" },
   { label: "Presupuestos", icon: LayoutTemplate, route: "/presupuestos", color: "#059669", bg: "bg-emerald-50" },
   { label: "Personas", icon: Users, route: "/personas", color: "#4f46e5", bg: "bg-indigo-50" },
   { label: "Personalización", icon: Settings, route: "/personalizacion", color: "#64748b", bg: "bg-slate-100" },
