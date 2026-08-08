@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation"
 import { useLanguage } from "@/i18n/useLanguage"
 import { DateFilter } from "@/components/DateFilter"
+import { CashflowRangeFilter } from "@/components/CashflowRangeFilter"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 
 type PageKey = "dashboard" | "presupuestos" | "ingresos" | "gastos" | "ahorros" | "compromisos" | "gastosFuturos" | "personalizacion" | "personas" | "guia"
@@ -39,7 +40,7 @@ export function Header() {
 
       {!isBudgetDetail && (
         <div className={`flex-1 flex ${isDashboard ? "justify-center" : "justify-center"} ${actions ? "ml-0" : ""}`}>
-          <DateFilter />
+          {isDashboard ? <CashflowRangeFilter /> : <DateFilter />}
         </div>
       )}
 

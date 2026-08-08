@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/i18n/useLanguage"
 import { AuthProvider } from "@/components/auth/AuthProvider"
 import { MonthFilterProvider } from "@/components/MonthFilterContext"
 import { HeaderActionsProvider } from "@/components/HeaderActionsContext"
+import { CashflowFilterProvider } from "@/components/contexts/CashflowFilterContext"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -37,6 +38,7 @@ export default function RootLayout({
         <AuthProvider>
           <LanguageProvider>
             <MonthFilterProvider>
+              <CashflowFilterProvider>
               <HeaderActionsProvider>
               <Sidebar />
               <main className="flex-1 flex flex-col h-screen overflow-hidden">
@@ -46,6 +48,7 @@ export default function RootLayout({
                 </div>
               </main>
               </HeaderActionsProvider>
+              </CashflowFilterProvider>
             </MonthFilterProvider>
           </LanguageProvider>
         </AuthProvider>

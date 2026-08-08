@@ -233,12 +233,13 @@ export async function getDashboardData(months: string[]) {
   const startOfMonth = sorted[0] + "-01"
   const lastMonth = sorted[sorted.length - 1]
   const endOfMonth = new Date(parseInt(lastMonth.split("-")[0]), parseInt(lastMonth.split("-")[1]), 0).toISOString().split("T")[0]
+  const firstDays = sorted.map((m) => m + "-01")
   const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
     supabase.from("expenses").select("amount, budget_category_id").gte("date", startOfMonth).lte("date", endOfMonth),
     getIncomes({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     getExpenses({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
-    supabase.from("monthly_budgets").select("id, template_id").eq("month", startOfMonth).maybeSingle(),
+    supabase.from("monthly_budgets").select("id, template_id, month").in("month", firstDays),
   ])
   const totalIngresos = incomeResult.data?.reduce((sum, i) => sum + Number(i.amount), 0) ?? 0
   const totalGastos = expenseResult.data?.reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
@@ -246,8 +247,12 @@ export async function getDashboardData(months: string[]) {
   let totalBudgeted = 0
   try {
     if (mbResult.data) {
-      const cats = await getMonthCategories(mbResult.data.id, mbResult.data.template_id)
-      totalBudgeted = sumBudgetLeaves(cats)
+      const budgets = mbResult.data as { id: string; template_id: string }[]
+      const perMonth = await Promise.all(budgets.map(async (mb) => {
+        const cats = await getMonthCategories(mb.id, mb.template_id)
+        return sumBudgetLeaves(cats)
+      }))
+      totalBudgeted = perMonth.reduce((sum, v) => sum + v, 0)
     }
   } catch { totalBudgeted = 0 }
   return { totalIngresos, totalGastos, totalBudgeted, totalGastosSinRubro, balance: totalIngresos - totalGastos, recentIncomes, recentExpenses }
@@ -346,6 +351,59 @@ export async function getCashflowData(startDate: string, endDate: string, granul
     cursor = nextBucket(cursor, granularity)
   }
   return points
+}
+
+export type CategoryCashflowItem = {
+  name: string
+  points: { key: string; label: string; gastos: number }[]
+}
+
+export async function getCategoryCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<{ labels: string[]; items: CategoryCashflowItem[] }> {
+  const [expenseRes, catsRes] = await Promise.all([
+    supabase.from("expenses").select("date, amount, budget_category_id").gte("date", startDate).lte("date", endDate),
+    supabase.from("budget_categories").select("id, name, parent_id"),
+  ])
+  const cats = catsRes.data ?? []
+  const parentIds = new Set(cats.filter((c) => c.parent_id).map((c) => c.parent_id))
+  const nameById = new Map<string, string>()
+  for (const c of cats) {
+    if (!parentIds.has(c.id)) nameById.set(c.id, c.name)
+  }
+
+  const bucketOrder: string[] = []
+  let cursor = new Date(startDate + "T00:00:00")
+  const end = new Date(endDate + "T00:00:00")
+  let guard = 0
+  while (cursor <= end && guard < 10000) {
+    bucketOrder.push(bucketKey(toYmd(cursor), granularity))
+    cursor = nextBucket(cursor, granularity)
+    guard++
+  }
+  const labels = bucketOrder.map((k) => labelFor(k, granularity))
+
+  const totals = new Map<string, number[]>()
+  for (const e of expenseRes.data ?? []) {
+    if (!e.budget_category_id) continue
+    const name = nameById.get(e.budget_category_id)
+    if (!name) continue
+    const key = bucketKey(e.date, granularity)
+    const idx = bucketOrder.indexOf(key)
+    if (idx < 0) continue
+    const arr = totals.get(name) ?? new Array(bucketOrder.length).fill(0)
+    arr[idx] += Number(e.amount)
+    totals.set(name, arr)
+  }
+
+  const items: CategoryCashflowItem[] = [...totals.entries()].map(([name, arr]) => ({
+    name,
+    points: arr.map((gastos, i) => ({ key: bucketOrder[i], label: labels[i], gastos })),
+  })).sort((a, b) => {
+    const ta = a.points.reduce((s, p) => s + p.gastos, 0)
+    const tb = b.points.reduce((s, p) => s + p.gastos, 0)
+    return tb - ta
+  })
+
+  return { labels, items }
 }
 
 /* ---- Budget Templates ---- */

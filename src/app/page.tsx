@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import Link from "next/link"
-import { getDashboardData, getMonthlyBudgets, getCashflowData } from "@/lib/db"
-import type { CashflowGranularity, CashflowPoint } from "@/lib/db"
+import { getDashboardData, getMonthlyBudgets, getCashflowData, getCategoryCashflowData, type CategoryCashflowItem } from "@/lib/db"
+import type { CashflowPoint } from "@/lib/db"
 import type { Income, Expense, Person } from "@/types"
-import { PiggyBank, Wallet, TrendingDown, TrendingUp, ClipboardList } from "lucide-react"
+import { Wallet, TrendingDown, TrendingUp, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
-import { useMonthFilter } from "@/components/MonthFilterContext"
+import { useCashflowFilter, autoGranularity, granularityLabel } from "@/components/contexts/CashflowFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
 import {
   Chart as ChartJS,
@@ -19,8 +19,11 @@ import {
   Tooltip as ChartTooltip,
   Legend,
   Filler,
+  type TooltipItem,
 } from "chart.js"
 import { Line } from "react-chartjs-2"
+
+import { CategoryMultiSelect } from "@/components/CategoryMultiSelect"
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcElement, ChartTooltip, Legend, Filler)
 
@@ -38,32 +41,35 @@ type DashboardData = {
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0")
-const toYmd = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-const todayStr = () => toYmd(new Date())
 
-function defaultRange(g: CashflowGranularity): { start: string; end: string } {
-  const now = new Date()
-  if (g === "month") return { start: `${now.getFullYear()}-01-01`, end: toYmd(new Date(now.getFullYear(), 11, 31)) }
-  if (g === "year") return { start: `${now.getFullYear() - 4}-01-01`, end: toYmd(new Date(now.getFullYear(), 11, 31)) }
-  if (g === "week") {
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 90)
-    return { start: `${now.getFullYear()}-01-01`, end: toYmd(end) }
+const PALETTE = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#0ea5e9", "#a855f7", "#84cc16", "#ec4899", "#14b8a6", "#f97316", "#8b5cf6", "#22c55e"]
+
+function monthsBetween(startDate: string, endDate: string): string[] {
+  const months: string[] = []
+  const start = new Date(startDate + "T00:00:00")
+  const end = new Date(endDate + "T00:00:00")
+  const cursor = new Date(start.getFullYear(), start.getMonth(), 1)
+  while (cursor <= end) {
+    months.push(`${cursor.getFullYear()}-${pad2(cursor.getMonth() + 1)}`)
+    cursor.setMonth(cursor.getMonth() + 1)
   }
-  // day: el mes actual
-  return { start: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-01`, end: toYmd(new Date(now.getFullYear(), now.getMonth() + 1, 0)) }
+  return months
 }
 
 export default function DashboardPage() {
-  const { months } = useMonthFilter()
+  const { startDate, endDate } = useCashflowFilter()
   const [data, setData] = useState<DashboardData | null>(null)
   const [monthlyBudgetId, setMonthlyBudgetId] = useState<string | null>(null)
   const [cashflowData, setCashflowData] = useState<CashflowPoint[]>([])
-  const [granularity, setGranularity] = useState<CashflowGranularity>("day")
-  const [startDate, setStartDate] = useState(() => todayStr())
-  const [endDate, setEndDate] = useState(() => todayStr())
+  const [categoryItems, setCategoryItems] = useState<CategoryCashflowItem[]>([])
+  const [categoryLabels, setCategoryLabels] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[] | null>(null)
   const [loading, setLoading] = useState(true)
   const { t, fmt } = useLanguage()
   const d = t.dashboard
+
+  const months = useMemo(() => monthsBetween(startDate, endDate), [startDate, endDate])
+  const granularity = autoGranularity(startDate, endDate)
 
   const load = useCallback(async (m: string[]) => {
     setLoading(true)
@@ -86,22 +92,15 @@ export default function DashboardPage() {
 
   useEffect(() => { void (async () => { await load(months) })() }, [months, load])
 
-  const applyCashflowRange = useCallback(async (g: CashflowGranularity, start: string, end: string) => {
-    setGranularity(g)
-    setStartDate(start)
-    setEndDate(end)
-    setCashflowData(await getCashflowData(start, end, g).catch(() => []))
-  }, [])
-
-  const changeGranularity = useCallback((g: CashflowGranularity) => {
-    const r = defaultRange(g)
-    void applyCashflowRange(g, r.start, r.end)
-  }, [applyCashflowRange])
+  useEffect(() => {
+    getCashflowData(startDate, endDate, granularity).then(setCashflowData).catch(() => setCashflowData([]))
+  }, [startDate, endDate, granularity])
 
   useEffect(() => {
-    const r = defaultRange("day")
-    getCashflowData(r.start, r.end, "day").then(setCashflowData).catch(() => setCashflowData([]))
-  }, [])
+    getCategoryCashflowData(startDate, endDate, granularity)
+      .then((d) => { setCategoryItems(d.items); setCategoryLabels(d.labels) })
+      .catch(() => { setCategoryItems([]); setCategoryLabels([]) })
+  }, [startDate, endDate, granularity])
 
   const cashflowChartData = useMemo(() => {
     if (!cashflowData.length) return null
@@ -144,13 +143,48 @@ export default function DashboardPage() {
     },
   }
 
+  const categoryChartData = useMemo(() => {
+    if (!categoryItems.length || !categoryLabels.length) return null
+    const showAll = selectedCategories === null
+    const visible = categoryItems.filter((item) => showAll || selectedCategories.includes(item.name))
+    if (!visible.length) return null
+    return {
+      labels: categoryLabels,
+      datasets: visible.map((item, i) => ({
+        label: item.name,
+        data: item.points.map((p) => p.gastos),
+        borderColor: PALETTE[i % PALETTE.length],
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        tension: 0.4,
+        pointRadius: 2.5,
+      })),
+    }
+  }, [categoryItems, categoryLabels, selectedCategories])
+
+  const categoryOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (ctx: TooltipItem<"line">) => `${ctx.dataset.label ?? ""}: ${ctx.parsed.y === null ? "0" : fmt(ctx.parsed.y)}`,
+        },
+      },
+    },
+    scales: {
+      y: { beginAtZero: true, grid: { borderDash: [2, 4], color: "#f1f5f9" }, border: { display: false } },
+      x: { grid: { display: false }, border: { display: false } },
+    },
+  }
+
   const spentPct = data && data.totalBudgeted > 0 ? Math.min(100, (data.totalGastos / data.totalBudgeted) * 100) : 0
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
   return (
     <div className="space-y-4">
-
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Tooltip content="Presupuesto restante del período: presupuesto inicial − gastos" className="h-full">
@@ -231,45 +265,23 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h3 className="text-sm font-semibold text-slate-800">Flujo de Caja</h3>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex rounded-lg border border-slate-200 overflow-hidden">
-                {(["day", "week", "month", "year"] as CashflowGranularity[]).map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => changeGranularity(g)}
-                    className={`px-3 py-1 text-xs font-medium transition-colors ${granularity === g ? "bg-indigo-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                  >
-                    {g === "day" ? "Día" : g === "week" ? "Semana" : g === "month" ? "Mes" : "Año"}
-                  </button>
-                ))}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
+            <h3 className="text-sm font-semibold text-slate-800">Gastos por Categoría</h3>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-indigo-50 text-indigo-600 rounded-full">
+                Vista: {granularityLabel(granularity)}
+              </span>
+              {categoryItems.length > 0 && (
+                <CategoryMultiSelect
+                  items={categoryItems.map((i) => i.name)}
+                  value={selectedCategories}
+                  onChange={setSelectedCategories}
                 />
-                <span className="text-xs text-slate-400">a</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="px-2 py-1 text-xs border border-slate-200 rounded-lg bg-white"
-                />
-                <button
-                  onClick={() => void applyCashflowRange(granularity, startDate, endDate)}
-                  className="px-3 py-1 text-xs font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                >
-                  Aplicar
-                </button>
-              </div>
+              )}
             </div>
           </div>
           <div className="relative h-64">
-            {cashflowChartData ? (
-              <Line data={cashflowChartData} options={cashflowOptions} />
+            {categoryChartData ? (
+              <Line data={categoryChartData} options={categoryOptions} />
             ) : (
               <div className="flex items-center justify-center h-full text-xs text-slate-400">
                 Sin datos para el período seleccionado
@@ -279,14 +291,20 @@ export default function DashboardPage() {
         </div>
 
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-          <h3 className="text-base font-semibold text-slate-800 mb-3">Gastos por Categoría</h3>
-          <div className="relative h-64 flex justify-center items-center">
-            {/* TODO: Falta dato dinámico para desglose de gastos por categoría */}
-            <div className="text-sm text-slate-400 text-center">
-              <PiggyBank className="size-8 mx-auto mb-2 text-slate-300" />
-              <p>Datos no disponibles</p>
-              <p className="text-xs text-slate-400 mt-1">Próximamente</p>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-slate-800">Flujo de Caja</h3>
+            <span className="px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide bg-indigo-50 text-indigo-600 rounded-full">
+              Vista: {granularityLabel(granularity)}
+            </span>
+          </div>
+          <div className="relative h-64">
+            {cashflowChartData ? (
+              <Line data={cashflowChartData} options={cashflowOptions} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-xs text-slate-400">
+                Sin datos para el período seleccionado
+              </div>
+            )}
           </div>
         </div>
       </div>
