@@ -228,7 +228,7 @@ export async function updateExpense(id: string, input: { person_id: string; amou
 /* ---- Dashboard totals ---- */
 
 export async function getDashboardData(months: string[]) {
-  if (months.length === 0) return { totalIngresos: 0, totalGastos: 0, totalBudgeted: 0, totalGastosSinRubro: 0, balance: 0, recentIncomes: [], recentExpenses: [] }
+  if (months.length === 0) return { totalIngresos: 0, totalGastos: 0, totalGastosConRubro: 0, totalBudgeted: 0, totalGastosSinRubro: 0, balance: 0, recentIncomes: [], recentExpenses: [] }
   const sorted = [...months].sort()
   const startOfMonth = sorted[0] + "-01"
   const lastMonth = sorted[sorted.length - 1]
@@ -244,6 +244,7 @@ export async function getDashboardData(months: string[]) {
   const totalIngresos = incomeResult.data?.reduce((sum, i) => sum + Number(i.amount), 0) ?? 0
   const totalGastos = expenseResult.data?.reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
   const totalGastosSinRubro = expenseResult.data?.filter(e => !e.budget_category_id).reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
+  const totalGastosConRubro = totalGastos - totalGastosSinRubro
   let totalBudgeted = 0
   try {
     if (mbResult.data) {
@@ -255,7 +256,7 @@ export async function getDashboardData(months: string[]) {
       totalBudgeted = perMonth.reduce((sum, v) => sum + v, 0)
     }
   } catch { totalBudgeted = 0 }
-  return { totalIngresos, totalGastos, totalBudgeted, totalGastosSinRubro, balance: totalIngresos - totalGastos, recentIncomes, recentExpenses }
+  return { totalIngresos, totalGastos, totalGastosConRubro, totalBudgeted, totalGastosSinRubro, balance: totalIngresos - totalGastos, recentIncomes, recentExpenses }
 }
 
 export type YearlyMonth = { month: string; ingresos: number; gastos: number; presupuesto: number; balance: number }

@@ -33,6 +33,7 @@ type RecentExpense = Expense & { people: Pick<Person, "name"> | null }
 type DashboardData = {
   totalIngresos: number
   totalGastos: number
+  totalGastosConRubro: number
   totalBudgeted: number
   totalGastosSinRubro: number
   balance: number
@@ -187,12 +188,12 @@ export default function DashboardPage() {
     <div className="space-y-4">
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <Tooltip content="Presupuesto restante del período: presupuesto inicial − gastos" className="h-full">
+        <Tooltip content="Presupuesto restante del período: presupuesto inicial − gastos del presupuesto" className="h-full">
           <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm flex flex-col justify-between h-full">
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] font-medium text-slate-500 mb-0.5">Presupuesto</p>
-                <h3 className="text-xl font-bold text-indigo-600">{fmt((data?.totalBudgeted ?? 0) - (data?.totalGastos ?? 0))}</h3>
+                <h3 className="text-xl font-bold text-indigo-600">{fmt((data?.totalBudgeted ?? 0) - (data?.totalGastosConRubro ?? 0))}</h3>
                 <p className="text-[10px] text-slate-500 mt-1">Presupuesto inicial: {fmt(data?.totalBudgeted ?? 0)}</p>
               </div>
               <div className="p-1.5 bg-indigo-50 rounded-lg text-indigo-600">

@@ -202,6 +202,7 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
 
   const totalIngresos = incomesData.reduce((s: number, i: IncomeWithRelations) => s + Number(i.amount), 0)
   const totalGastos = expensesData.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+  const totalGastosConRubro = expensesData.filter((e: ExpenseWithRelations) => e.budget_category_id).reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
   let totalBudgeted = 0
   if (mbResult.data) {
     const cats = await getMonthlyBudgetCategories(mbResult.data.id, mbResult.data.template_id)
@@ -209,7 +210,7 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
   }
   const balance = totalIngresos - totalGastos
 
-  return { totalBudgeted, totalIngresos, totalGastos, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
+  return { totalBudgeted, totalIngresos, totalGastos, totalGastosConRubro, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
 }
 
 export async function getYearlyData(year: number): Promise<YearlyMonth[]> {

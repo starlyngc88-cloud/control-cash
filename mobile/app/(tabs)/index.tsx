@@ -96,7 +96,7 @@ export default function DashboardScreen() {
     },
     {
       label: "Presupuesto",
-      value: (data?.totalBudgeted ?? 0) - (data?.totalGastos ?? 0),
+      value: (data?.totalBudgeted ?? 0) - (data?.totalGastosConRubro ?? 0),
       icon: Wallet,
       color: "#4f46e5",
       iconBg: "bg-indigo-100",

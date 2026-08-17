@@ -150,6 +150,7 @@ export interface DashboardData {
   totalBudgeted: number
   totalIngresos: number
   totalGastos: number
+  totalGastosConRubro: number
   balance: number
   recentIncomes: (Income & { people: Pick<Person, "name"> | null })[]
   recentExpenses: (Expense & { people: Pick<Person, "name"> | null })[]
