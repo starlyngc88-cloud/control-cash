@@ -378,11 +378,10 @@ export default function AhorrosPage() {
 
   if (loading) return <p className="text-muted-foreground">{t.common.loading}</p>
 
-  const regularSavings = savings.filter((s) => !linkedFuture.some((f) => f.saving_id === s.id))
-  const totalAhorrado = regularSavings.reduce((sum, s) => sum + Number(s.current_amount), 0)
-  const numHuchas = regularSavings.length
+  const totalAhorrado = savings.reduce((sum, s) => sum + Number(s.current_amount), 0)
+  const numHuchas = savings.length
   const recentMovements = dashboard?.recentMovements ?? []
-  const hasItems = regularSavings.length > 0 || categories.some((c) => c.name !== "Gastos futuros")
+  const hasItems = savings.length > 0 || categories.some((c) => c.name !== "Gastos futuros")
 
   const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
 
