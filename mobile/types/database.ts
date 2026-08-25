@@ -4,9 +4,12 @@ export interface Person {
   created_at?: string
 }
 
+export type ExpenseCategoryTab = "categoria" | "disponible" | "hucha"
+
 export interface ExpenseCategory {
   id: string
   name: string
+  tab?: ExpenseCategoryTab | null
   created_at?: string
 }
 
@@ -29,6 +32,7 @@ export interface BudgetCategory {
   budgeted: number
   parent_id: string | null
   monthly_budget_id?: string | null
+  is_paid?: boolean
 }
 
 export interface MonthlyBudget {
@@ -46,6 +50,7 @@ export interface Expense {
   date: string
   expense_category_id: string | null
   budget_category_id: string | null
+  saving_id?: string | null
   created_at?: string
 }
 
@@ -101,7 +106,14 @@ export interface SavingMovement {
   amount: number
   notes: string | null
   movement_date: string
+  expense_id?: string | null
   created_at?: string
+}
+
+export interface SavingsDashboard {
+  totalAhorrado: number
+  numHuchas: number
+  recentMovements: (SavingMovement & { savings: Pick<Saving, "name"> })[]
 }
 
 export interface Commitment {
@@ -151,7 +163,22 @@ export interface DashboardData {
   totalIngresos: number
   totalGastos: number
   totalGastosConRubro: number
+  totalGastosSinRubro: number
   balance: number
   recentIncomes: (Income & { people: Pick<Person, "name"> | null })[]
   recentExpenses: (Expense & { people: Pick<Person, "name"> | null })[]
+}
+
+export type CashflowGranularity = "day" | "week" | "month" | "year"
+
+export interface CashflowPoint {
+  key: string
+  label: string
+  ingresos: number
+  gastos: number
+}
+
+export interface CategoryCashflowItem {
+  name: string
+  points: { key: string; label: string; gastos: number }[]
 }

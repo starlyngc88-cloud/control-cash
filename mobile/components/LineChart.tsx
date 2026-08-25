@@ -9,6 +9,7 @@ interface LineChartProps {
   width?: number
   height?: number
   showGrid?: boolean
+  showLegend?: boolean
 }
 
 export default function LineChart({
@@ -16,6 +17,7 @@ export default function LineChart({
   width = 320,
   height = 180,
   showGrid = true,
+  showLegend = true,
 }: LineChartProps) {
   if (datasets.length === 0 || datasets.every((d) => d.data.length === 0)) {
     return (
@@ -81,7 +83,7 @@ export default function LineChart({
         )
       )}
       {/* Legend */}
-      {datasets.length > 1 && (
+      {showLegend && datasets.length > 1 && (
         <G>
           {datasets.map((ds, i) => (
             <G key={ds.label}>

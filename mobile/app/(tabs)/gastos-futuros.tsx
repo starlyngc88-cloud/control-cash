@@ -1,14 +1,12 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, deleteFutureExpense, updateFutureExpenseStatus, completeFutureExpense, getPeople, getSavings, type FutureExpenseWithRelations, type SavingWithRelations } from "@/services/api"
+import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, updateFutureExpenseCategory, deleteFutureExpense, deleteFutureExpenseCategory, updateFutureExpenseStatus, completeFutureExpense, getPeople, getSavings, type FutureExpenseWithRelations, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
-import { Plus, CalendarClock, Pencil, Trash2, Search, X, Circle, CheckCircle2, Ban, type LucideIcon } from "lucide-react-native"
+import { Plus, CalendarClock, Pencil, Trash2, Search, X, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react-native"
 import type { FutureExpenseCategory, Person } from "@/types/database"
 
-const STATUS_ICONS: Record<string, LucideIcon> = { planned: Circle, completed: CheckCircle2, cancelled: Ban }
-const STATUS_COLORS: Record<string, string> = { planned: "#f59e0b", completed: "#059669", cancelled: "#94a3b8" }
 const STATUS_LABELS: Record<string, string> = { planned: "Planeado", completed: "Completado", cancelled: "Cancelado" }
 
 export default function GastosFuturosScreen() {
@@ -28,13 +26,19 @@ export default function GastosFuturosScreen() {
   const [submitting, setSubmitting] = useState(false)
   const [completeId, setCompleteId] = useState<string | null>(null)
   const [completePersonId, setCompletePersonId] = useState("")
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
+
+  const [catManagerName, setCatManagerName] = useState("")
+  const [editingCat, setEditingCat] = useState<FutureExpenseCategory | null>(null)
+  const [catDeleteTarget, setCatDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [catDeleteExpenses, setCatDeleteExpenses] = useState<FutureExpenseWithRelations[]>([])
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [expectedAmount, setExpectedAmount] = useState("")
   const [expectedDate, setExpectedDate] = useState(new Date().toISOString().split("T")[0])
-  const [catName, setCatName] = useState("")
+  const [planCuota, setPlanCuota] = useState("")
   const [savingId, setSavingId] = useState("")
 
   const load = useCallback(async () => {
@@ -61,11 +65,11 @@ export default function GastosFuturosScreen() {
   const catNameMap = Object.fromEntries(categories.map((c: FutureExpenseCategory) => [c.id, c.name]))
 
   const openNew = () => {
-    setEditing(null); setTitle(""); setDescription(""); setCategoryId(""); setExpectedAmount(""); setExpectedDate(new Date().toISOString().split("T")[0]); setSavingId(""); setModalOpen(true)
+    setEditing(null); setTitle(""); setDescription(""); setCategoryId(""); setExpectedAmount(""); setExpectedDate(new Date().toISOString().split("T")[0]); setPlanCuota(""); setSavingId(""); setModalOpen(true)
   }
 
   const openEdit = (item: FutureExpenseWithRelations) => {
-    setEditing(item); setTitle(item.title); setDescription(item.description ?? ""); setCategoryId(item.category_id ?? ""); setExpectedAmount(String(item.expected_amount)); setExpectedDate(item.expected_date); setSavingId(item.saving_id ?? ""); setModalOpen(true)
+    setEditing(item); setTitle(item.title); setDescription(item.description ?? ""); setCategoryId(item.category_id ?? ""); setExpectedAmount(String(item.expected_amount)); setExpectedDate(item.expected_date); setPlanCuota(""); setSavingId(item.saving_id ?? ""); setModalOpen(true)
   }
 
   const handleSubmit = async () => {
@@ -128,24 +132,143 @@ export default function GastosFuturosScreen() {
     return { bg: "bg-emerald-50/50", dot: "bg-emerald-500" }
   }
 
-  const handleAddCategory = async () => {
-    if (!catName.trim()) return
-    await createFutureExpenseCategory({ name: catName.trim() })
-    setCatName(""); setCatModalOpen(false); load()
+  const openCatManager = () => {
+    setEditingCat(null); setCatManagerName(""); setCatModalOpen(true)
   }
+
+  const handleCatSubmit = async () => {
+    if (!catManagerName.trim()) return
+    setSubmitting(true)
+    try {
+      if (editingCat) {
+        await updateFutureExpenseCategory(editingCat.id, { name: catManagerName.trim() })
+      } else {
+        await createFutureExpenseCategory({ name: catManagerName.trim() })
+      }
+      setCatModalOpen(false); setCatManagerName(""); setEditingCat(null)
+      const cats = await getFutureExpenseCategories()
+      setCategories(cats)
+      load()
+    } catch { Alert.alert("Error", "No se pudo guardar la categoría.") }
+    finally { setSubmitting(false) }
+  }
+
+  const handleDeleteCat = (id: string, catName: string) => {
+    const related = items.filter((e) => e.category_id === id)
+    setCatDeleteExpenses(related)
+    setCatDeleteTarget({ id, name: catName })
+  }
+
+  const confirmDeleteCat = async () => {
+    if (!catDeleteTarget) return
+    setSubmitting(true)
+    try {
+      for (const fe of catDeleteExpenses) await deleteFutureExpense(fe.id)
+      await deleteFutureExpenseCategory(catDeleteTarget.id)
+      setCatDeleteTarget(null); setCatDeleteExpenses([])
+      const cats = await getFutureExpenseCategories()
+      setCategories(cats)
+      if (categoryId === catDeleteTarget.id) setCategoryId("")
+      load()
+    } catch { Alert.alert("Error", "No se pudo eliminar la categoría.") }
+    finally { setSubmitting(false) }
+  }
+
+  const planCalc = useMemo(() => {
+    if (!expectedAmount) return null
+    const target = parseFloat(expectedAmount)
+    if (!target) return null
+    if (expectedDate) {
+      const now = new Date()
+      const end = new Date(expectedDate)
+      const diff = end.getTime() - now.getTime()
+      if (diff <= 0) return null
+      const months = Math.max(1, Math.ceil(diff / (1000 * 60 * 60 * 24 * 30.44)))
+      return { cuota: target / months, meses: months, type: "fecha" as const }
+    }
+    if (planCuota) {
+      const cuota = parseFloat(planCuota)
+      if (!cuota) return null
+      const meses = Math.ceil(target / cuota)
+      const end = new Date()
+      end.setMonth(end.getMonth() + meses)
+      return { meses, type: "cuota" as const, fechaEst: end.toLocaleDateString("es-CO") }
+    }
+    return null
+  }, [expectedAmount, expectedDate, planCuota])
 
   const now = new Date()
   const in30 = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
   const in90 = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
   const dueSoon30 = items.filter((fe: FutureExpenseWithRelations) => fe.expected_date && new Date(fe.expected_date) <= in30 && fe.status === "planned")
   const dueSoon90 = items.filter((fe: FutureExpenseWithRelations) => fe.expected_date && new Date(fe.expected_date) <= in90 && fe.status === "planned")
-  const filtered = items.filter((fe: FutureExpenseWithRelations) => !search || fe.title?.toLowerCase().includes(search.toLowerCase()) || fe.description?.toLowerCase().includes(search.toLowerCase()))
+  const filtered = items.filter((fe: FutureExpenseWithRelations) => !search || fe.title?.toLowerCase().includes(search.toLowerCase()) || fe.description?.toLowerCase().includes(search.toLowerCase()) || fe.future_expense_categories?.name?.toLowerCase().includes(search.toLowerCase()))
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, { id: string | null; name: string; items: FutureExpenseWithRelations[] }>()
+    for (const c of categories) {
+      map.set(c.id, { id: c.id, name: c.name, items: [] })
+    }
+    for (const fe of filtered) {
+      const catId = fe.category_id ?? "__none__"
+      const catName = fe.future_expense_categories?.name || "Sin categoría"
+      if (!map.has(catId)) map.set(catId, { id: fe.category_id ?? null, name: catName, items: [] })
+      map.get(catId)!.items.push(fe)
+    }
+    return map
+  }, [filtered, categories])
+
+  const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
+  const hasItems = items.length > 0 || categories.length > 0
 
   if (loading) return (
     <View className="flex-1 bg-background items-center justify-center" style={{ paddingTop: insets.top }}>
       <ActivityIndicator size="large" color="#4f46e5" />
     </View>
   )
+
+  const renderRow = (item: FutureExpenseWithRelations) => {
+    const urgency = getUrgency(item.expected_date)
+    const linkedBalance = Number(item.savings?.current_amount ?? 0)
+    const target = Number(item.expected_amount)
+    const progress = target > 0 ? Math.min(linkedBalance / target, 1) : 0
+    const showProgress = Boolean(item.saving_id) && item.status === "planned"
+    return (
+      <View key={item.id} className={`flex-row items-center px-4 py-2 border-b border-slate-100 last:border-b-0 ${urgency.bg}`}>
+        <View className="flex-1 min-w-0">
+          <View className="flex-row items-center gap-2">
+            <View className={`w-1.5 h-1.5 rounded-full ${urgency.dot}`} />
+            <View className="min-w-0">
+              <Text className="text-xs font-medium text-slate-900 truncate">{item.title}</Text>
+              <Text className="text-[10px] text-slate-500">
+                {new Date(item.expected_date).toLocaleDateString("es-CO")}{item.status === "completed" ? ` · ${STATUS_LABELS.completed}` : ""}
+              </Text>
+              {showProgress ? (
+                <View className="flex-row items-center gap-1 mt-0.5">
+                  <Text className="text-[10px] text-indigo-600">Abonado {formatCurrency(linkedBalance)} / {formatCurrency(target)}</Text>
+                  <View className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <View className={`h-full rounded-full ${progress >= 1 ? "bg-emerald-500" : "bg-indigo-500"}`} style={{ width: `${progress * 100}%` }} />
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        </View>
+        <View className="flex-row items-center gap-1.5 shrink-0 ml-3">
+          {item.status === "planned" && (
+            <>
+              <TouchableOpacity onPress={() => handleStatusChange(item.id, "completed")} className="p-1">
+                <CheckCircle2 size={14} color="#059669" />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => openEdit(item)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+            </>
+          )}
+          <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+          <Text className="text-xs font-semibold text-rose-600 tabular-nums w-24 text-right">{formatCurrency(Number(item.expected_amount))}</Text>
+        </View>
+      </View>
+    )
+  }
 
   return (
     <View className="flex-1 bg-[#f8fafc]" style={{ paddingTop: insets.top + 12 }}>
@@ -159,7 +282,6 @@ export default function GastosFuturosScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
       {loadError ? (
         <View className="mx-4 mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
           <Text className="text-[11px] text-rose-700">{loadError}</Text>
@@ -184,12 +306,11 @@ export default function GastosFuturosScreen() {
         </View>
       </View>
 
-      {/* KPI */}
       <View className="gap-2 mx-4 mb-3">
         <View className="flex-row gap-3">
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Total previsto</Text>
-            <Text className="text-sm font-bold text-slate-800">{formatCurrency(items.filter((i: FutureExpenseWithRelations) => i.status === "planned").reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
+            <Text className="text-sm font-bold text-rose-600">{formatCurrency(items.filter((i: FutureExpenseWithRelations) => i.status === "planned").reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
           </View>
           <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
             <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pendientes</Text>
@@ -209,81 +330,67 @@ export default function GastosFuturosScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
-        {/* Categories inline add */}
-        <TouchableOpacity onPress={() => setCatModalOpen(true)} className="flex-row items-center gap-1.5 mb-3">
+        <TouchableOpacity onPress={openCatManager} className="flex-row items-center gap-1.5 mb-3">
           <Plus size={12} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar categoría</Text>
         </TouchableOpacity>
 
-        {filtered.length === 0 ? (
+        {!hasItems ? (
           <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
             <CalendarClock size={32} color="#cbd5e1" />
-            <Text className="text-xs text-slate-400 mt-2">Sin gastos futuros</Text>
+            <Text className="text-xs text-slate-400 mt-2">{search ? "Sin resultados" : "Sin gastos futuros"}</Text>
           </View>
         ) : (
-          <View className="space-y-2">
-            {filtered.map((item: FutureExpenseWithRelations) => {
-              const urgency = getUrgency(item.expected_date)
-              const StatusIcon = STATUS_ICONS[item.status] ?? Circle
-              const statusColor = STATUS_COLORS[item.status] ?? "#94a3b8"
-              const d = daysUntil(item.expected_date)
-              const linkedBalance = Number(item.savings?.current_amount ?? 0)
-              const target = Number(item.expected_amount)
-              const progress = target > 0 ? Math.min(linkedBalance / target, 1) : 0
-              const showProgress = Boolean(item.saving_id) && item.status === "planned"
+          <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+            <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Gastos por categoría</Text>
+              <View className="flex-row items-center gap-3">
+                {grouped.size > 0 && (
+                  <TouchableOpacity onPress={() => { if (allExpanded) setExpandedCats(new Set()); else setExpandedCats(new Set(grouped.keys())) }}>
+                    <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                  </TouchableOpacity>
+                )}
+                <Text className="text-xs font-bold text-rose-600 tabular-nums">{formatCurrency(filtered.reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
+              </View>
+            </View>
+
+            {Array.from(grouped.entries()).map(([key, group]) => {
+              const isExpanded = expandedCats.has(key)
+              const catTotal = group.items.reduce((s: number, e: FutureExpenseWithRelations) => s + Number(e.expected_amount), 0)
+              const cat = categories.find((c) => c.id === group.id)
               return (
-                <View key={item.id} className={`bg-white rounded-xl p-4 border border-slate-100 shadow-sm ${urgency.bg}`}>
-                  <View className="flex-row items-start justify-between">
-                    <View className="flex-1 mr-2">
-                      <Text className="text-sm font-semibold text-slate-800">{item.title}</Text>
-                      {item.description ? <Text className="text-[10px] text-slate-400 mt-0.5">{item.description}</Text> : null}
-                    </View>
-                    <View className="flex-row gap-1">
-                      <TouchableOpacity onPress={() => handleStatusChange(item.id, item.status === "planned" ? "completed" : item.status === "completed" ? "cancelled" : "planned")} className="p-1">
-                        <StatusIcon size={16} color={statusColor} />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => openEdit(item)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDelete(item.id)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
-                    </View>
+                <View key={key}>
+                  <View className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                    <TouchableOpacity onPress={() => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next })} className="mr-2">
+                      {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
+                    </TouchableOpacity>
+                    {cat && (
+                      <>
+                        <TouchableOpacity onPress={() => { setEditingCat(cat); setCatManagerName(cat.name); setCatModalOpen(true) }} className="p-0.5 mr-0.5">
+                          <Pencil size={12} color="#94a3b8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDeleteCat(cat.id, cat.name)} className="p-0.5 mr-0.5">
+                          <Trash2 size={12} color="#e11d48" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{group.name}</Text>
+                    <Text className="text-[10px] text-slate-400 ml-1.5">({group.items.length})</Text>
+                    <Text className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(catTotal)}</Text>
                   </View>
-                  <View className="flex-row items-center justify-between mt-2">
-                    <Text className="text-xs font-semibold text-slate-800">{formatCurrency(Number(item.expected_amount))}</Text>
-                    <View className="flex-row items-center gap-1.5">
-                      <Text className={`text-[10px] font-medium ${d < 0 ? "text-slate-400" : d <= 30 ? "text-red-500" : d <= 90 ? "text-amber-500" : "text-emerald-500"}`}>
-                        {d < 0 ? `Vencido hace ${Math.abs(d)}d` : d === 0 ? "Hoy" : `En ${d}d`}
-                      </Text>
-                      <View className={`w-1.5 h-1.5 rounded-full ${urgency.dot}`} />
-                    </View>
-                  </View>
-                  <View className="flex-row items-center gap-1.5 mt-1.5">
-                    <Text className="text-[10px] text-slate-400">{STATUS_LABELS[item.status]}</Text>
-                    {item.future_expense_categories?.name ? (
-                      <><Text className="text-[10px] text-slate-300">·</Text><Text className="text-[10px] text-slate-400">{item.future_expense_categories.name}</Text></>
-                    ) : null}
-                  </View>
-                  {showProgress ? (
-                    <View className="mt-2">
-                      <View className="flex-row items-center justify-between mb-1">
-                        <Text className="text-[10px] text-slate-500">Hucha {formatCurrency(linkedBalance)}</Text>
-                        <Text className="text-[10px] text-slate-500">Meta {formatCurrency(target)}</Text>
-                      </View>
-                      <View className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <View className={`h-full rounded-full ${progress >= 1 ? "bg-emerald-500" : "bg-indigo-500"}`} style={{ width: `${progress * 100}%` }} />
-                      </View>
-                    </View>
-                  ) : null}
+                  {isExpanded && group.items.map(renderRow)}
                 </View>
               )
             })}
+
+            <View className="bg-white px-4 py-2.5 border-t border-slate-200 items-end">
+              <TouchableOpacity onPress={openNew} className="flex-row items-center gap-1">
+                <Plus size={13} color="#4f46e5" /><Text className="text-xs text-indigo-600 font-medium">Nuevo gasto futuro</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
         <View className="h-8" />
       </ScrollView>
-
-      {/* Footer total */}
-      <View className="bg-white border-t border-slate-200 px-4 py-3 flex-row items-center justify-between" style={{ paddingBottom: insets.bottom + 12 }}>
-        <Text className="text-xs font-medium text-slate-500">Total visible</Text>
-        <Text className="text-sm font-bold text-slate-800">{formatCurrency(filtered.reduce((s: number, i: FutureExpenseWithRelations) => s + Number(i.expected_amount), 0))}</Text>
-      </View>
 
       {/* Item Modal */}
       <Modal visible={modalOpen} animationType="slide" transparent>
@@ -325,6 +432,19 @@ export default function GastosFuturosScreen() {
                   <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="YYYY-MM-DD" placeholderTextColor="#94a3b8" value={expectedDate} onChangeText={setExpectedDate} />
                 </View>
                 <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Ahorro mensual (opcional)</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0.00" placeholderTextColor="#94a3b8" value={planCuota} onChangeText={setPlanCuota} keyboardType="decimal-pad" />
+                </View>
+                {planCalc ? (
+                  <View className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5">
+                    {planCalc.type === "fecha" ? (
+                      <Text className="text-[11px] text-amber-800">Necesitas ahorrar <Text className="font-bold">{formatCurrency(planCalc.cuota)}</Text> por mes durante <Text className="font-bold">{planCalc.meses} meses</Text></Text>
+                    ) : (
+                      <Text className="text-[11px] text-amber-800">Ahorrando <Text className="font-bold">{formatCurrency(parseFloat(planCuota || "0"))}</Text> por mes, alcanzas la meta en <Text className="font-bold">{planCalc.meses} meses</Text> (~{planCalc.fechaEst})</Text>
+                    )}
+                  </View>
+                ) : null}
+                <View>
                   <Text className="text-xs font-medium text-slate-600 mb-1">Hucha vinculada</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-1">
                     <TouchableOpacity onPress={() => setSavingId("")} className={`mr-1.5 px-3 py-1.5 rounded-xl border ${!savingId ? "bg-indigo-600 border-indigo-600" : "bg-white border-slate-200"}`}>
@@ -348,14 +468,81 @@ export default function GastosFuturosScreen() {
       </Modal>
 
       {/* Category Modal */}
-      <Modal visible={catModalOpen} animationType="fade" transparent>
+      <Modal visible={catModalOpen} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
+          <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-semibold text-slate-800">{editingCat ? "Editar categoría" : "Nueva categoría"}</Text>
+              <TouchableOpacity onPress={() => { setCatModalOpen(false); setCatManagerName(""); setEditingCat(null) }}>
+                <X size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView className="max-h-60 mb-4">
+              {categories.length === 0 ? (
+                <Text className="text-xs text-slate-400 text-center py-4">Sin categorías aún</Text>
+              ) : (
+                categories.map((cat) => (
+                  <View key={cat.id} className="flex-row items-center justify-between py-2.5 border-b border-slate-100">
+                    <Text className="text-xs text-slate-800 flex-1 mr-2" numberOfLines={1}>{cat.name}</Text>
+                    <TouchableOpacity onPress={() => { setEditingCat(cat); setCatManagerName(cat.name) }} className="p-1">
+                      <Pencil size={13} color="#94a3b8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteCat(cat.id, cat.name)} className="p-1">
+                      <Trash2 size={13} color="#e11d48" />
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+            <View className="space-y-3">
+              <View>
+                <Text className="text-xs font-medium text-slate-600 mb-1">Nombre</Text>
+                <TextInput
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
+                  placeholder="Nombre de la categoría"
+                  placeholderTextColor="#94a3b8"
+                  value={catManagerName}
+                  onChangeText={setCatManagerName}
+                />
+              </View>
+              <TouchableOpacity onPress={handleCatSubmit} disabled={submitting} className="h-10 rounded-xl bg-indigo-600 items-center justify-center">
+                {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">{editingCat ? "Guardar cambios" : "Crear categoría"}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Delete Category Modal */}
+      <Modal visible={!!catDeleteTarget} animationType="fade" transparent>
         <View className="flex-1 justify-center px-6">
           <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xl">
-            <Text className="text-sm font-semibold text-slate-800 mb-3">Nueva categoría</Text>
-            <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 mb-3" placeholder="Nombre" placeholderTextColor="#94a3b8" value={catName} onChangeText={setCatName} />
-            <TouchableOpacity onPress={handleAddCategory} className="h-10 rounded-xl bg-indigo-600 items-center justify-center">
-              <Text className="text-sm font-semibold text-white">Agregar</Text>
-            </TouchableOpacity>
+            <Text className="text-sm font-semibold text-slate-800 mb-1">Eliminar categoría</Text>
+            <Text className="text-[10px] text-slate-400 mb-4">Esta acción no se puede deshacer.</Text>
+            <View className="rounded-xl bg-rose-50 px-3 py-2 mb-4">
+              <Text className="text-xs text-rose-700">¿Eliminar la categoría <Text className="font-bold">{catDeleteTarget?.name}</Text>?</Text>
+              {catDeleteExpenses.length > 0 && (
+                <Text className="text-[10px] text-rose-500 mt-1">{catDeleteExpenses.length} gasto{catDeleteExpenses.length !== 1 ? "s" : ""} asociado{catDeleteExpenses.length !== 1 ? "s" : ""} también será{catDeleteExpenses.length !== 1 ? "n" : ""} eliminado{catDeleteExpenses.length !== 1 ? "s" : ""}.</Text>
+              )}
+            </View>
+            {catDeleteExpenses.length > 0 && (
+              <ScrollView className="max-h-40 mb-4">
+                {catDeleteExpenses.map((fe) => (
+                  <View key={fe.id} className="flex-row items-center justify-between px-3 py-1.5 rounded-xl bg-white border border-rose-100 mb-1">
+                    <Text className="text-xs text-slate-700 flex-1 mr-2" numberOfLines={1}>{fe.title}</Text>
+                    <Text className="text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(Number(fe.expected_amount))}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+            <View className="flex-row gap-2">
+              <TouchableOpacity onPress={() => setCatDeleteTarget(null)} className="flex-1 h-10 rounded-xl border border-slate-200 items-center justify-center">
+                <Text className="text-xs font-semibold text-slate-600">Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmDeleteCat} disabled={submitting} className="flex-1 h-10 rounded-xl bg-rose-600 items-center justify-center">
+                {submitting ? <ActivityIndicator color="white" /> : <Text className="text-xs font-semibold text-white">{catDeleteExpenses.length > 0 ? `Eliminar (${catDeleteExpenses.length} gastos)` : "Eliminar"}</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

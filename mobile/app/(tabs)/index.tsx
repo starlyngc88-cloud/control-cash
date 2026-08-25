@@ -1,36 +1,64 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Dimensions } from "react-native"
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Dimensions, TouchableOpacity } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
-import { getDashboardData, getYearlyData } from "@/services/api"
+import { useRouter } from "expo-router"
+import { getDashboardData, getCashflowData, getCategoryCashflowData, getMonthlyBudgets, autoGranularity, granularityLabel } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Wallet, TrendingUp, TrendingDown, PiggyBank } from "lucide-react-native"
-import type { DashboardData, YearlyMonth } from "@/types/database"
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, ChevronRight } from "lucide-react-native"
+import type { DashboardData, CashflowPoint, CategoryCashflowItem } from "@/types/database"
 import LineChart from "@/components/LineChart"
 import DateFilter from "@/components/DateFilter"
+import CategoryFilter from "@/components/CategoryFilter"
 
-const MONTHS_SHORT = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dec"]
+const PALETTE = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#0ea5e9", "#a855f7", "#84cc16", "#ec4899", "#14b8a6", "#f97316", "#8b5cf6", "#22c55e"]
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
+  const router = useRouter()
   const { months, setMonths } = useMonthFilter()
   const [data, setData] = useState<DashboardData | null>(null)
-  const [yearlyData, setYearlyData] = useState<YearlyMonth[]>([])
+  const [cashflowData, setCashflowData] = useState<CashflowPoint[]>([])
+  const [categoryItems, setCategoryItems] = useState<CategoryCashflowItem[]>([])
+  const [categoryLabels, setCategoryLabels] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[] | null>(null)
+  const [monthlyBudgetId, setMonthlyBudgetId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const screenWidth = Dimensions.get("window").width
 
+  const range = useMemo(() => {
+    if (months.length === 0) return { startDate: "", endDate: "" }
+    const sorted = [...months].sort()
+    const first = sorted[0]
+    const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+    return { startDate: first + "-01", endDate: new Date(y, m, 0).toISOString().split("T")[0] }
+  }, [months])
+
+  const granularity = useMemo(() => autoGranularity(range.startDate, range.endDate), [range])
+
   const load = useCallback(async () => {
     try {
       setLoadError(null)
-      const [dashboard, yearly] = await Promise.all([
+      const [dashboard, budgets, cashflow, category] = await Promise.all([
         getDashboardData(months),
-        getYearlyData(new Date().getFullYear()),
+        getMonthlyBudgets(),
+        range.startDate ? getCashflowData(range.startDate, range.endDate, granularity) : Promise.resolve([] as CashflowPoint[]),
+        range.startDate ? getCategoryCashflowData(range.startDate, range.endDate, granularity) : Promise.resolve({ labels: [], items: [] }),
       ])
       setData(dashboard)
-      setYearlyData(yearly)
+      setCashflowData(cashflow)
+      setCategoryItems(category.items)
+      setCategoryLabels(category.labels)
+      if (months.length === 1) {
+        const firstDay = months[0] + "-01"
+        const mb = budgets.find((b) => b.month === firstDay)
+        setMonthlyBudgetId(mb?.id ?? null)
+      } else {
+        setMonthlyBudgetId(null)
+      }
     } catch (error) {
       console.error("[KellyCash][Mobile][Dashboard] load failed", error)
       setLoadError("No se pudieron cargar los resúmenes. Verifica sesión, RLS y variables de Supabase.")
@@ -38,7 +66,7 @@ export default function DashboardScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }, [months])
+  }, [months, range, granularity])
 
   useEffect(() => {
     void (async () => { await load() })()
@@ -52,36 +80,44 @@ export default function DashboardScreen() {
     load()
   }
 
-  const filteredYearly = useMemo(() => {
-    if (!months.length) return yearlyData
-    return yearlyData.filter((m) => months.includes(m.month))
-  }, [yearlyData, months])
-
   const cashflowDatasets = useMemo(() => {
-    if (!filteredYearly.length) return []
-    const labels = filteredYearly.map((m) => MONTHS_SHORT[parseInt(m.month.split("-")[1]) - 1])
+    if (!cashflowData.length) return []
     return [
       {
         label: "Ingresos",
         color: "#10b981",
         fillColor: "rgba(16,185,129,0.06)",
-        data: filteredYearly.map((m) => ({ label: labels[filteredYearly.indexOf(m)], value: m.ingresos })),
+        data: cashflowData.map((p) => ({ label: p.label, value: p.ingresos })),
       },
       {
         label: "Gastos",
         color: "#f43f5e",
-        data: filteredYearly.map((m) => ({ label: labels[filteredYearly.indexOf(m)], value: m.gastos })),
+        data: cashflowData.map((p) => ({ label: p.label, value: p.gastos })),
         dash: [5, 5],
       },
     ]
-  }, [filteredYearly])
+  }, [cashflowData])
+
+  const categoryDatasets = useMemo(() => {
+    if (!categoryItems.length || !categoryLabels.length) return []
+    const showAll = selectedCategories === null
+    const visible = categoryItems.filter((item) => showAll || selectedCategories.includes(item.name))
+    return visible.map((item, i) => ({
+      label: item.name,
+      color: PALETTE[i % PALETTE.length],
+      data: item.points.map((p) => ({ label: p.label, value: p.gastos })),
+    }))
+  }, [categoryItems, categoryLabels, selectedCategories])
 
   const chartWidth = Math.min(screenWidth - 64, 600)
+
+  const spentPct = data && data.totalBudgeted > 0 ? Math.min(100, (data.totalGastos / data.totalBudgeted) * 100) : 0
+  const spentBarColor = spentPct > 100 ? "#f43f5e" : spentPct > 80 ? "#f59e0b" : "#10b981"
 
   const KPI_CARDS = [
     {
       label: "Disponible para gastar",
-      value: (data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0),
+      value: (data?.totalIngresos ?? 0) - (data?.totalBudgeted ?? 0) - (data?.totalGastosSinRubro ?? 0),
       icon: TrendingDown,
       color: "#059669",
       iconBg: "bg-emerald-100",
@@ -170,6 +206,20 @@ export default function DashboardScreen() {
                     {card.subtitle}
                   </Text>
                 ) : null}
+                {card.label === "Gastos" && data && data.totalBudgeted > 0 && (
+                  <View style={{ marginTop: 8, height: 4, borderRadius: 2, backgroundColor: "#f1f5f9", overflow: "hidden" }}>
+                    <View style={{ height: 4, borderRadius: 2, backgroundColor: spentBarColor, width: `${spentPct}%` }} />
+                  </View>
+                )}
+                {card.label === "Presupuesto" && monthlyBudgetId && (
+                  <TouchableOpacity
+                    onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: monthlyBudgetId } })}
+                    style={{ marginTop: 8, flexDirection: "row", alignItems: "center", gap: 2 }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "500", color: "#4f46e5" }}>Ver detalle</Text>
+                    <ChevronRight size={12} color="#4f46e5" />
+                  </TouchableOpacity>
+                )}
               </View>
             )
           })}
@@ -177,7 +227,52 @@ export default function DashboardScreen() {
 
         <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 20 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#1e293b" }}>Gastos por Categoría</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#eef2ff" }}>
+                <Text style={{ fontSize: 9, fontWeight: "600", color: "#4f46e5", textTransform: "uppercase" }}>Vista: {granularityLabel(granularity)}</Text>
+              </View>
+              {categoryItems.length > 0 && (
+                <CategoryFilter
+                  items={categoryItems.map((i) => i.name)}
+                  value={selectedCategories}
+                  onChange={setSelectedCategories}
+                />
+              )}
+            </View>
+          </View>
+          <View style={{ alignItems: "center" }}>
+            {categoryDatasets.length > 0 ? (
+              <>
+                <LineChart
+                  datasets={categoryDatasets}
+                  width={chartWidth}
+                  height={200}
+                  showLegend={false}
+                />
+                <View style={{ alignSelf: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 12, width: "100%" }}>
+                  {categoryDatasets.map((ds, i) => (
+                    <View key={`${ds.label}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ds.color }} />
+                      <Text style={{ fontSize: 10, color: "#64748b" }} numberOfLines={1}>{ds.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : (
+              <View style={{ height: 180, justifyContent: "center", alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: "#94a3b8" }}>Sin datos para el período seleccionado</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 20 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
             <Text style={{ fontSize: 14, fontWeight: "600", color: "#1e293b" }}>Flujo de Caja</Text>
+            <View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, backgroundColor: "#eef2ff" }}>
+              <Text style={{ fontSize: 9, fontWeight: "600", color: "#4f46e5", textTransform: "uppercase" }}>Vista: {granularityLabel(granularity)}</Text>
+            </View>
           </View>
           <View style={{ alignItems: "center" }}>
             {cashflowDatasets.length > 0 ? (

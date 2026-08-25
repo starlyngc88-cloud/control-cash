@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories, type CommitmentWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
-import { Plus, CircleDollarSign, Pencil, Trash2, X, ArrowDownCircle, History, Search } from "lucide-react-native"
+import { Plus, ShieldCheck, Pencil, Trash2, X, ArrowDownCircle, Search, ChevronDown, ChevronRight } from "lucide-react-native"
 import type { CommitmentPayment } from "@/types/database"
 
 export default function CompromisosScreen() {
@@ -12,17 +12,16 @@ export default function CompromisosScreen() {
   const router = useRouter()
   const [commitments, setCommitments] = useState<CommitmentWithRelations[]>([])
   const [categories, setCategories] = useState<BudgetCategoryWithTemplate[]>([])
+  const [paymentsMap, setPaymentsMap] = useState<Record<string, CommitmentPayment[]>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [paymentModalOpen, setPaymentModalOpen] = useState(false)
-  const [historyModalOpen, setHistoryModalOpen] = useState(false)
-  const [historyData, setHistoryData] = useState<CommitmentPayment[]>([])
-  const [historyTitle, setHistoryTitle] = useState("")
-  const [editing, setEditing] = useState<CommitmentWithRelations | null>(null)
   const [paymentCommId, setPaymentCommId] = useState<string | null>(null)
+  const [editing, setEditing] = useState<CommitmentWithRelations | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [expandedComm, setExpandedComm] = useState<Set<string>>(new Set())
 
   const [name, setName] = useState("")
   const [descrip, setDescrip] = useState("")
@@ -35,9 +34,15 @@ export default function CompromisosScreen() {
   const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0])
 
   const load = useCallback(async () => {
-    const [com, cats] = await Promise.all([getCommitments(), getAllBudgetCategories()])
+    const [com, cats, pays] = await Promise.all([getCommitments(), getAllBudgetCategories(), getCommitmentPayments()])
     setCommitments(com)
     setCategories(cats.filter((c) => !c.parent_id))
+    const map: Record<string, CommitmentPayment[]> = {}
+    for (const p of pays) {
+      if (!map[p.commitment_id]) map[p.commitment_id] = []
+      map[p.commitment_id].push(p)
+    }
+    setPaymentsMap(map)
     setLoading(false); setRefreshing(false)
   }, [])
 
@@ -84,11 +89,13 @@ export default function CompromisosScreen() {
     finally { setSubmitting(false) }
   }
 
-  const openHistory = async (comm: CommitmentWithRelations) => {
-    setHistoryTitle(comm.name)
-    const payments = await getCommitmentPayments(comm.id)
-    setHistoryData(payments)
-    setHistoryModalOpen(true)
+  const toggleComm = (id: string) => {
+    setExpandedComm((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   if (loading) return (
@@ -99,10 +106,13 @@ export default function CompromisosScreen() {
 
   const totalDeuda = commitments.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.current_balance), 0)
   const totalOriginal = commitments.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.total_amount), 0)
+  const pagosCount = Object.values(paymentsMap).reduce((s: number, pays: CommitmentPayment[]) => s + pays.length, 0)
 
   const filtered = commitments.filter((c) =>
-    !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.description?.toLowerCase().includes(search.toLowerCase())
+    !search || c.name?.toLowerCase().includes(search.toLowerCase()) || c.description?.toLowerCase().includes(search.toLowerCase()) || c.budget_categories?.name?.toLowerCase().includes(search.toLowerCase())
   )
+
+  const allExpanded = commitments.length > 0 && commitments.every((c) => expandedComm.has(c.id))
 
   return (
     <View className="flex-1 bg-[#f8fafc]" style={{ paddingTop: insets.top + 12 }}>
@@ -116,7 +126,6 @@ export default function CompromisosScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search */}
       <View className="mx-4 mb-3">
         <View className="flex-row items-center bg-white rounded-xl border border-slate-200 px-3 h-9">
           <Search size={14} color="#94a3b8" />
@@ -135,22 +144,24 @@ export default function CompromisosScreen() {
         </View>
       </View>
 
-      <View className="flex-row gap-3 mx-4 mb-3">
-        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
-          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Deuda total</Text>
-          <Text className="text-sm font-bold text-rose-600">{formatCurrency(totalDeuda)}</Text>
-        </View>
-        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
-          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pagado</Text>
-          <Text className="text-sm font-bold text-emerald-600">{formatCurrency(totalOriginal - totalDeuda)}</Text>
-        </View>
+      <View className="flex-row gap-2 mx-4 mb-3">
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Compromisos</Text>
           <Text className="text-sm font-bold text-slate-800">{commitments.length}</Text>
         </View>
         <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Deuda total</Text>
+          <Text className="text-sm font-bold text-rose-600">{formatCurrency(totalDeuda)}</Text>
+        </View>
+      </View>
+      <View className="flex-row gap-2 mx-4 mb-3">
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
           <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Progreso</Text>
-          <Text className="text-sm font-bold text-indigo-600">{totalOriginal > 0 ? Math.round(((totalOriginal - totalDeuda) / totalOriginal) * 100) : 0}%</Text>
+          <Text className="text-sm font-bold text-emerald-600">{totalOriginal > 0 ? Math.round((1 - totalDeuda / totalOriginal) * 100) : 0}%</Text>
+        </View>
+        <View className="flex-1 bg-white rounded-xl p-3 border border-slate-100 shadow-sm">
+          <Text className="text-[10px] font-medium text-slate-500 mb-0.5">Pagos registrados</Text>
+          <Text className="text-sm font-bold text-indigo-600">{pagosCount}</Text>
         </View>
       </View>
 
@@ -158,49 +169,79 @@ export default function CompromisosScreen() {
         <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
           {filtered.length === 0 ? (
             <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
-              <CircleDollarSign size={32} color="#cbd5e1" />
+              <ShieldCheck size={32} color="#cbd5e1" />
               <Text className="text-xs text-slate-400 mt-2">{search ? "Sin resultados" : "Sin compromisos"}</Text>
             </View>
           ) : (
-            <View className="space-y-3">
+            <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Compromisos</Text>
+                {commitments.length > 0 && (
+                  <TouchableOpacity onPress={() => { if (allExpanded) setExpandedComm(new Set()); else setExpandedComm(new Set(commitments.map((c) => c.id))) }}>
+                    <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               {filtered.map((c: CommitmentWithRelations) => {
-                const progress = Number(c.total_amount) > 0 ? ((Number(c.total_amount) - Number(c.current_balance)) / Number(c.total_amount)) * 100 : 0
+                const isExpanded = expandedComm.has(c.id)
+                const pays = paymentsMap[c.id] ?? []
+                const progress = Number(c.total_amount) > 0 ? Math.round((1 - Number(c.current_balance) / Number(c.total_amount)) * 100) : 0
                 return (
-                  <View key={c.id} className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
-                    <View className="flex-row items-start justify-between mb-2">
-                      <View className="flex-1 mr-2">
-                        <Text className="text-sm font-semibold text-slate-800">{c.name}</Text>
-                        {c.description ? <Text className="text-[10px] text-slate-400">{c.description}</Text> : null}
+                  <View key={c.id}>
+                    <View className="flex-row items-center px-4 py-2.5 border-b border-slate-200">
+                      <TouchableOpacity onPress={() => toggleComm(c.id)} className="mr-1.5">
+                        {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
+                      </TouchableOpacity>
+                      <View className="flex-1 mr-2 min-w-0">
+                        <Text className="text-xs font-semibold text-slate-700 truncate">{c.name}</Text>
+                        {c.budget_categories?.name ? <Text className="text-[10px] text-slate-400">· {c.budget_categories.name}</Text> : null}
                       </View>
-                      <View className="flex-row gap-1">
-                        <TouchableOpacity onPress={() => openPayment(c.id)} className="p-1.5 bg-emerald-100 rounded-lg"><ArrowDownCircle size={14} color="#059669" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => openHistory(c)} className="p-1.5 bg-indigo-100 rounded-lg"><History size={12} color="#4f46e5" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => openEdit(c)} className="p-1.5 bg-slate-100 rounded-lg"><Pencil size={12} color="#64748b" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-1.5 bg-rose-100 rounded-lg"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                      <Text className="text-[10px] text-slate-500 tabular-nums">{progress}%</Text>
+                      <View className="w-10 h-1 rounded-full bg-slate-200 overflow-hidden ml-1.5">
+                        <View className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
+                      </View>
+                      <Text className="ml-2 text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(Number(c.current_balance))}</Text>
+                      <View className="flex-row items-center gap-0.5 ml-1.5">
+                        <TouchableOpacity onPress={() => openEdit(c)} className="p-0.5"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-0.5"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
                       </View>
                     </View>
-                    <View className="h-2 bg-slate-100 rounded-full mb-1.5 overflow-hidden">
-                      <View className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(100, progress)}%` }} />
-                    </View>
-                    <View className="flex-row justify-between items-center">
-                      <Text className="text-xs font-semibold text-rose-600">Saldo: {formatCurrency(Number(c.current_balance))}</Text>
-                      <Text className="text-[10px] text-slate-400">Total: {formatCurrency(Number(c.total_amount))}</Text>
-                    </View>
-                    {c.budget_categories?.name ? <Text className="text-[10px] text-slate-400 mt-1">Rubro: {c.budget_categories.name}</Text> : null}
+                    {isExpanded && (
+                      <View className="bg-white border-b border-slate-100 px-5 py-2.5">
+                        {c.description ? <Text className="text-[10px] text-slate-500 mb-2">{c.description}</Text> : null}
+                        <TouchableOpacity onPress={() => openPayment(c.id)} className="self-start flex-row items-center gap-1 bg-indigo-600 rounded-lg px-3 py-1.5 mb-2">
+                          <ArrowDownCircle size={12} color="white" /><Text className="text-[10px] font-medium text-white">Registrar pago</Text>
+                        </TouchableOpacity>
+                        {pays.length > 0 ? (
+                          <View className="space-y-1">
+                            {pays.map((p: CommitmentPayment) => (
+                              <View key={p.id} className="flex-row items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-lg">
+                                <Text className="text-[10px] text-slate-500">{formatDate(p.date)}{p.notes ? ` · ${p.notes}` : ""}</Text>
+                                <View className="flex-row items-center gap-1.5">
+                                  <Text className="text-[10px] font-medium text-rose-600 tabular-nums">{formatCurrency(Number(p.amount))}</Text>
+                                  <Text className="text-[10px] text-rose-500 tabular-nums">-{formatCurrency(Number(p.capital_amount))}</Text>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text className="text-[10px] text-slate-400">Sin pagos registrados aún.</Text>
+                        )}
+                      </View>
+                    )}
                   </View>
                 )
               })}
+              <View className="bg-white px-4 py-2.5 border-t border-slate-200 flex-row items-center justify-between">
+                <Text className="text-xs text-rose-600 font-medium">Saldo restante total: {formatCurrency(totalDeuda)}</Text>
+                <TouchableOpacity onPress={openNew} className="flex-row items-center gap-1">
+                  <Plus size={13} color="#4f46e5" /><Text className="text-xs text-indigo-600 font-medium">Nuevo compromiso</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
           <View className="h-4" />
         </ScrollView>
-
-        <View className="bg-white border-t border-slate-200 px-4 py-3 shadow-lg" style={{ paddingBottom: insets.bottom + 8 }}>
-          <View className="flex-row items-center justify-between">
-            <Text className="text-xs font-medium text-slate-500">Saldo restante total</Text>
-            <Text className="text-sm font-bold text-rose-600">{formatCurrency(filtered.reduce((s: number, c: CommitmentWithRelations) => s + Number(c.current_balance), 0))}</Text>
-          </View>
-        </View>
       </View>
 
       {/* Commitment Modal */}
@@ -221,13 +262,15 @@ export default function CompromisosScreen() {
                   <Text className="text-xs font-medium text-slate-600 mb-1">Descripción</Text>
                   <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="Detalle..." placeholderTextColor="#94a3b8" value={descrip} onChangeText={setDescrip} />
                 </View>
-                <View>
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto total</Text>
-                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={totalAmount} onChangeText={setTotalAmount} keyboardType="decimal-pad" />
-                </View>
-                <View>
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Saldo actual</Text>
-                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={currentBalance} onChangeText={setCurrentBalance} keyboardType="decimal-pad" />
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium text-slate-600 mb-1">Monto total</Text>
+                    <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={totalAmount} onChangeText={setTotalAmount} keyboardType="decimal-pad" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium text-slate-600 mb-1">Saldo actual</Text>
+                    <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={currentBalance} onChangeText={setCurrentBalance} keyboardType="decimal-pad" />
+                  </View>
                 </View>
                 <View>
                   <Text className="text-xs font-medium text-slate-600 mb-1">Rubro (opcional)</Text>
@@ -260,13 +303,15 @@ export default function CompromisosScreen() {
               <TouchableOpacity onPress={() => setPaymentModalOpen(false)}><X size={20} color="#94a3b8" /></TouchableOpacity>
             </View>
             <View className="space-y-3">
-              <View>
-                <Text className="text-xs font-medium text-slate-600 mb-1">Monto del pago</Text>
-                <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
-              </View>
-              <View>
-                <Text className="text-xs font-medium text-slate-600 mb-1">Abono a capital</Text>
-                <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payCapital} onChangeText={setPayCapital} keyboardType="decimal-pad" />
+              <View className="flex-row gap-3">
+                <View className="flex-1">
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto del pago</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Abono a capital</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payCapital} onChangeText={setPayCapital} keyboardType="decimal-pad" />
+                </View>
               </View>
               <View>
                 <Text className="text-xs font-medium text-slate-600 mb-1">Fecha</Text>
@@ -280,37 +325,6 @@ export default function CompromisosScreen() {
             <TouchableOpacity onPress={handlePayment} disabled={submitting} className="h-11 rounded-xl bg-emerald-600 items-center justify-center mt-4">
               {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">Registrar pago</Text>}
             </TouchableOpacity>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* History Modal */}
-      <Modal visible={historyModalOpen} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
-          <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl max-h-[70%]" style={{ paddingBottom: insets.bottom + 20 }}>
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-semibold text-slate-800">{historyTitle}</Text>
-              <TouchableOpacity onPress={() => setHistoryModalOpen(false)}><X size={20} color="#94a3b8" /></TouchableOpacity>
-            </View>
-            <ScrollView>
-              {historyData.length === 0 ? (
-                <Text className="text-xs text-slate-400 text-center py-4">Sin pagos registrados</Text>
-              ) : (
-                <View className="space-y-2">
-                  {historyData.map((p: CommitmentPayment) => (
-                    <View key={p.id} className="flex-row items-center justify-between bg-slate-50 rounded-xl px-4 py-2.5">
-                      <View>
-                        <Text className="text-xs font-medium text-slate-800">{formatCurrency(Number(p.amount))}</Text>
-                        <Text className="text-[10px] text-slate-400">Capital: {formatCurrency(Number(p.capital_amount))}</Text>
-                      </View>
-                      <View className="items-end">
-                        <Text className="text-[10px] text-slate-500">{formatDate(p.date)}</Text>
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>

@@ -1,5 +1,5 @@
 import "../global.css"
-import { Slot, useRouter, useSegments } from "expo-router"
+import { Slot, usePathname, useRouter, useSegments } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { AuthProvider, useAuth } from "@/providers/AuthProvider"
 import { useEffect } from "react"
@@ -10,19 +10,21 @@ import { GestureHandlerRootView } from "react-native-gesture-handler"
 function RootLayoutNav() {
   const { user, loading } = useAuth()
   const segments = useSegments()
+  const pathname = usePathname()
   const router = useRouter()
 
   useEffect(() => {
     if (loading) return
 
     const inAuthGroup = segments[0] === "(auth)"
+    const atRootIndex = pathname === "/"
 
-    if (!user && !inAuthGroup) {
-      router.replace("/(auth)/login")
-    } else if (user && inAuthGroup) {
+    if (user && atRootIndex) {
       router.replace("/(tabs)")
+    } else if (!user && !inAuthGroup) {
+      router.replace("/(auth)/login")
     }
-  }, [user, loading, segments, router])
+  }, [user, loading, segments, pathname, router])
 
   if (loading) {
     return (

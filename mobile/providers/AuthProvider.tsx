@@ -30,18 +30,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (DEBUG_LOGS) {
-        console.log("[KellyCash][Mobile][Auth] init session", {
-          userId: session?.user?.id ?? null,
-          email: session?.user?.email ?? null,
-          expiresAt: session?.expires_at ?? null,
-        })
+    let active = true
+    const timeout = setTimeout(() => {
+      if (active) {
+        console.warn("[KellyCash][Mobile][Auth] getSession tardó demasiado, se fuerza salir del estado de carga")
+        setLoading(false)
       }
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    }, 8000)
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!active) return
+        if (DEBUG_LOGS) {
+          console.log("[KellyCash][Mobile][Auth] init session", {
+            userId: session?.user?.id ?? null,
+            email: session?.user?.email ?? null,
+            expiresAt: session?.expires_at ?? null,
+          })
+        }
+        setSession(session)
+        setUser(session?.user ?? null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        console.error("[KellyCash][Mobile][Auth] getSession failed", error)
+        if (active) setLoading(false)
+      })
+      .finally(() => clearTimeout(timeout))
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (DEBUG_LOGS) {
@@ -57,7 +72,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      active = false
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {

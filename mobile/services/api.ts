@@ -1,5 +1,5 @@
 import { assertSupabaseConfigured, supabase } from "@/lib/supabase"
-import type { Person, ExpenseCategory, IncomeCategory, DashboardData, YearlyMonth, BudgetTemplate, BudgetCategory, MonthlyBudget, FutureExpenseCategory, FutureExpense, Commitment, CommitmentPayment, AllowedUser, Expense, Income, Saving, SavingMovement, SavingCategory } from "@/types/database"
+import type { Person, ExpenseCategory, IncomeCategory, DashboardData, YearlyMonth, BudgetTemplate, BudgetCategory, MonthlyBudget, FutureExpenseCategory, FutureExpense, Commitment, CommitmentPayment, AllowedUser, Expense, Income, Saving, SavingMovement, SavingCategory, CashflowGranularity, CashflowPoint, CategoryCashflowItem, ExpenseCategoryTab, SavingsDashboard } from "@/types/database"
 
 const DEBUG_PREFIX = "[KellyCash][Mobile][Supabase]"
 const DEBUG_LOGS = typeof __DEV__ !== "undefined" ? __DEV__ : true
@@ -9,10 +9,12 @@ export type ExpenseWithRelations = Expense & {
   people: Pick<Person, "name"> | null
   expense_categories: Pick<ExpenseCategory, "id" | "name"> | null
   budget_categories: Pick<BudgetCategory, "name"> | null
+  savings: Pick<Saving, "id" | "name"> | null
 }
 
 export type IncomeWithRelations = Income & {
   people: Pick<Person, "name"> | null
+  income_categories: Pick<IncomeCategory, "name"> | null
 }
 
 export type FutureExpenseWithRelations = FutureExpense & {
@@ -35,6 +37,8 @@ export type BudgetCategoryWithTemplate = BudgetCategory & {
 export type MonthlyBudgetWithTotals = MonthlyBudget & {
   budget_templates: Pick<BudgetTemplate, "name">
   totalBudgeted: number
+  totalSpent: number
+  hasMovements: boolean
 }
 
 async function debugAuthState(scope: string) {
@@ -98,36 +102,100 @@ export async function getExpenses(opts?: { startDate?: string; endDate?: string 
   const personIds = [...new Set(expenses.map((e: Expense) => e.person_id))]
   const expCatIds = [...new Set(expenses.map((e: Expense) => e.expense_category_id).filter(Boolean))]
   const budgetCatIds = [...new Set(expenses.map((e: Expense) => e.budget_category_id).filter(Boolean))]
+  const savingIds = [...new Set(expenses.map((e: Expense) => e.saving_id).filter(Boolean))]
 
-  const [peopleRes, expCatsRes, bCatsRes] = await Promise.all([
+  const [peopleRes, expCatsRes, bCatsRes, savingsRes] = await Promise.all([
     personIds.length > 0 ? supabase.from("people").select("id, name").in("id", personIds) : Promise.resolve({ data: [] }),
     expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : { data: [] },
     budgetCatIds.length > 0 ? supabase.from("budget_categories").select("id, name").in("id", budgetCatIds) : { data: [] },
+    savingIds.length > 0 ? supabase.from("savings").select("id, name").in("id", savingIds) : { data: [] },
   ])
   logReadResult("getExpenses:people", "error" in peopleRes ? peopleRes.error : null, peopleRes.data?.length)
   logReadResult("getExpenses:expense_categories", "error" in expCatsRes ? expCatsRes.error : null, expCatsRes.data?.length)
   logReadResult("getExpenses:budget_categories", "error" in bCatsRes ? bCatsRes.error : null, bCatsRes.data?.length)
+  logReadResult("getExpenses:savings", "error" in savingsRes ? savingsRes.error : null, savingsRes.data?.length)
 
   const peopleMap = new Map((peopleRes.data ?? []).map((p: Pick<Person, "id" | "name">) => [p.id, { name: p.name }]))
   const expCatMap = new Map((expCatsRes.data ?? []).map((c: Pick<ExpenseCategory, "id" | "name">) => [c.id, { id: c.id, name: c.name }]))
   const bCatMap = new Map((bCatsRes.data ?? []).map((bc: Pick<BudgetCategory, "id" | "name">) => [bc.id, { name: bc.name }]))
+  const savingMap = new Map((savingsRes.data ?? []).map((s: Pick<Saving, "id" | "name">) => [s.id, { id: s.id, name: s.name }]))
   const mapped: ExpenseWithRelations[] = expenses.map((e: Expense) => ({
     ...e,
     people: peopleMap.get(e.person_id) ?? null,
     expense_categories: e.expense_category_id ? expCatMap.get(e.expense_category_id) ?? null : null,
     budget_categories: e.budget_category_id ? bCatMap.get(e.budget_category_id) ?? null : null,
+    savings: e.saving_id ? savingMap.get(e.saving_id) ?? null : null,
   }))
   logReadResult("getExpenses:mapped", null, mapped.length)
   return mapped
 }
+async function recalcSavingBalance(savingId: string) {
+  const { data, error } = await supabase.from("saving_movements").select("type, amount").eq("saving_id", savingId)
+  if (error) throw error
+  const balance = (data ?? []).reduce((sum: number, m: { type: string; amount: number | null }) => sum + (m.type === "income" ? Number(m.amount) : -Number(m.amount)), 0)
+  const { error: updateError } = await supabase.from("savings").update({ current_amount: Math.max(0, balance) }).eq("id", savingId)
+  if (updateError) throw updateError
+}
 export async function createExpense(data: Partial<Expense>) {
-  return supabase.from("expenses").insert(data).select().single()
+  const { data: exp, error } = await supabase.from("expenses").insert(data).select().single()
+  if (error) throw error
+  if (data.saving_id) {
+    await createSavingMovement({
+      saving_id: data.saving_id,
+      type: "withdrawal",
+      amount: Number(data.amount ?? 0),
+      notes: data.description ?? "",
+      movement_date: data.date ?? new Date().toISOString().split("T")[0],
+      expense_id: (exp as Expense).id,
+    })
+  }
+  return exp
 }
 export async function updateExpense(id: string, data: Partial<Expense>) {
-  return supabase.from("expenses").update(data).eq("id", id)
+  const { data: prev } = await supabase.from("expenses").select("saving_id, amount").eq("id", id).single()
+  const { error } = await supabase.from("expenses").update(data).eq("id", id)
+  if (error) throw error
+  const prevSaving = prev?.saving_id ?? null
+  const newSaving = data.saving_id ?? null
+  const prevAmount = Number(prev?.amount ?? 0)
+  if (prevSaving) {
+    await createSavingMovement({
+      saving_id: prevSaving,
+      type: "income",
+      amount: prevAmount,
+      notes: "Ajuste de gasto",
+      movement_date: new Date().toISOString().split("T")[0],
+    })
+  }
+  if (newSaving) {
+    await createSavingMovement({
+      saving_id: newSaving,
+      type: "withdrawal",
+      amount: Number(data.amount ?? 0),
+      notes: data.description ?? "",
+      movement_date: data.date ?? new Date().toISOString().split("T")[0],
+    })
+  }
 }
 export async function deleteExpense(id: string) {
-  return supabase.from("expenses").delete().eq("id", id)
+  const { data: prev } = await supabase.from("expenses").select("saving_id, amount, description").eq("id", id).single()
+  const { data: linked } = await supabase.from("saving_movements").select("saving_id").eq("expense_id", id)
+  const { error } = await supabase.from("expenses").delete().eq("id", id)
+  if (error) throw error
+  if (linked && linked.length > 0) {
+    for (const m of linked) {
+      await supabase.from("saving_movements").delete().eq("expense_id", id)
+      await recalcSavingBalance(m.saving_id)
+    }
+  } else if (prev?.saving_id) {
+    await createSavingMovement({
+      saving_id: prev.saving_id,
+      type: "income",
+      amount: Number(prev.amount),
+      notes: `Reversión de gasto ${prev.description ?? ""}`.trim(),
+      movement_date: new Date().toISOString().split("T")[0],
+    })
+  }
 }
 
 export async function getIncomes(opts?: { startDate?: string; endDate?: string }): Promise<IncomeWithRelations[]> {
@@ -141,14 +209,14 @@ export async function getIncomes(opts?: { startDate?: string; endDate?: string }
   const { data, error } = await query
   logReadResult("getIncomes:income", error, data?.length)
   if (error || !data) return []
-  const raw = data as unknown as Income[]
+  const raw = data as unknown as (Income & { income_categories: Pick<IncomeCategory, "name"> | null })[]
   const personIds = [...new Set(raw.map((inc: Income) => inc.person_id))]
   const { data: people, error: peopleError } = personIds.length > 0
     ? await supabase.from("people").select("id, name").in("id", personIds)
     : { data: [], error: null }
   logReadResult("getIncomes:people", peopleError, people?.length)
   const peopleMap = new Map((people ?? []).map((p: Pick<Person, "id" | "name">) => [p.id, { name: p.name }]))
-  return raw.map((inc: Income): IncomeWithRelations => ({ ...inc, people: peopleMap.get(inc.person_id) ?? null }))
+  return raw.map((inc: Income & { income_categories: Pick<IncomeCategory, "name"> | null }): IncomeWithRelations => ({ ...inc, people: peopleMap.get(inc.person_id) ?? null }))
 }
 export async function createIncome(data: Partial<Income>) {
   return supabase.from("income").insert(data).select().single()
@@ -164,10 +232,14 @@ export async function getExpenseCategories(): Promise<ExpenseCategory[]> {
   const { data } = await supabase.from("expense_categories").select("*").order("name")
   return data ?? []
 }
-export async function createExpenseCategory(input: { name: string }) {
+export async function createExpenseCategory(input: { name: string; tab?: ExpenseCategoryTab | null }) {
   return supabase.from("expense_categories").insert(input).select().single()
 }
+export async function updateExpenseCategory(id: string, input: { name: string; tab?: ExpenseCategoryTab | null }) {
+  return supabase.from("expense_categories").update(input).eq("id", id)
+}
 export async function deleteExpenseCategory(id: string) {
+  await supabase.from("expenses").update({ expense_category_id: null }).eq("expense_category_id", id)
   return supabase.from("expense_categories").delete().eq("id", id)
 }
 
@@ -178,7 +250,11 @@ export async function getIncomeCategories(): Promise<IncomeCategory[]> {
 export async function createIncomeCategory(input: { name: string }) {
   return supabase.from("income_categories").insert(input).select().single()
 }
+export async function updateIncomeCategory(id: string, input: { name: string }) {
+  return supabase.from("income_categories").update(input).eq("id", id)
+}
 export async function deleteIncomeCategory(id: string) {
+  await supabase.from("income").update({ category_id: null }).eq("category_id", id)
   return supabase.from("income_categories").delete().eq("id", id)
 }
 
@@ -201,8 +277,10 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
   logReadResult("getDashboardData:monthly_budgets", mbResult.error)
 
   const totalIngresos = incomesData.reduce((s: number, i: IncomeWithRelations) => s + Number(i.amount), 0)
-  const totalGastos = expensesData.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
-  const totalGastosConRubro = expensesData.filter((e: ExpenseWithRelations) => e.budget_category_id).reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+  const gastosDisponibles = expensesData.filter((e: ExpenseWithRelations) => !e.saving_id)
+  const totalGastos = gastosDisponibles.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+  const totalGastosConRubro = gastosDisponibles.filter((e: ExpenseWithRelations) => e.budget_category_id).reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+  const totalGastosSinRubro = totalGastos - totalGastosConRubro
   let totalBudgeted = 0
   if (mbResult.data) {
     const cats = await getMonthlyBudgetCategories(mbResult.data.id, mbResult.data.template_id)
@@ -210,7 +288,7 @@ export async function getDashboardData(months: string[]): Promise<DashboardData 
   }
   const balance = totalIngresos - totalGastos
 
-  return { totalBudgeted, totalIngresos, totalGastos, totalGastosConRubro, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
+  return { totalBudgeted, totalIngresos, totalGastos, totalGastosConRubro, totalGastosSinRubro, balance, recentIncomes: incomesData.slice(0, 5), recentExpenses: expensesData.slice(0, 5) }
 }
 
 export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
@@ -226,7 +304,7 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
       supabase.from("monthly_budgets").select("id, template_id").eq("month", startDate).maybeSingle(),
     ])
     const ingresos = incomesData.reduce((s: number, i: IncomeWithRelations) => s + Number(i.amount), 0)
-    const gastos = expensesData.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+    const gastos = expensesData.filter((e: ExpenseWithRelations) => !e.saving_id).reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
     let presupuesto = 0
     if (mbResult.data) {
       const cats = await getMonthlyBudgetCategories(mbResult.data.id, mbResult.data.template_id)
@@ -235,6 +313,148 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
     months.push({ month: monthStr, ingresos, gastos, presupuesto, balance: ingresos - gastos })
   }
   return months
+}
+
+/* ---- Cashflow & category charts ---- */
+
+const pad = (n: number) => String(n).padStart(2, "0")
+const toYmd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+export function autoGranularity(startDate: string, endDate: string): CashflowGranularity {
+  const start = new Date(startDate + "T00:00:00").getTime()
+  const end = new Date(endDate + "T00:00:00").getTime()
+  if (!startDate || !endDate || Number.isNaN(start) || Number.isNaN(end)) return "day"
+  const days = Math.round((end - start) / 86400000)
+  if (days <= 45) return "day"
+  if (days <= 183) return "week"
+  if (days <= 450) return "month"
+  return "year"
+}
+
+const GRANULARITY_LABEL: Record<CashflowGranularity, string> = {
+  day: "Día",
+  week: "Semana",
+  month: "Mes",
+  year: "Año",
+}
+
+export function granularityLabel(g: CashflowGranularity): string {
+  return GRANULARITY_LABEL[g]
+}
+
+function bucketKey(date: string, granularity: CashflowGranularity): string {
+  const d = new Date(date + "T00:00:00")
+  const y = d.getFullYear()
+  const m = pad(d.getMonth() + 1)
+  if (granularity === "year") return String(y)
+  if (granularity === "month") return `${y}-${m}`
+  if (granularity === "week") {
+    const dow = (d.getDay() + 6) % 7
+    const start = new Date(d)
+    start.setDate(d.getDate() - dow)
+    return toYmd(start)
+  }
+  return date
+}
+
+function labelFor(key: string, granularity: CashflowGranularity): string {
+  if (granularity === "year") return key
+  if (granularity === "month") {
+    return new Date(key + "-01T00:00:00").toLocaleDateString("es-CO", { month: "short", year: "numeric" }).replace(".", "")
+  }
+  return new Date(key + "T00:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" }).replace(".", "")
+}
+
+function nextBucket(cursor: Date, granularity: CashflowGranularity): Date {
+  const next = new Date(cursor)
+  if (granularity === "day") next.setDate(next.getDate() + 1)
+  else if (granularity === "week") next.setDate(next.getDate() + 7)
+  else if (granularity === "month") next.setMonth(next.getMonth() + 1)
+  else next.setFullYear(next.getFullYear() + 1)
+  return next
+}
+
+export async function getCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<CashflowPoint[]> {
+  assertSupabaseConfigured()
+  const [incomeRes, expenseRes] = await Promise.all([
+    supabase.from("income").select("date, amount").gte("date", startDate).lte("date", endDate),
+    supabase.from("expenses").select("date, amount, saving_id").gte("date", startDate).lte("date", endDate),
+  ])
+  const byKey = new Map<string, { key: string; ingresos: number; gastos: number }>()
+  for (const i of incomeRes.data ?? []) {
+    const key = bucketKey(i.date, granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    cur.ingresos += Number(i.amount)
+    byKey.set(key, cur)
+  }
+  for (const e of expenseRes.data ?? []) {
+    if (e.saving_id) continue
+    const key = bucketKey(e.date, granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    cur.gastos += Number(e.amount)
+    byKey.set(key, cur)
+  }
+  const points: CashflowPoint[] = []
+  let cursor = new Date(startDate + "T00:00:00")
+  const end = new Date(endDate + "T00:00:00")
+  let guard = 0
+  while (cursor <= end && guard < 10000) {
+    const key = bucketKey(toYmd(cursor), granularity)
+    const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
+    points.push({ key, label: labelFor(key, granularity), ingresos: cur.ingresos, gastos: cur.gastos })
+    cursor = nextBucket(cursor, granularity)
+    guard++
+  }
+  return points
+}
+
+export async function getCategoryCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<{ labels: string[]; items: CategoryCashflowItem[] }> {
+  assertSupabaseConfigured()
+  const [expenseRes, catsRes] = await Promise.all([
+    supabase.from("expenses").select("date, amount, budget_category_id, saving_id").gte("date", startDate).lte("date", endDate),
+    supabase.from("budget_categories").select("id, name, parent_id"),
+  ])
+  const cats = catsRes.data ?? []
+  const parentIds = new Set(cats.filter((c) => c.parent_id).map((c) => c.parent_id))
+  const nameById = new Map<string, string>()
+  for (const c of cats) {
+    if (!parentIds.has(c.id)) nameById.set(c.id, c.name)
+  }
+
+  const bucketOrder: string[] = []
+  let cursor = new Date(startDate + "T00:00:00")
+  const end = new Date(endDate + "T00:00:00")
+  let guard = 0
+  while (cursor <= end && guard < 10000) {
+    bucketOrder.push(bucketKey(toYmd(cursor), granularity))
+    cursor = nextBucket(cursor, granularity)
+    guard++
+  }
+  const labels = bucketOrder.map((k) => labelFor(k, granularity))
+
+  const totals = new Map<string, number[]>()
+  for (const e of expenseRes.data ?? []) {
+    if (!e.budget_category_id) continue
+    const name = nameById.get(e.budget_category_id)
+    if (!name) continue
+    const key = bucketKey(e.date, granularity)
+    const idx = bucketOrder.indexOf(key)
+    if (idx < 0) continue
+    const arr = totals.get(name) ?? new Array(bucketOrder.length).fill(0)
+    arr[idx] += Number(e.amount)
+    totals.set(name, arr)
+  }
+
+  const items: CategoryCashflowItem[] = [...totals.entries()].map(([name, arr]) => ({
+    name,
+    points: arr.map((gastos, i) => ({ key: bucketOrder[i], label: labels[i], gastos })),
+  })).sort((a, b) => {
+    const ta = a.points.reduce((s, p) => s + p.gastos, 0)
+    const tb = b.points.reduce((s, p) => s + p.gastos, 0)
+    return tb - ta
+  })
+
+  return { labels, items }
 }
 
 export async function getSavings(): Promise<SavingWithRelations[]> {
@@ -252,11 +472,23 @@ export async function deleteSaving(id: string) {
 }
 
 export async function createSavingMovement(data: Partial<SavingMovement>) {
-  return supabase.from("saving_movements").insert(data).select().single()
+  const { data: mov, error: movError } = await supabase.from("saving_movements").insert(data).select().single()
+  if (movError) throw movError
+  const { data: saving } = await supabase.from("savings").select("current_amount").eq("id", data.saving_id).single()
+  const amountChange = data.type === "income" ? Number(data.amount ?? 0) : -Number(data.amount ?? 0)
+  const newAmount = Math.max(0, Number(saving?.current_amount ?? 0) + amountChange)
+  const { error: updateError } = await supabase.from("savings").update({ current_amount: newAmount }).eq("id", data.saving_id)
+  if (updateError) throw updateError
+  return mov
 }
 export async function getSavingMovements(savingId: string): Promise<SavingMovement[]> {
-  const { data } = await supabase.from("saving_movements").select("*").eq("saving_id", savingId).order("movement_date", { ascending: false })
+  const { data } = await supabase.from("saving_movements").select("*").eq("saving_id", savingId).order("movement_date", { ascending: false }).order("created_at", { ascending: false })
   return data ?? []
+}
+
+export async function getRecentSavingMovements(limit = 5) {
+  const { data } = await supabase.from("saving_movements").select("*, savings(name)").order("movement_date", { ascending: false }).order("created_at", { ascending: false }).limit(limit)
+  return (data ?? []) as (SavingMovement & { savings: Pick<Saving, "name"> })[]
 }
 
 export async function countAllSavingMovements(): Promise<number> {
@@ -264,9 +496,31 @@ export async function countAllSavingMovements(): Promise<number> {
   return count ?? 0
 }
 
+export async function getSavingsDashboard(): Promise<SavingsDashboard> {
+  const [savingsResult, recentMovements] = await Promise.all([
+    supabase.from("savings").select("current_amount"),
+    getRecentSavingMovements(5),
+  ])
+  const savings = savingsResult.data as Saving[] | null
+  const totalAhorrado = savings?.reduce((sum: number, s: Saving) => sum + Number(s.current_amount), 0) ?? 0
+  return { totalAhorrado, numHuchas: savings?.length ?? 0, recentMovements }
+}
+
 export async function getSavingCategories(): Promise<SavingCategory[]> {
   const { data } = await supabase.from("saving_categories").select("*").order("name")
   return data ?? []
+}
+export async function createSavingCategory(input: { name: string }) {
+  return supabase.from("saving_categories").insert(input).select().single()
+}
+export async function updateSavingCategory(id: string, input: { name: string }) {
+  return supabase.from("saving_categories").update(input).eq("id", id)
+}
+export async function deleteSavingCategory(id: string) {
+  const { data: savs } = await supabase.from("savings").select("id").eq("category_id", id)
+  const ids = (savs ?? []).map((s: Pick<Saving, "id">) => s.id)
+  if (ids.length > 0) await supabase.from("savings").delete().in("id", ids)
+  return supabase.from("saving_categories").delete().eq("id", id)
 }
 
 export async function getFutureExpenseCategories(): Promise<FutureExpenseCategory[]> {
@@ -276,7 +530,11 @@ export async function getFutureExpenseCategories(): Promise<FutureExpenseCategor
 export async function createFutureExpenseCategory(input: { name: string }) {
   return supabase.from("future_expense_categories").insert(input).select().single()
 }
+export async function updateFutureExpenseCategory(id: string, input: { name: string }) {
+  return supabase.from("future_expense_categories").update(input).eq("id", id)
+}
 export async function deleteFutureExpenseCategory(id: string) {
+  await supabase.from("future_expenses").update({ category_id: null }).eq("category_id", id)
   return supabase.from("future_expense_categories").delete().eq("id", id)
 }
 
@@ -291,10 +549,11 @@ export async function createFutureExpense(data: Partial<FutureExpense>) {
 }
 export async function updateFutureExpense(id: string, data: Partial<FutureExpense>) {
   const { data: existing } = await supabase.from("future_expenses").select("saving_id").eq("id", id).single()
-  const result = await supabase.from("future_expenses").update(data).eq("id", id)
+  const finalSavingId = data.saving_id ?? existing?.saving_id ?? null
+  const result = await supabase.from("future_expenses").update({ ...data, saving_id: finalSavingId }).eq("id", id)
   if (result.error) throw result.error
-  if (existing?.saving_id && data.title) {
-    await supabase.from("savings").update({ name: data.title, description: data.description || "Gasto futuro" }).eq("id", existing.saving_id)
+  if (finalSavingId && data.title) {
+    await supabase.from("savings").update({ name: data.title, description: data.description || "Gasto futuro" }).eq("id", finalSavingId)
   }
   return result
 }
@@ -366,7 +625,14 @@ export async function getCommitmentPayments(commitmentId?: string): Promise<Comm
   return data ?? []
 }
 export async function createCommitmentPayment(data: Partial<CommitmentPayment>) {
-  return supabase.from("commitment_payments").insert(data).select().single()
+  const { data: payment, error } = await supabase.from("commitment_payments").insert(data).select().single()
+  if (error) throw error
+  if (data.commitment_id && data.capital_amount) {
+    const { data: comm } = await supabase.from("commitments").select("current_balance").eq("id", data.commitment_id).single()
+    const newBalance = Math.max(0, Number(comm?.current_balance ?? 0) - Number(data.capital_amount))
+    await supabase.from("commitments").update({ current_balance: newBalance }).eq("id", data.commitment_id)
+  }
+  return payment
 }
 
 export async function getBudgetTemplates(): Promise<BudgetTemplate[]> {
@@ -433,13 +699,21 @@ export async function updateBudgetCategory(id: string, data: Partial<BudgetCateg
 export async function deleteBudgetCategory(id: string) {
   return supabase.from("budget_categories").delete().eq("id", id)
 }
+export async function setBudgetCategoryPaid(id: string, is_paid: boolean) {
+  return supabase.from("budget_categories").update({ is_paid }).eq("id", id)
+}
 
 export async function getMonthlyBudgets(): Promise<MonthlyBudgetWithTotals[]> {
   const { data } = await supabase.from("monthly_budgets").select("*, budget_templates(name)").order("month", { ascending: false })
   const months = (data ?? []) as MonthlyBudgetWithTotals[]
   const withTotals = await Promise.all(months.map(async (m: MonthlyBudgetWithTotals) => {
     const cats = await getMonthlyBudgetCategories(m.id, m.template_id)
-    return { ...m, totalBudgeted: sumBudgetLeaves(cats) }
+    const monthDate = new Date(m.month + "T00:00:00")
+    const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).toISOString().split("T")[0]
+    const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).toISOString().split("T")[0]
+    const { data: expenses } = await supabase.from("expenses").select("amount").gte("date", startDate).lte("date", endDate)
+    const totalSpent = (expenses ?? []).reduce((s: number, e: { amount: number | null }) => s + Number(e.amount), 0)
+    return { ...m, totalBudgeted: sumBudgetLeaves(cats), totalSpent, hasMovements: totalSpent > 0 }
   }))
   return withTotals
 }
@@ -489,6 +763,7 @@ export interface MonthCategoryNode {
   excess: number
   percentage: number
   status: CatStatus
+  is_paid: boolean
   parent_id: string | null
   children: MonthCategoryNode[]
 }
@@ -501,12 +776,12 @@ export async function getMonthlyBudgetDashboard(id: string) {
   const startDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1).toISOString().split("T")[0]
   const endDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0).toISOString().split("T")[0]
   const [expenseResult, incomeResult] = await Promise.all([
-    supabase.from("expenses").select("amount, budget_category_id").gte("date", startDate).lte("date", endDate),
+    supabase.from("expenses").select("amount, budget_category_id, saving_id").gte("date", startDate).lte("date", endDate),
     supabase.from("income").select("amount").gte("date", startDate).lte("date", endDate),
   ])
   const categorySpent: Record<string, number> = {}
   for (const exp of expenseResult.data ?? []) {
-    if (exp.budget_category_id) categorySpent[exp.budget_category_id] = (categorySpent[exp.budget_category_id] ?? 0) + Number(exp.amount)
+    if (exp.budget_category_id && !exp.saving_id) categorySpent[exp.budget_category_id] = (categorySpent[exp.budget_category_id] ?? 0) + Number(exp.amount)
   }
   const treeMap = new Map<string, BudgetCategory & { children: BudgetCategory[] }>()
   for (const cat of categories) treeMap.set(cat.id, { ...cat, children: [] })
@@ -529,7 +804,7 @@ export async function getMonthlyBudgetDashboard(id: string) {
     let status: CatStatus = "green"
     if (percentage > 100) status = "red"
     else if (percentage >= 80) status = "yellow"
-    return { id: n.id, name: n.name, budgeted, spent, available, excess, percentage, status, parent_id: n.parent_id ?? null, children: n.children.map((c) => build(c as BudgetCategory & { children: BudgetCategory[] })) }
+    return { id: n.id, name: n.name, budgeted, spent, available, excess, percentage, status, is_paid: Boolean(n.is_paid), parent_id: n.parent_id ?? null, children: n.children.map((c) => build(c as BudgetCategory & { children: BudgetCategory[] })) }
   }
   const builtRoots = roots.map(build)
   const totalBudgeted = roots.reduce((s: number, r: BudgetCategory & { children: BudgetCategory[] }) => s + nodeBudgeted(r), 0)

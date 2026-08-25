@@ -236,14 +236,15 @@ export async function getDashboardData(months: string[]) {
   const firstDays = sorted.map((m) => m + "-01")
   const [incomeResult, expenseResult, recentIncomes, recentExpenses, mbResult] = await Promise.all([
     supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
-    supabase.from("expenses").select("amount, budget_category_id").gte("date", startOfMonth).lte("date", endOfMonth),
+    supabase.from("expenses").select("amount, budget_category_id, saving_id").gte("date", startOfMonth).lte("date", endOfMonth),
     getIncomes({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     getExpenses({ limit: 5, startDate: startOfMonth, endDate: endOfMonth }),
     supabase.from("monthly_budgets").select("id, template_id, month").in("month", firstDays),
   ])
   const totalIngresos = incomeResult.data?.reduce((sum, i) => sum + Number(i.amount), 0) ?? 0
-  const totalGastos = expenseResult.data?.reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
-  const totalGastosSinRubro = expenseResult.data?.filter(e => !e.budget_category_id).reduce((sum, e) => sum + Number(e.amount), 0) ?? 0
+  const gastosDisponibles = expenseResult.data?.filter(e => !e.saving_id) ?? []
+  const totalGastos = gastosDisponibles.reduce((sum, e) => sum + Number(e.amount), 0)
+  const totalGastosSinRubro = gastosDisponibles.filter(e => !e.budget_category_id).reduce((sum, e) => sum + Number(e.amount), 0)
   const totalGastosConRubro = totalGastos - totalGastosSinRubro
   let totalBudgeted = 0
   try {
@@ -269,10 +270,10 @@ export async function getYearlyData(year: number): Promise<YearlyMonth[]> {
     const endOfMonth = new Date(year, m, 0).toISOString().split("T")[0]
     const [incomeResult, expenseResult] = await Promise.all([
       supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
-      supabase.from("expenses").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
+      supabase.from("expenses").select("amount, saving_id").gte("date", startOfMonth).lte("date", endOfMonth),
     ])
     const ingresos = incomeResult.data?.reduce((s, i) => s + Number(i.amount), 0) ?? 0
-    const gastos = expenseResult.data?.reduce((s, e) => s + Number(e.amount), 0) ?? 0
+    const gastos = expenseResult.data?.filter(e => !e.saving_id).reduce((s, e) => s + Number(e.amount), 0) ?? 0
     const { data: mb } = await supabase.from("monthly_budgets").select("id, template_id").eq("month", startOfMonth).maybeSingle()
     let presupuesto = 0
     if (mb) {
@@ -326,7 +327,7 @@ function nextBucket(cursor: Date, granularity: CashflowGranularity): Date {
 export async function getCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<CashflowPoint[]> {
   const [incomeRes, expenseRes] = await Promise.all([
     supabase.from("income").select("date, amount").gte("date", startDate).lte("date", endDate),
-    supabase.from("expenses").select("date, amount").gte("date", startDate).lte("date", endDate),
+    supabase.from("expenses").select("date, amount, saving_id").gte("date", startDate).lte("date", endDate),
   ])
   const byKey = new Map<string, { key: string; ingresos: number; gastos: number }>()
   for (const i of incomeRes.data ?? []) {
@@ -336,6 +337,7 @@ export async function getCashflowData(startDate: string, endDate: string, granul
     byKey.set(key, cur)
   }
   for (const e of expenseRes.data ?? []) {
+    if (e.saving_id) continue
     const key = bucketKey(e.date, granularity)
     const cur = byKey.get(key) ?? { key, ingresos: 0, gastos: 0 }
     cur.gastos += Number(e.amount)
@@ -361,7 +363,7 @@ export type CategoryCashflowItem = {
 
 export async function getCategoryCashflowData(startDate: string, endDate: string, granularity: CashflowGranularity): Promise<{ labels: string[]; items: CategoryCashflowItem[] }> {
   const [expenseRes, catsRes] = await Promise.all([
-    supabase.from("expenses").select("date, amount, budget_category_id").gte("date", startDate).lte("date", endDate),
+    supabase.from("expenses").select("date, amount, budget_category_id, saving_id").gte("date", startDate).lte("date", endDate),
     supabase.from("budget_categories").select("id, name, parent_id"),
   ])
   const cats = catsRes.data ?? []
@@ -814,10 +816,10 @@ export async function getMonthlyBudgetDashboard(id: string): Promise<MonthlyBudg
   const startOfMonth = new Date(year, month, 1).toISOString().split("T")[0]
   const endOfMonth = new Date(year, month + 1, 0).toISOString().split("T")[0]
   const [expenseResult, incomeResult] = await Promise.all([
-    supabase.from("expenses").select("amount, budget_category_id").gte("date", startOfMonth).lte("date", endOfMonth),
+    supabase.from("expenses").select("amount, budget_category_id, saving_id").gte("date", startOfMonth).lte("date", endOfMonth),
     supabase.from("income").select("amount").gte("date", startOfMonth).lte("date", endOfMonth),
   ])
-  const expenses = expenseResult.data ?? []
+  const expenses = (expenseResult.data ?? []).filter(e => !e.saving_id)
   const incomes = incomeResult.data ?? []
   const categorySpent: Record<string, number> = {}
   for (const exp of expenses) { if (exp.budget_category_id) categorySpent[exp.budget_category_id] = (categorySpent[exp.budget_category_id] ?? 0) + Number(exp.amount) }
