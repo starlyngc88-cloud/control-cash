@@ -182,3 +182,30 @@ export interface CategoryCashflowItem {
   name: string
   points: { key: string; label: string; gastos: number }[]
 }
+
+export interface IncomeDropInsight {
+  type: "income_drop"
+  currentMonth: string
+  previousMonth: string
+  currentAmount: number
+  previousAmount: number
+  dropPercent: number
+}
+
+export interface SavingsRateInsight {
+  type: "low_savings_rate"
+  month: string
+  totalIncome: number
+  totalDeposits: number
+  rate: number
+}
+
+export interface ChronicOverspendInsight {
+  type: "chronic_overspend"
+  categoryName: string
+  timesOverBudget: number
+  totalMonths: number
+  totalExcess: number
+}
+
+export type FinancialInsight = IncomeDropInsight | SavingsRateInsight | ChronicOverspendInsight

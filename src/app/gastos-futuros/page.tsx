@@ -29,7 +29,6 @@ import type { FutureExpense, FutureExpenseCategory, Person, Saving } from "@/typ
 import { Plus, Trash2, Pencil, Crosshair, CheckCircle2, ChevronDown, ChevronRight, List, Search, Link } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
-import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
@@ -74,21 +73,14 @@ export default function GastosFuturosPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
   const { t, fmt } = useLanguage()
   const dict = t.gastosFuturos
-  const { startDate, endDate } = useCashflowFilter()
 
   const [search, setSearch] = useState("")
 
   const filtered = useMemo(() => {
-    let result = expenses
-    if (startDate && endDate) {
-      result = result.filter((e) => e.expected_date >= startDate && e.expected_date <= endDate)
-    }
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter((e) => e.title.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q) || (e.future_expense_categories?.name ?? "").toLowerCase().includes(q))
-    }
-    return result
-  }, [expenses, search, startDate, endDate])
+    if (!search) return expenses
+    const q = search.toLowerCase()
+    return expenses.filter((e) => e.title.toLowerCase().includes(q) || (e.description ?? "").toLowerCase().includes(q) || (e.future_expense_categories?.name ?? "").toLowerCase().includes(q))
+  }, [expenses, search])
 
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")

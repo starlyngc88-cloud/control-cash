@@ -8,6 +8,7 @@ import type { Income, Expense, Person } from "@/types"
 import { Wallet, TrendingDown, TrendingUp, ClipboardList } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { useCashflowFilter, autoGranularity, granularityLabel } from "@/components/contexts/CashflowFilterContext"
+import { FinancialInsights } from "@/components/FinancialInsights"
 import { Tooltip } from "@/components/ui/tooltip"
 import {
   Chart as ChartJS,
@@ -261,6 +262,8 @@ export default function DashboardPage() {
           </div>
         </Tooltip>
       </div>
+
+      <FinancialInsights />
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

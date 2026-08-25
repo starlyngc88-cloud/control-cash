@@ -35,7 +35,6 @@ import { Plus, Trash2, Pencil, Goal, ArrowDownCircle, ArrowUpCircle, List, Chevr
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
-import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function AhorrosPage() {
@@ -58,8 +57,10 @@ export default function AhorrosPage() {
   const { t, fmt } = useLanguage()
   const dict = t.ahorros
 
-  const { startDate } = useCashflowFilter()
-  const activeMonth = startDate ? startDate.slice(0, 7) : ""
+  const activeMonth = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })()
 
   const [search, setSearch] = useState("")
 

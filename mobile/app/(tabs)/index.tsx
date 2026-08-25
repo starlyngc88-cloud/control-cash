@@ -2,12 +2,12 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, Dimensions, TouchableOpacity } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getDashboardData, getCashflowData, getCategoryCashflowData, getMonthlyBudgets, autoGranularity, granularityLabel } from "@/services/api"
+import { getDashboardData, getCashflowData, getCategoryCashflowData, getMonthlyBudgets, getFinancialInsights, autoGranularity, granularityLabel } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, ChevronRight } from "lucide-react-native"
-import type { DashboardData, CashflowPoint, CategoryCashflowItem } from "@/types/database"
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, ChevronRight, AlertTriangle } from "lucide-react-native"
+import type { DashboardData, CashflowPoint, CategoryCashflowItem, FinancialInsight } from "@/types/database"
 import LineChart from "@/components/LineChart"
 import DateFilter from "@/components/DateFilter"
 import CategoryFilter from "@/components/CategoryFilter"
@@ -27,6 +27,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [insights, setInsights] = useState<FinancialInsight[]>([])
   const screenWidth = Dimensions.get("window").width
 
   const range = useMemo(() => {
@@ -42,16 +43,18 @@ export default function DashboardScreen() {
   const load = useCallback(async () => {
     try {
       setLoadError(null)
-      const [dashboard, budgets, cashflow, category] = await Promise.all([
+      const [dashboard, budgets, cashflow, category, insightsData] = await Promise.all([
         getDashboardData(months),
         getMonthlyBudgets(),
         range.startDate ? getCashflowData(range.startDate, range.endDate, granularity) : Promise.resolve([] as CashflowPoint[]),
         range.startDate ? getCategoryCashflowData(range.startDate, range.endDate, granularity) : Promise.resolve({ labels: [], items: [] }),
+        getFinancialInsights(),
       ])
       setData(dashboard)
       setCashflowData(cashflow)
       setCategoryItems(category.items)
       setCategoryLabels(category.labels)
+      setInsights(insightsData)
       if (months.length === 1) {
         const firstDay = months[0] + "-01"
         const mb = budgets.find((b) => b.month === firstDay)
@@ -224,6 +227,69 @@ export default function DashboardScreen() {
             )
           })}
         </View>
+
+        {insights.length > 0 && (
+          <View style={{ marginBottom: 20 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: "#1e293b", marginBottom: 12 }}>Alertas financieras</Text>
+            {insights.map((insight, i) => {
+              if (insight.type === "income_drop") {
+                return (
+                  <View key={`insight-${i}`} style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 8, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                    <View style={{ backgroundColor: "#fff1f2", borderRadius: 8, padding: 6 }}>
+                      <TrendingDown size={14} color="#e11d48" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Ingresos bajaron</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
+                        {formatCurrency(insight.currentAmount)} este mes vs {formatCurrency(insight.previousAmount)} el anterior
+                      </Text>
+                      <View style={{ backgroundColor: "#fff1f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#e11d48" }}>-{insight.dropPercent}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                )
+              }
+              if (insight.type === "low_savings_rate") {
+                return (
+                  <View key={`insight-${i}`} style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 8, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                    <View style={{ backgroundColor: "#fffbeb", borderRadius: 8, padding: 6 }}>
+                      <PiggyBank size={14} color="#d97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Tasa de ahorro baja</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
+                        Solo ahorras el {insight.rate}% de tus ingresos
+                      </Text>
+                      <View style={{ backgroundColor: "#fffbeb", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#d97706" }}>{formatCurrency(insight.totalDeposits)} / {formatCurrency(insight.totalIncome)}</Text>
+                      </View>
+                    </View>
+                  </View>
+                )
+              }
+              if (insight.type === "chronic_overspend") {
+                return (
+                  <View key={`insight-${i}`} style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 8, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+                    <View style={{ backgroundColor: "#fef2f2", borderRadius: 8, padding: 6 }}>
+                      <AlertTriangle size={14} color="#dc2626" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Presupuesto superado</Text>
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
+                        {insight.categoryName} se pasó en {insight.timesOverBudget} de {insight.totalMonths} meses
+                      </Text>
+                      <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>+{formatCurrency(insight.totalExcess)} exceso</Text>
+                      </View>
+                    </View>
+                  </View>
+                )
+              }
+              return null
+            })}
+          </View>
+        )}
 
         <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 20 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>

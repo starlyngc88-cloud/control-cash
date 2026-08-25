@@ -847,3 +847,150 @@ export async function updateUserRole(userId: string, role: "admin" | "user") {
 export function subscribeToTable(table: string, callback: (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => void) {
   return supabase.channel(`${table}-changes`).on("postgres_changes", { event: "*", schema: "public", table }, (payload) => callback(payload as unknown as { new: Record<string, unknown>; old: Record<string, unknown> })).subscribe()
 }
+
+/* ---- Financial Insights ---- */
+
+export type IncomeDropInsight = {
+  type: "income_drop"
+  currentMonth: string
+  previousMonth: string
+  currentAmount: number
+  previousAmount: number
+  dropPercent: number
+}
+
+export type SavingsRateInsight = {
+  type: "low_savings_rate"
+  month: string
+  totalIncome: number
+  totalDeposits: number
+  rate: number
+}
+
+export type ChronicOverspendInsight = {
+  type: "chronic_overspend"
+  categoryName: string
+  timesOverBudget: number
+  totalMonths: number
+  totalExcess: number
+}
+
+export type FinancialInsight = IncomeDropInsight | SavingsRateInsight | ChronicOverspendInsight
+
+export async function getFinancialInsights(): Promise<FinancialInsight[]> {
+  assertSupabaseConfigured()
+  const insights: FinancialInsight[] = []
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+
+  const currentMonthStr = `${currentYear}-${String(currentMonth).padStart(2, "0")}`
+  const prevMonth = currentMonth === 1 ? 12 : currentMonth - 1
+  const prevMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear
+  const prevMonthStr = `${prevMonthYear}-${String(prevMonth).padStart(2, "0")}`
+
+  const [yearlyData, currentDash] = await Promise.all([
+    getYearlyData(currentYear),
+    getDashboardData([currentMonthStr]),
+  ])
+
+  if (currentDash) {
+    const currentMonthData = yearlyData.find((m) => m.month === currentMonthStr)
+    const prevMonthData = yearlyData.find((m) => m.month === prevMonthStr)
+
+    if (currentMonthData && prevMonthData && prevMonthData.ingresos > 0) {
+      const drop = ((prevMonthData.ingresos - currentMonthData.ingresos) / prevMonthData.ingresos) * 100
+      if (drop > 10) {
+        insights.push({
+          type: "income_drop",
+          currentMonth: currentMonthStr,
+          previousMonth: prevMonthStr,
+          currentAmount: currentMonthData.ingresos,
+          previousAmount: prevMonthData.ingresos,
+          dropPercent: Math.round(drop),
+        })
+      }
+    }
+
+    if (currentDash.totalIngresos > 0) {
+      const { data: movements } = await supabase
+        .from("saving_movements")
+        .select("amount")
+        .eq("type", "income")
+        .gte("movement_date", `${currentMonthStr}-01`)
+        .lte("movement_date", new Date(currentYear, currentMonth, 0).toISOString().split("T")[0])
+
+      const totalDeposits = movements?.reduce((s: number, m: { amount: number }) => s + Number(m.amount), 0) ?? 0
+      const rate = (totalDeposits / currentDash.totalIngresos) * 100
+
+      if (rate < 10) {
+        insights.push({
+          type: "low_savings_rate",
+          month: currentMonthStr,
+          totalIncome: currentDash.totalIngresos,
+          totalDeposits,
+          rate: Math.round(rate),
+        })
+      }
+    }
+  }
+
+  const { data: allBudgets } = await supabase
+    .from("monthly_budgets")
+    .select("id, month")
+    .order("month", { ascending: false })
+    .limit(3)
+
+  if (allBudgets && allBudgets.length >= 2) {
+    const categoryStats = new Map<string, { over: number; total: number; excess: number }>()
+    for (const mb of allBudgets) {
+      const cats = await getMonthlyBudgetCategories(mb.id, "")
+      const monthDate = new Date(mb.month + "T00:00:00")
+      const startY = monthDate.getFullYear()
+      const startM = monthDate.getMonth()
+      const startOfMonth = new Date(startY, startM, 1).toISOString().split("T")[0]
+      const endOfMonth = new Date(startY, startM + 1, 0).toISOString().split("T")[0]
+      const { data: monthExpenses } = await supabase
+        .from("expenses")
+        .select("amount, budget_category_id")
+        .gte("date", startOfMonth)
+        .lte("date", endOfMonth)
+      const spentByCat: Record<string, number> = {}
+      for (const e of monthExpenses ?? []) {
+        if (e.budget_category_id) {
+          spentByCat[e.budget_category_id] = (spentByCat[e.budget_category_id] ?? 0) + Number(e.amount)
+        }
+      }
+      for (const cat of cats) {
+        if (Number(cat.budgeted) <= 0) continue
+        const spent = spentByCat[cat.id] ?? 0
+        const budgeted = Number(cat.budgeted)
+        if (spent > budgeted) {
+          const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, excess: 0 }
+          existing.over += 1
+          existing.total += 1
+          existing.excess += spent - budgeted
+          categoryStats.set(cat.name, existing)
+        } else {
+          const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, excess: 0 }
+          existing.total += 1
+          categoryStats.set(cat.name, existing)
+        }
+      }
+    }
+
+    for (const [name, stats] of categoryStats) {
+      if (stats.over >= 2 && stats.total >= 2) {
+        insights.push({
+          type: "chronic_overspend",
+          categoryName: name,
+          timesOverBudget: stats.over,
+          totalMonths: stats.total,
+          totalExcess: stats.excess,
+        })
+      }
+    }
+  }
+
+  return insights
+}
