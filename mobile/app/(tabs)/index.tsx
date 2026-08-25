@@ -277,7 +277,7 @@ export default function DashboardScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Presupuesto superado</Text>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-                        {insight.categoryName} se pasó en {insight.timesOverBudget} de {insight.totalMonths} meses
+                        {insight.categoryName} superó el presupuesto en {insight.timesOverBudget} de {insight.totalMonths} meses
                       </Text>
                       <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
                         <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>+{formatCurrency(insight.totalExcess)} exceso</Text>

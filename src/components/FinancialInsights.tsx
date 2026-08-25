@@ -53,7 +53,7 @@ function InsightCard({ insight, fmt }: { insight: FinancialInsight; fmt: (n: num
         <div className="min-w-0">
           <p className="text-[10px] font-medium text-slate-500">Presupuesto superado</p>
           <p className="text-xs font-semibold text-slate-800">
-            {insight.categoryName} se pasó en {insight.timesOverBudget} de {insight.totalMonths} meses
+            {insight.categoryName} superó el presupuesto en {insight.timesOverBudget} de {insight.totalMonths} meses
           </p>
           <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 mt-1">
             +{fmt(insight.totalExcess)} exceso
