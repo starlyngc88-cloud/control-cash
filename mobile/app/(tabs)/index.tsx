@@ -7,12 +7,54 @@ import { formatCurrency } from "@/utils/format"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { Wallet, TrendingUp, TrendingDown, PiggyBank, ChevronRight, AlertTriangle } from "lucide-react-native"
-import type { DashboardData, CashflowPoint, CategoryCashflowItem, FinancialInsight } from "@/types/database"
+import type { DashboardData, CashflowPoint, CategoryCashflowItem, FinancialInsight, ChronicOverspendCategory } from "@/types/database"
 import LineChart from "@/components/LineChart"
 import DateFilter from "@/components/DateFilter"
 import CategoryFilter from "@/components/CategoryFilter"
 
 const PALETTE = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#0ea5e9", "#a855f7", "#84cc16", "#ec4899", "#14b8a6", "#f97316", "#8b5cf6", "#22c55e"]
+
+function OverspendCarousel({ categories }: { categories: ChronicOverspendCategory[] }) {
+  const [current, setCurrent] = useState(0)
+
+  useEffect(() => {
+    if (categories.length <= 1) return
+    const timer = setInterval(() => {
+      setCurrent((c) => (c + 1) % categories.length)
+    }, 4000)
+    return () => clearInterval(timer)
+  }, [categories.length])
+
+  const cat = categories[current]
+
+  return (
+    <View style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 8, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
+      <View style={{ backgroundColor: "#fef2f2", borderRadius: 8, padding: 6 }}>
+        <AlertTriangle size={14} color="#dc2626" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 10, fontWeight: "500", color: "#dc2626" }}>Presupuesto superado</Text>
+        <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
+          La categoría {cat.categoryName} se pasó del presupuesto {cat.timesOverBudget} {cat.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {cat.totalMonths} meses
+        </Text>
+        <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
+          <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>Excediste {formatCurrency(cat.totalExcess)}</Text>
+        </View>
+      </View>
+      {categories.length > 1 && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "center" }}>
+          <TouchableOpacity onPress={() => setCurrent((c) => (c - 1 + categories.length) % categories.length)}>
+            <Text style={{ fontSize: 12, color: "#94a3b8" }}>◀</Text>
+          </TouchableOpacity>
+          <Text style={{ fontSize: 9, color: "#94a3b8", fontVariant: ["tabular-nums"] }}>{current + 1}/{categories.length}</Text>
+          <TouchableOpacity onPress={() => setCurrent((c) => (c + 1) % categories.length)}>
+            <Text style={{ fontSize: 12, color: "#94a3b8" }}>▶</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  )
+}
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
@@ -269,22 +311,7 @@ export default function DashboardScreen() {
                 )
               }
               if (insight.type === "chronic_overspend") {
-                return (
-                  <View key={`insight-${i}`} style={{ backgroundColor: "white", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: "#f1f5f9", marginBottom: 8, flexDirection: "row", alignItems: "flex-start", gap: 10 }}>
-                    <View style={{ backgroundColor: "#fef2f2", borderRadius: 8, padding: 6 }}>
-                      <AlertTriangle size={14} color="#dc2626" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#dc2626" }}>Presupuesto superado</Text>
-                      <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-                        La categoría {insight.categoryName} se pasó del presupuesto {insight.timesOverBudget} {insight.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {insight.totalMonths} meses
-                      </Text>
-                      <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
-                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>Excediste {formatCurrency(insight.totalExcess)} en total</Text>
-                      </View>
-                    </View>
-                  </View>
-                )
+                return <OverspendCarousel key={`insight-${i}`} categories={insight.categories} />
               }
               return null
             })}

@@ -200,12 +200,16 @@ export interface SavingsRateInsight {
   rate: number
 }
 
-export interface ChronicOverspendInsight {
-  type: "chronic_overspend"
+export interface ChronicOverspendCategory {
   categoryName: string
   timesOverBudget: number
   totalMonths: number
   totalExcess: number
+}
+
+export interface ChronicOverspendInsight {
+  type: "chronic_overspend"
+  categories: ChronicOverspendCategory[]
 }
 
 export type FinancialInsight = IncomeDropInsight | SavingsRateInsight | ChronicOverspendInsight

@@ -926,12 +926,16 @@ export type SavingsRateInsight = {
   rate: number
 }
 
-export type ChronicOverspendInsight = {
-  type: "chronic_overspend"
+export type ChronicOverspendCategory = {
   categoryName: string
   timesOverBudget: number
   totalMonths: number
   totalExcess: number
+}
+
+export type ChronicOverspendInsight = {
+  type: "chronic_overspend"
+  categories: ChronicOverspendCategory[]
 }
 
 export type FinancialInsight = IncomeDropInsight | SavingsRateInsight | ChronicOverspendInsight
@@ -997,8 +1001,8 @@ export async function getFinancialInsights(): Promise<FinancialInsight[]> {
     .order("month", { ascending: false })
     .limit(3)
 
-  if (allBudgets && allBudgets.length >= 2) {
-    const categoryStats = new Map<string, { over: number; total: number; excess: number }>()
+  if (allBudgets && allBudgets.length >= 1) {
+    const categoryStats = new Map<string, { over: number; total: number; latestExcess: number; latestMonth: string }>()
     for (const mb of allBudgets) {
       const cats = await getMonthCategories(mb.id, "")
       const monthDate = new Date(mb.month + "T00:00:00")
@@ -1020,30 +1024,34 @@ export async function getFinancialInsights(): Promise<FinancialInsight[]> {
       for (const cat of cats) {
         if (cat.budgeted <= 0) continue
         const spent = spentByCat[cat.id] ?? 0
+        const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, latestExcess: 0, latestMonth: "" }
+        existing.total += 1
         if (spent > cat.budgeted) {
-          const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, excess: 0 }
           existing.over += 1
-          existing.total += 1
-          existing.excess += spent - cat.budgeted
-          categoryStats.set(cat.name, existing)
-        } else {
-          const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, excess: 0 }
-          existing.total += 1
-          categoryStats.set(cat.name, existing)
+          if (mb.month >= existing.latestMonth) {
+            existing.latestExcess = spent - cat.budgeted
+            existing.latestMonth = mb.month
+          }
         }
+        categoryStats.set(cat.name, existing)
       }
     }
 
-    for (const [name, stats] of categoryStats) {
-      if (stats.over >= 2 && stats.total >= 2) {
-        insights.push({
-          type: "chronic_overspend",
-          categoryName: name,
-          timesOverBudget: stats.over,
-          totalMonths: stats.total,
-          totalExcess: stats.excess,
-        })
-      }
+    const overspent = [...categoryStats.entries()]
+      .filter(([, stats]) => stats.over >= 1)
+      .map(([name, stats]) => ({
+        categoryName: name,
+        timesOverBudget: stats.over,
+        totalMonths: stats.total,
+        totalExcess: stats.latestExcess,
+      }))
+      .sort((a, b) => b.totalExcess - a.totalExcess)
+
+    if (overspent.length > 0) {
+      insights.push({
+        type: "chronic_overspend",
+        categories: overspent,
+      } as ChronicOverspendInsight)
     }
   }
 
