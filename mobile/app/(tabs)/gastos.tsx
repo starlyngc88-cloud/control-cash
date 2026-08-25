@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
@@ -34,7 +34,7 @@ export default function GastosScreen() {
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayString())
   const [categoryId, setCategoryId] = useState("")
   const [budgetCategoryId, setBudgetCategoryId] = useState("")
   const [assumeAvailable, setAssumeAvailable] = useState(false)
@@ -89,7 +89,7 @@ export default function GastosScreen() {
     setPersonId("")
     setAmount("")
     setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
+    setDate(todayString())
     setCategoryId("")
     setBudgetCategoryId("")
     setAssumeAvailable(false)
@@ -274,7 +274,7 @@ export default function GastosScreen() {
         <View className="ml-2.5 flex-1 min-w-0">
           <View className="flex-row items-center gap-1.5">
             <Text className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</Text>
-            <Text className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
+            <Text className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
           </View>
           {exp.people?.name && <Text className="text-[10px] text-slate-500">{exp.people.name}</Text>}
         </View>
@@ -467,7 +467,7 @@ export default function GastosScreen() {
                   </TouchableOpacity>
                   <DatePickerModal
                     date={parsedDate}
-                    onChange={(d) => setDate(d.toISOString().split("T")[0])}
+                    onChange={(d) => setDate(toLocalDateString(d))}
                     visible={datePickerOpen}
                     onClose={() => setDatePickerOpen(false)}
                   />

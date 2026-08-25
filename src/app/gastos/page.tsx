@@ -16,6 +16,7 @@ import type { Person, Expense, ExpenseCategory, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight, X } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { toLocalDateString, todayString } from "@/lib/utils"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { useMonthFilter } from "@/components/MonthFilterContext"
 import { useSearchParams } from "next/navigation"
@@ -73,7 +74,7 @@ function GastosPageInner() {
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayString())
   const [expenseCategoryId, setExpenseCategoryId] = useState("")
   const [budgetCategoryId, setBudgetCategoryId] = useState("")
   const [assumeAvailable, setAssumeAvailable] = useState(false)
@@ -105,7 +106,7 @@ function GastosPageInner() {
     setPersonId("")
     setAmount("")
     setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
+    setDate(todayString())
     setExpenseCategoryId("")
     setBudgetCategoryId("")
     setAssumeAvailable(false)
@@ -230,7 +231,7 @@ function GastosPageInner() {
       setPersonId("")
       setAmount("")
       setDescription("")
-      setDate(new Date().toISOString().split("T")[0])
+      setDate(todayString())
       setExpenseCategoryId("")
       setSavingId("")
       load()
@@ -358,7 +359,7 @@ function GastosPageInner() {
         <div className="ml-2.5 min-w-0">
           <div className="flex items-center gap-1.5">
             <p className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</p>
-            <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+            <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
           </div>
           {exp.people?.name && <p className="text-[10px] text-slate-500">{exp.people.name}</p>}
         </div>

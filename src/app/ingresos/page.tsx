@@ -27,6 +27,7 @@ import type { Person, Income, IncomeCategory } from "@/types"
 import { Plus, Trash2, Pencil, TrendingDown, Search, List, ChevronDown, ChevronRight } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { toLocalDateString, todayString } from "@/lib/utils"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { useMonthFilter } from "@/components/MonthFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
@@ -57,7 +58,7 @@ export default function IngresosPage() {
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayString())
   const [categoryId, setCategoryId] = useState("")
 
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
@@ -78,7 +79,7 @@ export default function IngresosPage() {
     setPersonId("")
     setAmount("")
     setDescription("")
-    setDate(new Date().toISOString().split("T")[0])
+    setDate(todayString())
     setCategoryId("")
     setOpen(true)
   }
@@ -165,7 +166,7 @@ export default function IngresosPage() {
       setPersonId("")
       setAmount("")
       setDescription("")
-      setDate(new Date().toISOString().split("T")[0])
+      setDate(todayString())
       setCategoryId("")
       load()
     } catch (err) {
@@ -530,7 +531,7 @@ export default function IngresosPage() {
                         <div className="ml-2.5 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <p className="text-xs font-medium text-slate-900 truncate">{inc.description || "Sin concepto"}</p>
-                            <span className="text-[10px] text-slate-400 shrink-0">{new Date(inc.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">{new Date(inc.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
                           </div>
                           {inc.people?.name && <p className="text-[10px] text-slate-500">{inc.people.name}</p>}
                         </div>

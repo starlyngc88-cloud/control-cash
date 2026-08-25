@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome, createIncomeCategory, updateIncomeCategory, deleteIncomeCategory, type IncomeWithRelations } from "@/services/api"
-import { formatCurrency } from "@/utils/format"
+import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
@@ -36,7 +36,7 @@ export default function IngresosScreen() {
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [date, setDate] = useState(todayString())
   const [categoryId, setCategoryId] = useState("")
   const [datePickerOpen, setDatePickerOpen] = useState(false)
   const parsedDate = useMemo(() => new Date(date + "T12:00:00"), [date])
@@ -70,7 +70,7 @@ export default function IngresosScreen() {
 
   const openNew = () => {
     setEditing(null)
-    setPersonId(""); setAmount(""); setDescription(""); setDate(new Date().toISOString().split("T")[0]); setCategoryId("")
+    setPersonId(""); setAmount(""); setDescription(""); setDate(todayString()); setCategoryId("")
     setModalOpen(true)
   }
 
@@ -191,7 +191,7 @@ export default function IngresosScreen() {
         <View className="ml-2.5 flex-1 min-w-0">
           <View className="flex-row items-center gap-1.5">
             <Text className="text-xs font-medium text-slate-900 truncate">{inc.description || "Sin concepto"}</Text>
-            <Text className="text-[10px] text-slate-400 shrink-0">{new Date(inc.date).toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
+            <Text className="text-[10px] text-slate-400 shrink-0">{new Date(inc.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
           </View>
           {inc.people?.name ? <Text className="text-[10px] text-slate-500">{inc.people.name}</Text> : null}
         </View>
@@ -344,7 +344,7 @@ export default function IngresosScreen() {
                   </TouchableOpacity>
                   <DatePickerModal
                     date={parsedDate}
-                    onChange={(d) => setDate(d.toISOString().split("T")[0])}
+                    onChange={(d) => setDate(toLocalDateString(d))}
                     visible={datePickerOpen}
                     onClose={() => setDatePickerOpen(false)}
                   />
