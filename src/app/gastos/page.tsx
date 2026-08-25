@@ -18,7 +18,7 @@ import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { toLocalDateString, todayString } from "@/lib/utils"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
-import { useMonthFilter } from "@/components/MonthFilterContext"
+import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { useSearchParams } from "next/navigation"
 import { Tooltip } from "@/components/ui/tooltip"
 
@@ -57,19 +57,8 @@ function GastosPageInner() {
   const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const g = t.gastos
-  const { months } = useMonthFilter()
+  const { startDate, endDate } = useCashflowFilter()
   const searchParams = useSearchParams()
-
-  const sorted = [...months].sort()
-  const activeMonth = sorted[0] ?? ""
-  const startDate = months.length > 0 ? sorted[0] + "-01" : ""
-  const endDate = months.length > 0
-    ? (() => {
-        const [y, m] = sorted[sorted.length - 1].split("-").map((p) => parseInt(p, 10))
-        if (!y || !m || Number.isNaN(y) || Number.isNaN(m)) return ""
-        return new Date(y, m, 0).toISOString().split("T")[0]
-      })()
-    : ""
 
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")
@@ -161,6 +150,7 @@ function GastosPageInner() {
 
   const load = useCallback(async () => {
     try {
+      const activeMonth = startDate ? startDate.slice(0, 7) : ""
       const [e, p, cats, bCats, s] = await Promise.all([getExpenses({ startDate, endDate }), getPeople(), getExpenseCategories(), activeMonth ? getBudgetCategoriesForMonth(activeMonth) : Promise.resolve([]), getSavings()])
       setExpenses(e)
       setPeople(p)
@@ -172,7 +162,7 @@ function GastosPageInner() {
     } finally {
       setLoading(false)
     }
-  }, [startDate, endDate, activeMonth])
+  }, [startDate, endDate])
 
   useEffect(() => { void (async () => { await load() })() }, [load])
 

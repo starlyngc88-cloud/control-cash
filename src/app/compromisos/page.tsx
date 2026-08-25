@@ -29,6 +29,7 @@ import type { Commitment, CommitmentPayment, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ShieldCheck, ArrowDownCircle, ChevronDown, ChevronRight, List, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
+import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
@@ -45,8 +46,18 @@ export default function CompromisosPage() {
   const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const dict = t.compromisos
+  const { startDate, endDate } = useCashflowFilter()
 
   const [search, setSearch] = useState("")
+
+  const filteredPayments = useMemo(() => {
+    if (!startDate || !endDate) return paymentsMap
+    const filtered: Record<string, CommitmentPayment[]> = {}
+    for (const [id, payments] of Object.entries(paymentsMap)) {
+      filtered[id] = payments.filter((p) => p.date >= startDate && p.date <= endDate)
+    }
+    return filtered
+  }, [paymentsMap, startDate, endDate])
 
   const filtered = useMemo(() => {
     if (!search) return commitments
@@ -454,7 +465,7 @@ export default function CompromisosPage() {
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] font-medium text-slate-500 mb-0.5">{dict.pagosRecientes}</p>
-                <h3 className="text-lg font-bold text-slate-800">{Object.values(paymentsMap).reduce((s, pays) => s + pays.length, 0)}</h3>
+                <h3 className="text-lg font-bold text-slate-800">{Object.values(filteredPayments).reduce((s, pays) => s + pays.length, 0)}</h3>
               </div>
               <div className="p-1.5 bg-green-50 rounded-lg text-green-600">
                 <ArrowDownCircle className="size-3.5" />
@@ -496,7 +507,7 @@ export default function CompromisosPage() {
           <div>
             {filtered.map((comm) => {
               const isExpanded = expandedComm.has(comm.id)
-              const pays = paymentsMap[comm.id] ?? []
+              const pays = filteredPayments[comm.id] ?? []
               const progress = comm.total_amount > 0 ? Math.round((1 - Number(comm.current_balance) / Number(comm.total_amount)) * 100) : 0
               return (
                 <div key={comm.id}>

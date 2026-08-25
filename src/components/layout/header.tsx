@@ -39,8 +39,8 @@ export function Header() {
       <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
 
       {!isBudgetDetail && (
-        <div className={`flex-1 flex ${isDashboard ? "justify-center" : "justify-center"} ${actions ? "ml-0" : ""}`}>
-          {isDashboard ? <CashflowRangeFilter /> : <DateFilter />}
+        <div className="flex-1 flex justify-center">
+          <CashflowRangeFilter />
         </div>
       )}
 

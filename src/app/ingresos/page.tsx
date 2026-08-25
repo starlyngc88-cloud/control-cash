@@ -29,7 +29,7 @@ import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { toLocalDateString, todayString } from "@/lib/utils"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
-import { useMonthFilter } from "@/components/MonthFilterContext"
+import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
 export default function IngresosPage() {
@@ -43,17 +43,7 @@ export default function IngresosPage() {
   const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const inc = t.ingresos
-  const { months } = useMonthFilter()
-
-  const sorted = [...months].sort()
-  const startDate = months.length > 0 ? sorted[0] + "-01" : ""
-  const endDate = months.length > 0
-    ? (() => {
-        const [y, m] = sorted[sorted.length - 1].split("-").map((p) => parseInt(p, 10))
-        if (!y || !m || Number.isNaN(y) || Number.isNaN(m)) return ""
-        return new Date(y, m, 0).toISOString().split("T")[0]
-      })()
-    : ""
+  const { startDate, endDate } = useCashflowFilter()
 
   const [personId, setPersonId] = useState("")
   const [amount, setAmount] = useState("")

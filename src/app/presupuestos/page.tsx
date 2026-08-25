@@ -31,7 +31,7 @@ import { Plus, Trash2, Pencil, Calendar, ChevronRight, ChevronDown, ChevronLeft,
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
-import { useMonthFilter } from "@/components/MonthFilterContext"
+import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 
 export default function PresupuestosPage() {
   const [template, setTemplate] = useState<BudgetTemplate | null>(null)
@@ -77,7 +77,7 @@ export default function PresupuestosPage() {
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
 
-  const { months } = useMonthFilter()
+  const { startDate, endDate } = useCashflowFilter()
   const [year, setYear] = useState(() => new Date().getFullYear())
 
   const { setActions } = useHeaderActions()
@@ -338,8 +338,11 @@ export default function PresupuestosPage() {
   const filteredMonths = monthlyBudgets.filter((mb) => {
     const mbYear = parseInt(mb.month.slice(0, 4), 10)
     if (mbYear !== year) return false
-    if (months.length === 0) return true
-    return months.includes(mb.month.slice(0, 7))
+    if (!startDate || !endDate) return true
+    const startMonth = startDate.slice(0, 7)
+    const endMonth = endDate.slice(0, 7)
+    const mbMonth = mb.month.slice(0, 7)
+    return mbMonth >= startMonth && mbMonth <= endMonth
   })
 
   return (

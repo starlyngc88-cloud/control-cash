@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 
 export type CashflowGranularity = "day" | "week" | "month" | "year"
 
@@ -17,6 +17,15 @@ const CashflowFilterContext = createContext<CashflowFilterContextType>({
   setStartDate: () => {},
   setEndDate: () => {},
 })
+
+const FILTER_KEY = "cashflow-filter"
+
+function getDefaultDates() {
+  const d = new Date()
+  const start = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0]
+  return { start, end }
+}
 
 export function autoGranularity(startDate: string, endDate: string): CashflowGranularity {
   const start = new Date(startDate + "T00:00:00").getTime()
@@ -41,14 +50,38 @@ export function granularityLabel(g: CashflowGranularity): string {
 }
 
 export function CashflowFilterProvider({ children }: { children: ReactNode }) {
-  const [startDate, setStartDate] = useState(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+  const defaults = getDefaultDates()
+  const [startDate, setStartDateState] = useState(() => {
+    if (typeof window === "undefined") return defaults.start
+    try {
+      const saved = localStorage.getItem(FILTER_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as { startDate?: string; endDate?: string }
+        if (parsed.startDate) return parsed.startDate
+      }
+    } catch {}
+    return defaults.start
   })
-  const [endDate, setEndDate] = useState(() => {
-    const d = new Date()
-    return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0]
+  const [endDate, setEndDateState] = useState(() => {
+    if (typeof window === "undefined") return defaults.end
+    try {
+      const saved = localStorage.getItem(FILTER_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as { startDate?: string; endDate?: string }
+        if (parsed.endDate) return parsed.endDate
+      }
+    } catch {}
+    return defaults.end
   })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTER_KEY, JSON.stringify({ startDate, endDate }))
+    } catch {}
+  }, [startDate, endDate])
+
+  const setStartDate = (s: string) => setStartDateState(s)
+  const setEndDate = (e: string) => setEndDateState(e)
 
   return (
     <CashflowFilterContext.Provider value={{ startDate, endDate, setStartDate, setEndDate }}>
