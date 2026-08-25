@@ -29,6 +29,10 @@
       "permissions": [],
       "softwareKeyboardLayoutMode": "resize"
     },
+    "updates": {
+      "url": "https://u.expo.dev/435c376c-51e3-4bf9-a591-717fff256db9",
+      "fallbackToCacheTimeout": 300
+    },
     "plugins": [
       "expo-router",
       "expo-secure-store",
@@ -40,7 +44,8 @@
           "backgroundColor": "#ffffff",
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true
