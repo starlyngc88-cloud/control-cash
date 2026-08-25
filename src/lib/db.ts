@@ -764,13 +764,13 @@ export async function completeFutureExpense(id: string, personId: string) {
   await createSavingMovement({
     saving_id: fe.saving_id,
     type: "withdrawal",
-    amount: balance,
+    amount: target,
     notes: `Objetivo completado: ${fe.title}`,
     movement_date: today,
   })
   await createIncome({
     person_id: personId,
-    amount: balance,
+    amount: target,
     description: `Gasto futuro completado: ${fe.title}`,
     date: today,
     category_id: null,
