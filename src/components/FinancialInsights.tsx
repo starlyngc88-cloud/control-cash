@@ -53,23 +53,9 @@ function InsightCard({ insight, fmt }: { insight: FinancialInsight; fmt: (n: num
 
 function OverspendCarousel({ categories, fmt }: { categories: ChronicOverspendCategory[]; fmt: (n: number) => string }) {
   const [current, setCurrent] = useState(0)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const resetTimer = () => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      setCurrent((c) => (c + 1) % categories.length)
-    }, 4000)
-  }
-
-  useEffect(() => {
-    if (categories.length <= 1) return
-    resetTimer()
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [current, categories.length])
-
-  const prev = () => { setCurrent((c) => (c - 1 + categories.length) % categories.length) }
-  const next = () => { setCurrent((c) => (c + 1) % categories.length) }
+  const prev = () => setCurrent((c) => (c - 1 + categories.length) % categories.length)
+  const next = () => setCurrent((c) => (c + 1) % categories.length)
   const cat = categories[current]
 
   return (
@@ -81,11 +67,19 @@ function OverspendCarousel({ categories, fmt }: { categories: ChronicOverspendCa
         <div className="min-w-0 flex-1">
           <p className="text-[10px] font-medium text-red-600">Presupuesto superado</p>
           <p className="text-xs font-semibold text-slate-800">
-            La categoría <strong>{cat.categoryName}</strong> se pasó del presupuesto {cat.timesOverBudget} {cat.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {cat.totalMonths} meses
+            La categoría <strong>{cat.categoryName}</strong> se pasó {fmt(cat.currentExcess)} este mes ({fmt(cat.currentExcess + cat.budgeted)} de {fmt(cat.budgeted)})
           </p>
-          <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 mt-1">
-            Excediste {fmt(cat.totalExcess)}
-          </span>
+          <div className="flex items-center gap-2 mt-1">
+            <span className={`inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full ${cat.previousExcess === null ? "bg-slate-50 text-slate-500" : cat.currentExcess > cat.previousExcess ? "bg-red-50 text-red-600" : cat.currentExcess < cat.previousExcess ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-500"}`}>
+              {cat.previousExcess === null
+                ? "No tenía exceso el mes pasado"
+                : cat.currentExcess > cat.previousExcess
+                  ? `▲ Empeoró vs mes anterior (+${fmt(cat.currentExcess - cat.previousExcess)})`
+                  : cat.currentExcess < cat.previousExcess
+                    ? `▼ Mejoró vs mes anterior (-${fmt(cat.previousExcess - cat.currentExcess)})`
+                    : "Igual que el mes pasado"}
+            </span>
+          </div>
         </div>
         {categories.length > 1 && (
           <div className="flex items-center gap-1 shrink-0">

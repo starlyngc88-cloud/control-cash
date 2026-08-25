@@ -17,14 +17,6 @@ const PALETTE = ["#6366f1", "#f43f5e", "#10b981", "#f59e0b", "#0ea5e9", "#a855f7
 function OverspendCarousel({ categories }: { categories: ChronicOverspendCategory[] }) {
   const [current, setCurrent] = useState(0)
 
-  useEffect(() => {
-    if (categories.length <= 1) return
-    const timer = setInterval(() => {
-      setCurrent((c) => (c + 1) % categories.length)
-    }, 4000)
-    return () => clearInterval(timer)
-  }, [categories.length])
-
   const cat = categories[current]
 
   return (
@@ -35,10 +27,20 @@ function OverspendCarousel({ categories }: { categories: ChronicOverspendCategor
       <View style={{ flex: 1 }}>
         <Text style={{ fontSize: 10, fontWeight: "500", color: "#dc2626" }}>Presupuesto superado</Text>
         <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-          La categoría {cat.categoryName} se pasó del presupuesto {cat.timesOverBudget} {cat.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {cat.totalMonths} meses
+          La categoría {cat.categoryName} se pasó {formatCurrency(cat.currentExcess)} este mes ({formatCurrency(cat.currentExcess + cat.budgeted)} de {formatCurrency(cat.budgeted)})
         </Text>
-        <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
-          <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>Excediste {formatCurrency(cat.totalExcess)}</Text>
+        <View style={{ flexDirection: "row", marginTop: 4 }}>
+          <View style={{ backgroundColor: cat.previousExcess === null ? "#f8fafc" : cat.currentExcess > cat.previousExcess ? "#fef2f2" : cat.currentExcess < cat.previousExcess ? "#ecfdf5" : "#f8fafc", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
+            <Text style={{ fontSize: 9, fontWeight: "600", color: cat.previousExcess === null ? "#64748b" : cat.currentExcess > cat.previousExcess ? "#dc2626" : cat.currentExcess < cat.previousExcess ? "#059669" : "#64748b" }}>
+              {cat.previousExcess === null
+                ? "No tenía exceso el mes pasado"
+                : cat.currentExcess > cat.previousExcess
+                  ? `▲ Empeoró vs mes anterior (+${formatCurrency(cat.currentExcess - cat.previousExcess)})`
+                  : cat.currentExcess < cat.previousExcess
+                    ? `▼ Mejoró vs mes anterior (-${formatCurrency(cat.previousExcess - cat.currentExcess)})`
+                    : "Igual que el mes pasado"}
+            </Text>
+          </View>
         </View>
       </View>
       {categories.length > 1 && (

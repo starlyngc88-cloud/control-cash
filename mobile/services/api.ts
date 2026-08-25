@@ -866,9 +866,9 @@ export type SavingsRateInsight = {
 
 export type ChronicOverspendCategory = {
   categoryName: string
-  timesOverBudget: number
-  totalMonths: number
-  totalExcess: number
+  currentExcess: number
+  previousExcess: number | null
+  budgeted: number
 }
 
 export type ChronicOverspendInsight = {
@@ -936,58 +936,75 @@ export async function getFinancialInsights(): Promise<FinancialInsight[]> {
     }
   }
 
-  const { data: allBudgets } = await supabase
+  const { data: currentMb } = await supabase
     .from("monthly_budgets")
     .select("id, month")
-    .order("month", { ascending: false })
-    .limit(3)
+    .eq("month", currentMonthStr + "-01")
+    .maybeSingle()
 
-  if (allBudgets && allBudgets.length >= 1) {
-    const categoryStats = new Map<string, { over: number; total: number; latestExcess: number; latestMonth: string }>()
-    for (const mb of allBudgets) {
-      const cats = await getMonthlyBudgetCategories(mb.id, "")
-      const monthDate = new Date(mb.month + "T00:00:00")
-      const startY = monthDate.getFullYear()
-      const startM = monthDate.getMonth()
-      const startOfMonth = new Date(startY, startM, 1).toISOString().split("T")[0]
-      const endOfMonth = new Date(startY, startM + 1, 0).toISOString().split("T")[0]
-      const { data: monthExpenses } = await supabase
-        .from("expenses")
-        .select("amount, budget_category_id")
-        .gte("date", startOfMonth)
-        .lte("date", endOfMonth)
-      const spentByCat: Record<string, number> = {}
-      for (const e of monthExpenses ?? []) {
-        if (e.budget_category_id) {
-          spentByCat[e.budget_category_id] = (spentByCat[e.budget_category_id] ?? 0) + Number(e.amount)
-        }
+  const { data: prevMb } = await supabase
+    .from("monthly_budgets")
+    .select("id, month")
+    .eq("month", prevMonthStr + "-01")
+    .maybeSingle()
+
+  async function getSpentByCategory(mbId: string, monthStr: string): Promise<Record<string, number>> {
+    const monthDate = new Date(monthStr + "-01T00:00:00")
+    const y = monthDate.getFullYear()
+    const m = monthDate.getMonth()
+    const start = new Date(y, m, 1).toISOString().split("T")[0]
+    const end = new Date(y, m + 1, 0).toISOString().split("T")[0]
+    const { data } = await supabase
+      .from("expenses")
+      .select("amount, budget_category_id")
+      .gte("date", start)
+      .lte("date", end)
+    const spent: Record<string, number> = {}
+    for (const e of data ?? []) {
+      if (e.budget_category_id) {
+        spent[e.budget_category_id] = (spent[e.budget_category_id] ?? 0) + Number(e.amount)
       }
-      for (const cat of cats) {
-        if (Number(cat.budgeted) <= 0) continue
-        const spent = spentByCat[cat.id] ?? 0
-        const budgeted = Number(cat.budgeted)
-        const existing = categoryStats.get(cat.name) ?? { over: 0, total: 0, latestExcess: 0, latestMonth: "" }
-        existing.total += 1
-        if (spent > budgeted) {
-          existing.over += 1
-          if (mb.month >= existing.latestMonth) {
-            existing.latestExcess = spent - budgeted
-            existing.latestMonth = mb.month
+    }
+    return spent
+  }
+
+  if (currentMb) {
+    const currentCats = await getMonthlyBudgetCategories(currentMb.id, "")
+    const currentSpent = await getSpentByCategory(currentMb.id, currentMonthStr)
+
+    let prevSpent: Record<string, number> = {}
+    if (prevMb) {
+      prevSpent = await getSpentByCategory(prevMb.id, prevMonthStr)
+    }
+
+    const overspent: ChronicOverspendCategory[] = []
+    for (const cat of currentCats) {
+      if (Number(cat.budgeted) <= 0) continue
+      const spent = currentSpent[cat.id] ?? 0
+      const budgeted = Number(cat.budgeted)
+      if (spent > budgeted) {
+        const currentExcess = spent - budgeted
+        let previousExcess: number | null = null
+        if (prevMb) {
+          const prevCats = await getMonthlyBudgetCategories(prevMb.id, "")
+          const prevCat = prevCats.find((c) => c.name === cat.name)
+          if (prevCat && Number(prevCat.budgeted) > 0) {
+            const prevSpentAmount = prevSpent[prevCat.id] ?? 0
+            if (prevSpentAmount > Number(prevCat.budgeted)) {
+              previousExcess = prevSpentAmount - Number(prevCat.budgeted)
+            }
           }
         }
-        categoryStats.set(cat.name, existing)
+        overspent.push({
+          categoryName: cat.name,
+          currentExcess,
+          previousExcess,
+          budgeted,
+        })
       }
     }
 
-    const overspent = [...categoryStats.entries()]
-      .filter(([, stats]) => stats.over >= 1)
-      .map(([name, stats]) => ({
-        categoryName: name,
-        timesOverBudget: stats.over,
-        totalMonths: stats.total,
-        totalExcess: stats.latestExcess,
-      }))
-      .sort((a, b) => b.totalExcess - a.totalExcess)
+    overspent.sort((a, b) => b.currentExcess - a.currentExcess)
 
     if (overspent.length > 0) {
       insights.push({

@@ -202,9 +202,9 @@ export interface SavingsRateInsight {
 
 export interface ChronicOverspendCategory {
   categoryName: string
-  timesOverBudget: number
-  totalMonths: number
-  totalExcess: number
+  currentExcess: number
+  previousExcess: number | null
+  budgeted: number
 }
 
 export interface ChronicOverspendInsight {
