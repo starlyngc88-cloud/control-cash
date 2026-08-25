@@ -70,13 +70,13 @@ function OverspendCarousel({ categories, fmt }: { categories: ChronicOverspendCa
             La categoría <strong>{cat.categoryName}</strong> se pasó {fmt(cat.currentExcess)} este mes ({fmt(cat.currentExcess + cat.budgeted)} de {fmt(cat.budgeted)})
           </p>
           <div className="flex items-center gap-2 mt-1">
-            <span className={`inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full ${cat.previousExcess === null ? "bg-slate-50 text-slate-500" : cat.currentExcess > cat.previousExcess ? "bg-red-50 text-red-600" : cat.currentExcess < cat.previousExcess ? "bg-emerald-50 text-emerald-600" : "bg-slate-50 text-slate-500"}`}>
+            <span className={`inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full ${cat.previousExcess === null ? "bg-slate-50 text-slate-500" : cat.currentExcess > cat.previousExcess ? "bg-red-50 text-red-600" : cat.currentExcess < cat.previousExcess ? "bg-amber-50 text-amber-600" : "bg-slate-50 text-slate-500"}`}>
               {cat.previousExcess === null
-                ? "No tenía exceso el mes pasado"
+                ? "Primera vez que se pasa"
                 : cat.currentExcess > cat.previousExcess
                   ? `▲ Empeoró vs mes anterior (+${fmt(cat.currentExcess - cat.previousExcess)})`
                   : cat.currentExcess < cat.previousExcess
-                    ? `▼ Mejoró vs mes anterior (-${fmt(cat.previousExcess - cat.currentExcess)})`
+                    ? `▼ Se pasó menos que el mes anterior (-${fmt(cat.previousExcess - cat.currentExcess)})`
                     : "Igual que el mes pasado"}
             </span>
           </div>

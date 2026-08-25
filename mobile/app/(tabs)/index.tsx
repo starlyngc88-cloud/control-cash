@@ -30,14 +30,14 @@ function OverspendCarousel({ categories }: { categories: ChronicOverspendCategor
           La categoría {cat.categoryName} se pasó {formatCurrency(cat.currentExcess)} este mes ({formatCurrency(cat.currentExcess + cat.budgeted)} de {formatCurrency(cat.budgeted)})
         </Text>
         <View style={{ flexDirection: "row", marginTop: 4 }}>
-          <View style={{ backgroundColor: cat.previousExcess === null ? "#f8fafc" : cat.currentExcess > cat.previousExcess ? "#fef2f2" : cat.currentExcess < cat.previousExcess ? "#ecfdf5" : "#f8fafc", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
-            <Text style={{ fontSize: 9, fontWeight: "600", color: cat.previousExcess === null ? "#64748b" : cat.currentExcess > cat.previousExcess ? "#dc2626" : cat.currentExcess < cat.previousExcess ? "#059669" : "#64748b" }}>
+          <View style={{ backgroundColor: cat.previousExcess === null ? "#f8fafc" : cat.currentExcess > cat.previousExcess ? "#fef2f2" : cat.currentExcess < cat.previousExcess ? "#fffbeb" : "#f8fafc", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start" }}>
+            <Text style={{ fontSize: 9, fontWeight: "600", color: cat.previousExcess === null ? "#64748b" : cat.currentExcess > cat.previousExcess ? "#dc2626" : cat.currentExcess < cat.previousExcess ? "#d97706" : "#64748b" }}>
               {cat.previousExcess === null
-                ? "No tenía exceso el mes pasado"
+                ? "Primera vez que se pasa"
                 : cat.currentExcess > cat.previousExcess
                   ? `▲ Empeoró vs mes anterior (+${formatCurrency(cat.currentExcess - cat.previousExcess)})`
                   : cat.currentExcess < cat.previousExcess
-                    ? `▼ Mejoró vs mes anterior (-${formatCurrency(cat.previousExcess - cat.currentExcess)})`
+                    ? `▼ Se pasó menos que el mes anterior (-${formatCurrency(cat.previousExcess - cat.currentExcess)})`
                     : "Igual que el mes pasado"}
             </Text>
           </View>
