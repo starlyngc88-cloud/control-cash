@@ -51,34 +51,28 @@ export function granularityLabel(g: CashflowGranularity): string {
 
 export function CashflowFilterProvider({ children }: { children: ReactNode }) {
   const defaults = getDefaultDates()
-  const [startDate, setStartDateState] = useState(() => {
-    if (typeof window === "undefined") return defaults.start
-    try {
-      const saved = localStorage.getItem(FILTER_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved) as { startDate?: string; endDate?: string }
-        if (parsed.startDate) return parsed.startDate
-      }
-    } catch {}
-    return defaults.start
-  })
-  const [endDate, setEndDateState] = useState(() => {
-    if (typeof window === "undefined") return defaults.end
-    try {
-      const saved = localStorage.getItem(FILTER_KEY)
-      if (saved) {
-        const parsed = JSON.parse(saved) as { startDate?: string; endDate?: string }
-        if (parsed.endDate) return parsed.endDate
-      }
-    } catch {}
-    return defaults.end
-  })
+  const [startDate, setStartDateState] = useState(defaults.start)
+  const [endDate, setEndDateState] = useState(defaults.end)
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     try {
+      const saved = localStorage.getItem(FILTER_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved) as { startDate?: string; endDate?: string }
+        if (parsed.startDate) setStartDateState(parsed.startDate)
+        if (parsed.endDate) setEndDateState(parsed.endDate)
+      }
+    } catch {}
+    setHydrated(true)
+  }, [])
+
+  useEffect(() => {
+    if (!hydrated) return
+    try {
       localStorage.setItem(FILTER_KEY, JSON.stringify({ startDate, endDate }))
     } catch {}
-  }, [startDate, endDate])
+  }, [startDate, endDate, hydrated])
 
   const setStartDate = (s: string) => setStartDateState(s)
   const setEndDate = (e: string) => setEndDateState(e)
