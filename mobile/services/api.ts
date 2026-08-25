@@ -552,9 +552,6 @@ export async function updateFutureExpense(id: string, data: Partial<FutureExpens
   const finalSavingId = data.saving_id ?? existing?.saving_id ?? null
   const result = await supabase.from("future_expenses").update({ ...data, saving_id: finalSavingId }).eq("id", id)
   if (result.error) throw result.error
-  if (finalSavingId && data.title) {
-    await supabase.from("savings").update({ name: data.title, description: data.description || "Gasto futuro" }).eq("id", finalSavingId)
-  }
   return result
 }
 export async function deleteFutureExpense(id: string) {

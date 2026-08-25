@@ -737,9 +737,6 @@ export async function updateFutureExpense(id: string, input: { title: string; de
   const finalSavingId = parsed.saving_id ?? existing?.saving_id ?? null
   const { error } = await supabase.from("future_expenses").update({ ...parsed, saving_id: finalSavingId }).eq("id", id)
   if (error) throw error
-  if (finalSavingId) {
-    await supabase.from("savings").update({ name: parsed.title, description: parsed.description || "Gasto futuro" }).eq("id", finalSavingId)
-  }
 }
 
 export async function deleteFutureExpense(id: string) {

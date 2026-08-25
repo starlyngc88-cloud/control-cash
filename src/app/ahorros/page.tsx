@@ -179,7 +179,6 @@ export default function AhorrosPage() {
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
     for (const s of filtered) {
-      if (linkedFuture.some((f) => f.saving_id === s.id)) continue
       const catId = s.category_id ?? "__none__"
       const catName = s.saving_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: s.category_id, name: catName, items: [] })
