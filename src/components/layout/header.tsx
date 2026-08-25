@@ -33,12 +33,13 @@ export function Header() {
   const title = t[titleKey].title ?? t.nav[titleKey] ?? t.app.name
   const isDashboard = basePath === "/"
   const isBudgetDetail = basePath === "/presupuestos" && pathname.split("/").length > 2
+  const hideFilter = basePath === "/ahorros" || basePath === "/gastos-futuros" || basePath === "/compromisos"
 
   return (
     <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-4 z-10 shadow-sm shrink-0">
       <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
 
-      {!isBudgetDetail && (
+      {!isBudgetDetail && !hideFilter && (
         <div className="flex-1 flex justify-center">
           <CashflowRangeFilter />
         </div>

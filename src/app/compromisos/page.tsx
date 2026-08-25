@@ -29,7 +29,6 @@ import type { Commitment, CommitmentPayment, BudgetCategory } from "@/types"
 import { Plus, Trash2, Pencil, ShieldCheck, ArrowDownCircle, ChevronDown, ChevronRight, List, Search } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
-import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { useHeaderActions } from "@/components/HeaderActionsContext"
 import { Tooltip } from "@/components/ui/tooltip"
 
@@ -46,18 +45,10 @@ export default function CompromisosPage() {
   const [error, setError] = useState("")
   const { t, fmt } = useLanguage()
   const dict = t.compromisos
-  const { startDate, endDate } = useCashflowFilter()
 
   const [search, setSearch] = useState("")
 
-  const filteredPayments = useMemo(() => {
-    if (!startDate || !endDate) return paymentsMap
-    const filtered: Record<string, CommitmentPayment[]> = {}
-    for (const [id, payments] of Object.entries(paymentsMap)) {
-      filtered[id] = payments.filter((p) => p.date >= startDate && p.date <= endDate)
-    }
-    return filtered
-  }, [paymentsMap, startDate, endDate])
+  const filteredPayments = useMemo(() => paymentsMap, [paymentsMap])
 
   const filtered = useMemo(() => {
     if (!search) return commitments
