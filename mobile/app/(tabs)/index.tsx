@@ -239,12 +239,12 @@ export default function DashboardScreen() {
                       <TrendingDown size={14} color="#e11d48" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Ingresos bajaron</Text>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#e11d48" }}>Ingresos bajaron</Text>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-                        {formatCurrency(insight.currentAmount)} este mes vs {formatCurrency(insight.previousAmount)} el anterior
+                        Ingresaste {formatCurrency(insight.currentAmount)} este mes, menos que los {formatCurrency(insight.previousAmount)} del mes pasado
                       </Text>
                       <View style={{ backgroundColor: "#fff1f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
-                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#e11d48" }}>-{insight.dropPercent}%</Text>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#e11d48" }}>-{insight.dropPercent}% menos</Text>
                       </View>
                     </View>
                   </View>
@@ -257,12 +257,12 @@ export default function DashboardScreen() {
                       <PiggyBank size={14} color="#d97706" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Tasa de ahorro baja</Text>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#d97706" }}>Ahorro bajo</Text>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-                        Solo ahorras el {insight.rate}% de tus ingresos
+                        Solo ahorrás el {insight.rate}% de lo que ingresás
                       </Text>
                       <View style={{ backgroundColor: "#fffbeb", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
-                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#d97706" }}>{formatCurrency(insight.totalDeposits)} / {formatCurrency(insight.totalIncome)}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#d97706" }}>Ahorraste {formatCurrency(insight.totalDeposits)} de {formatCurrency(insight.totalIncome)} ingresados</Text>
                       </View>
                     </View>
                   </View>
@@ -275,12 +275,12 @@ export default function DashboardScreen() {
                       <AlertTriangle size={14} color="#dc2626" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#64748b" }}>Presupuesto superado</Text>
+                      <Text style={{ fontSize: 10, fontWeight: "500", color: "#dc2626" }}>Presupuesto superado</Text>
                       <Text style={{ fontSize: 12, fontWeight: "600", color: "#1e293b" }}>
-                        {insight.categoryName} superó el presupuesto en {insight.timesOverBudget} de {insight.totalMonths} meses
+                        La categoría {insight.categoryName} se pasó del presupuesto {insight.timesOverBudget} {insight.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {insight.totalMonths} meses
                       </Text>
                       <View style={{ backgroundColor: "#fef2f2", borderRadius: 999, paddingHorizontal: 6, paddingVertical: 2, alignSelf: "flex-start", marginTop: 4 }}>
-                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>+{formatCurrency(insight.totalExcess)} exceso</Text>
+                        <Text style={{ fontSize: 9, fontWeight: "600", color: "#dc2626" }}>Excediste {formatCurrency(insight.totalExcess)} en total</Text>
                       </View>
                     </View>
                   </View>

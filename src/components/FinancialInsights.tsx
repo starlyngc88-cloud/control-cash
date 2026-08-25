@@ -13,12 +13,12 @@ function InsightCard({ insight, fmt }: { insight: FinancialInsight; fmt: (n: num
           <TrendingDown className="size-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-medium text-slate-500">Ingresos bajaron</p>
+          <p className="text-[10px] font-medium text-rose-600">Ingresos bajaron</p>
           <p className="text-xs font-semibold text-slate-800">
-            {fmt(insight.currentAmount)} este mes vs {fmt(insight.previousAmount)} el anterior
+            Ingresaste {fmt(insight.currentAmount)} este mes, menos que los {fmt(insight.previousAmount)} del mes pasado
           </p>
           <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 mt-1">
-            -{insight.dropPercent}%
+            -{insight.dropPercent}% menos
           </span>
         </div>
       </div>
@@ -32,12 +32,12 @@ function InsightCard({ insight, fmt }: { insight: FinancialInsight; fmt: (n: num
           <PiggyBank className="size-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-medium text-slate-500">Tasa de ahorro baja</p>
+          <p className="text-[10px] font-medium text-amber-600">Ahorro bajo</p>
           <p className="text-xs font-semibold text-slate-800">
-            Solo ahorras el {insight.rate}% de tus ingresos
+            Solo ahorrás el {insight.rate}% de lo que ingresás
           </p>
           <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 mt-1">
-            {fmt(insight.totalDeposits)} / {fmt(insight.totalIncome)}
+            Ahorraste {fmt(insight.totalDeposits)} de {fmt(insight.totalIncome)} ingresados
           </span>
         </div>
       </div>
@@ -51,12 +51,12 @@ function InsightCard({ insight, fmt }: { insight: FinancialInsight; fmt: (n: num
           <AlertTriangle className="size-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-[10px] font-medium text-slate-500">Presupuesto superado</p>
+          <p className="text-[10px] font-medium text-red-600">Presupuesto superado</p>
           <p className="text-xs font-semibold text-slate-800">
-            {insight.categoryName} superó el presupuesto en {insight.timesOverBudget} de {insight.totalMonths} meses
+            La categoría <strong>{insight.categoryName}</strong> se pasó del presupuesto {insight.timesOverBudget} {insight.timesOverBudget === 1 ? "vez" : "veces"} en los últimos {insight.totalMonths} meses
           </p>
           <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 mt-1">
-            +{fmt(insight.totalExcess)} exceso
+            Excediste {fmt(insight.totalExcess)} en total
           </span>
         </div>
       </div>
