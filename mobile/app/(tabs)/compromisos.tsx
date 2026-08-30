@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories, type CommitmentWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { Plus, ShieldCheck, Pencil, Trash2, X, ArrowDownCircle, Search, ChevronDown, ChevronRight } from "lucide-react-native"
 import type { CommitmentPayment } from "@/types/database"
 
@@ -47,6 +48,8 @@ export default function CompromisosScreen() {
   }, [])
 
   useEffect(() => { void (async () => { await load() })() }, [load])
+
+  useRealtimeSubscription("commitments", () => load(), () => load(), () => load())
 
   const openNew = () => {
     setEditing(null); setName(""); setDescrip(""); setTotalAmount(""); setCurrentBalance(""); setCommCategoryId(""); setModalOpen(true)

@@ -136,7 +136,45 @@ async function recalcSavingBalance(savingId: string) {
   const { error: updateError } = await supabase.from("savings").update({ current_amount: Math.max(0, balance) }).eq("id", savingId)
   if (updateError) throw updateError
 }
+async function findOrCreateExpenseCategory(name: string): Promise<string | null> {
+  if (!name) return null
+  const { data: existing } = await supabase
+    .from("expense_categories")
+    .select("id")
+    .ilike("name", name)
+    .eq("tab", "categoria")
+    .maybeSingle()
+  if (existing) return existing.id
+  const { data: created } = await supabase
+    .from("expense_categories")
+    .insert({ name, tab: "categoria" })
+    .select("id")
+    .single()
+  return created?.id ?? null
+}
+
 export async function createExpense(data: Partial<Expense>) {
+  if (data.expense_category_id && !data.saving_id) {
+    const { data: cat } = await supabase
+      .from("expense_categories")
+      .select("tab")
+      .eq("id", data.expense_category_id)
+      .maybeSingle()
+    if (cat?.tab === "hucha") {
+      throw new Error("Los gastos de hucha deben tener una hucha vinculada")
+    }
+  }
+  if (data.budget_category_id && !data.expense_category_id) {
+    const { data: budgetCat } = await supabase
+      .from("budget_categories")
+      .select("name")
+      .eq("id", data.budget_category_id)
+      .maybeSingle()
+    if (budgetCat) {
+      const expCatId = await findOrCreateExpenseCategory(budgetCat.name)
+      if (expCatId) data.expense_category_id = expCatId
+    }
+  }
   const { data: exp, error } = await supabase.from("expenses").insert(data).select().single()
   if (error) throw error
   if (data.saving_id) {
@@ -152,6 +190,27 @@ export async function createExpense(data: Partial<Expense>) {
   return exp
 }
 export async function updateExpense(id: string, data: Partial<Expense>) {
+  if (data.expense_category_id && !data.saving_id) {
+    const { data: cat } = await supabase
+      .from("expense_categories")
+      .select("tab")
+      .eq("id", data.expense_category_id)
+      .maybeSingle()
+    if (cat?.tab === "hucha") {
+      throw new Error("Los gastos de hucha deben tener una hucha vinculada")
+    }
+  }
+  if (data.budget_category_id && !data.expense_category_id) {
+    const { data: budgetCat } = await supabase
+      .from("budget_categories")
+      .select("name")
+      .eq("id", data.budget_category_id)
+      .maybeSingle()
+    if (budgetCat) {
+      const expCatId = await findOrCreateExpenseCategory(budgetCat.name)
+      if (expCatId) data.expense_category_id = expCatId
+    }
+  }
   const { data: prev } = await supabase.from("expenses").select("saving_id, amount").eq("id", id).single()
   const { error } = await supabase.from("expenses").update(data).eq("id", id)
   if (error) throw error

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, updateFutureExpenseCategory, deleteFutureExpense, deleteFutureExpenseCategory, updateFutureExpenseStatus, completeFutureExpense, getPeople, getSavings, type FutureExpenseWithRelations, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { Plus, CalendarClock, Pencil, Trash2, Search, X, CheckCircle2, ChevronDown, ChevronRight } from "lucide-react-native"
 import type { FutureExpenseCategory, Person } from "@/types/database"
 
@@ -61,6 +62,8 @@ export default function GastosFuturosScreen() {
   useEffect(() => {
     void (async () => { await load() })()
   }, [load])
+
+  useRealtimeSubscription("future_expenses", () => load(), () => load(), () => load())
 
   const catNameMap = Object.fromEntries(categories.map((c: FutureExpenseCategory) => [c.id, c.name]))
 

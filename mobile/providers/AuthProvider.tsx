@@ -85,8 +85,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
-    return { error: error ? `⚠️ ${error.message}` : null }
+    const normalizedEmail = email.toLowerCase().trim()
+    const { data: allowed } = await supabase
+      .from("allowed_users")
+      .select("id, active")
+      .eq("email", normalizedEmail)
+      .maybeSingle()
+
+    if (!allowed) return { error: "⚠️ Este correo no está autorizado para usar KellyCash." }
+    if (!allowed.active) return { error: "⚠️ Este correo no está autorizado para usar KellyCash." }
+
+    const { error } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+      options: { data: { email: normalizedEmail } },
+    })
+    if (error) {
+      const msg = error.message
+      if (msg.includes("already registered")) return { error: "⚠️ Este correo ya está registrado. Inicia sesión." }
+      if (msg.includes("assword")) return { error: "⚠️ La contraseña debe tener al menos 6 caracteres." }
+      return { error: `⚠️ ${msg}` }
+    }
+
+    const { data: existing } = await supabase
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", allowed.id)
+      .maybeSingle()
+    if (!existing) {
+      await supabase.from("user_roles").insert({ user_id: allowed.id, role: "user" })
+    }
+
+    return { error: null }
   }
 
   const signOut = async () => {

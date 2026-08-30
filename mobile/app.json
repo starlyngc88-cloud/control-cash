@@ -27,7 +27,10 @@
       },
       "package": "com.kellycash.mobile",
       "permissions": [],
-      "softwareKeyboardLayoutMode": "resize"
+      "softwareKeyboardLayoutMode": "resize",
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "updates": {
       "url": "https://u.expo.dev/435c376c-51e3-4bf9-a591-717fff256db9",

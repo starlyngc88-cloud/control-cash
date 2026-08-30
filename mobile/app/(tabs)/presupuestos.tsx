@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react"
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform, useWindowDimensions } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
 import { getBudgetTemplates, createBudgetTemplate, getBudgetCategories, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, getMonthlyBudgets, createMonthlyBudget, deleteMonthlyBudget, type MonthlyBudgetWithTotals } from "@/services/api"
@@ -12,6 +12,8 @@ const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 export default function PresupuestosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { width } = useWindowDimensions()
+  const isTablet = width >= 768
   const [templates, setTemplates] = useState<BudgetTemplate[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
   const [categories, setCategories] = useState<BudgetCategory[]>([])
@@ -29,6 +31,7 @@ export default function PresupuestosScreen() {
   const [catBudgeted, setCatBudgeted] = useState("")
   const [catParentId, setCatParentId] = useState<string | null>(null)
   const [editingCat, setEditingCat] = useState<BudgetCategory | null>(null)
+  const [catHasSub, setCatHasSub] = useState(false)
 
   const [monthCursor, setMonthCursor] = useState(() => {
     const now = new Date()
@@ -74,19 +77,21 @@ export default function PresupuestosScreen() {
   }, [selectedTemplate])
 
   const openNewCat = (parentId: string | null = null) => {
-    setEditingCat(null); setCatName(""); setCatBudgeted(""); setCatParentId(parentId); setCatModalOpen(true)
+    setEditingCat(null); setCatName(""); setCatBudgeted(""); setCatParentId(parentId); setCatHasSub(false); setCatModalOpen(true)
   }
 
   const openEditCat = (cat: BudgetCategory) => {
-    setEditingCat(cat); setCatName(cat.name); setCatBudgeted(String(cat.budgeted)); setCatParentId(cat.parent_id); setCatModalOpen(true)
+    const hasChildren = categories.some((c) => c.parent_id === cat.id)
+    setEditingCat(cat); setCatName(cat.name); setCatBudgeted(hasChildren ? "" : String(cat.budgeted)); setCatParentId(cat.parent_id); setCatHasSub(hasChildren || Number(cat.budgeted) === 0); setCatModalOpen(true)
   }
 
   const handleCatSubmit = async () => {
     if (!catName.trim() || !selectedTemplate) { Alert.alert("Error", "Completá nombre."); return }
     setSubmitting(true)
     try {
-      if (editingCat) await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted: parseFloat(catBudgeted) || 0, parent_id: catParentId })
-      else await createBudgetCategory({ template_id: selectedTemplate, name: catName.trim(), budgeted: parseFloat(catBudgeted) || 0, parent_id: catParentId })
+      const budgeted = catHasSub ? 0 : (parseFloat(catBudgeted) || 0)
+      if (editingCat) await updateBudgetCategory(editingCat.id, { name: catName.trim(), budgeted, parent_id: catParentId })
+      else await createBudgetCategory({ template_id: selectedTemplate, name: catName.trim(), budgeted, parent_id: catParentId })
       setCatModalOpen(false); void getBudgetCategories(selectedTemplate).then(setCategories)
     } catch { Alert.alert("Error", "No se pudo guardar.") }
     finally { setSubmitting(false) }
@@ -175,146 +180,292 @@ export default function PresupuestosScreen() {
       </View>
 
       <ScrollView className="flex-1 px-4" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}>
-        {/* Meses financieros carrusel */}
-        <View className="mb-4 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-          <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-            <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Meses financieros</Text>
-            <View className="flex-row items-center gap-2">
-              <TouchableOpacity onPress={openMonth} className="flex-row items-center gap-1 bg-indigo-50 rounded-lg px-2.5 py-1.5">
-                <Calendar size={12} color="#4f46e5" /><Text className="text-[10px] font-semibold text-indigo-600">Abrir mes</Text>
-              </TouchableOpacity>
-              <View className="flex-row items-center gap-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-1">
-                <TouchableOpacity onPress={() => setYear((y) => y - 1)} hitSlop={6} className="p-0.5"><ChevronLeft size={14} color="#94a3b8" /></TouchableOpacity>
-                <Text className="text-xs font-semibold text-slate-700 tabular-nums min-w-[36px] text-center">{year}</Text>
-                <TouchableOpacity onPress={() => setYear((y) => y + 1)} hitSlop={6} className="p-0.5"><ChevronRight size={14} color="#94a3b8" /></TouchableOpacity>
+        {isTablet ? (
+          <View className="flex-row gap-4">
+            {/* Columna izquierda: Plantilla base */}
+            <View className="flex-[2]">
+              {templates.length > 0 && selectedTemplate ? (
+                <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                  <TouchableOpacity onPress={() => setTemplateOpen((o) => !o)} className="flex-row items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+                    <View className="flex-1">
+                      <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Plantilla base</Text>
+                      <Text className="text-[9px] text-slate-400 mt-0.5">Se copia al abrir un mes.</Text>
+                    </View>
+                    {templateOpen ? <ChevronDown size={16} color="#94a3b8" /> : <ChevronRight size={16} color="#94a3b8" />}
+                  </TouchableOpacity>
+
+                  {templateOpen && parentsWithChildren.length > 0 && (
+                    <TouchableOpacity onPress={() => { if (allExpanded) setExpandedParents(new Set()); else setExpandedParents(new Set(parentsWithChildren.map((p) => p.id))) }} className="px-4 py-2 bg-white">
+                      <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {templateOpen && parentCats.map((parent: BudgetCategory) => {
+                    const children = childCats(parent.id)
+                    const hasChildren = children.length > 0
+                    const isExpanded = expandedParents.has(parent.id)
+                    const parentTotal = hasChildren ? children.reduce((s: number, c: BudgetCategory) => s + Number(c.budgeted), 0) : Number(parent.budgeted)
+                    return (
+                      <View key={parent.id}>
+                        <TouchableOpacity
+                          onPress={() => hasChildren && toggleParent(parent.id)}
+                          activeOpacity={hasChildren ? 0.7 : 1}
+                          className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200"
+                        >
+                          {hasChildren ? (
+                            <View className="mr-1">{isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}</View>
+                          ) : (
+                            <View className="size-3.5 mr-1" />
+                          )}
+                          <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</Text>
+                          <Text className="text-xs font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(parentTotal))}</Text>
+                        </TouchableOpacity>
+
+                        {hasChildren && isExpanded && (
+                          <View className="bg-white">
+                            {children.map((child: BudgetCategory) => (
+                              <View key={child.id} className="flex-row items-center px-4 py-2 border-b border-slate-100">
+                                <View className="flex-1 flex-row items-center">
+                                  <View className="size-7 rounded-full items-center justify-center bg-slate-100 mr-2.5">
+                                    <Plus size={12} color="#64748b" />
+                                  </View>
+                                  <Text className="text-xs font-medium text-slate-900">{child.name}</Text>
+                                </View>
+                                <Text className="text-xs font-semibold text-slate-900 tabular-nums mr-2">{capitalize(formatCurrency(Number(child.budgeted)))}</Text>
+                                <View className="flex-row items-center gap-0.5">
+                                  <TouchableOpacity onPress={() => openEditCat(child)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                                  <TouchableOpacity onPress={() => handleDeleteCat(child.id, child.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+
+                        {!hasChildren && (
+                          <View className="flex-row items-center px-4 py-2 border-b border-slate-100">
+                            <View className="flex-1" />
+                            <Text className="text-xs text-slate-400 mr-2">{formatCurrency(Number(parent.budgeted))}</Text>
+                            <TouchableOpacity onPress={() => openNewCat(parent.id)} className="p-1"><Plus size={12} color="#4f46e5" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => openEditCat(parent)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleDeleteCat(parent.id, parent.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    )
+                  })}
+
+                  {templateOpen && <View className="flex-row items-center justify-between px-4 py-3 border-t border-slate-200">
+                    <Text className="text-sm font-semibold text-slate-700">Total</Text>
+                    <Text className="text-sm font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(totalBudgeted))}</Text>
+                  </View>}
+
+                  {templateOpen && <TouchableOpacity onPress={() => openNewCat(null)} className="flex-row items-center justify-center gap-1.5 py-3 border-t border-slate-200">
+                    <Plus size={14} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar rubro</Text>
+                  </TouchableOpacity>}
+                </View>
+              ) : (
+                <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center">
+                  <LayoutTemplate size={32} color="#cbd5e1" />
+                  <Text className="text-xs text-slate-400 mt-2">Creando la plantilla base…</Text>
+                </View>
+              )}
+            </View>
+            {/* Columna derecha: Meses financieros */}
+            <View className="flex-[1]">
+              <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                  <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Meses</Text>
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity onPress={openMonth} className="flex-row items-center gap-1 bg-indigo-50 rounded-lg px-2.5 py-1.5">
+                      <Calendar size={12} color="#4f46e5" /><Text className="text-[10px] font-semibold text-indigo-600">Abrir</Text>
+                    </TouchableOpacity>
+                    <View className="flex-row items-center gap-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-1">
+                      <TouchableOpacity onPress={() => setYear((y) => y - 1)} hitSlop={6} className="p-0.5"><ChevronLeft size={14} color="#94a3b8" /></TouchableOpacity>
+                      <Text className="text-xs font-semibold text-slate-700 tabular-nums min-w-[36px] text-center">{year}</Text>
+                      <TouchableOpacity onPress={() => setYear((y) => y + 1)} hitSlop={6} className="p-0.5"><ChevronRight size={14} color="#94a3b8" /></TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {yearMonths.length === 0 ? (
+                  <Text className="text-xs text-slate-500 px-4 py-6">Sin meses en {year}.</Text>
+                ) : (
+                  yearMonths.map((mb: MonthlyBudgetWithTotals) => {
+                    const isCurrent = String(mb.month ?? "").slice(0, 7) === currentMonthStr
+                    return (
+                      <TouchableOpacity
+                        key={mb.id}
+                        onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })}
+                        className="flex-row items-center justify-between px-4 py-3 border-b border-slate-100"
+                      >
+                        <View className="flex-1">
+                          <View className="flex-row items-center gap-2">
+                            <Text className="text-xs font-semibold text-slate-900 capitalize">{formatMonth(mb.month)}</Text>
+                            {isCurrent && (
+                              <View className="bg-indigo-100 rounded-full px-1.5 py-0.5">
+                                <Text className="text-[8px] font-semibold text-indigo-600 uppercase">Actual</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text className="text-[10px] text-slate-500 tabular-nums mt-1">{formatCurrency(Number(mb.totalBudgeted ?? 0))} ppto.</Text>
+                        </View>
+                        <View className="flex-row items-center gap-1">
+                          <ChevronRight size={11} color="#64748b" />
+                          <TouchableOpacity onPress={() => handleDeleteMonth(mb)} hitSlop={8} className="p-1">
+                            <Trash2 size={13} color="#e11d48" />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })
+                )}
               </View>
             </View>
           </View>
+        ) : (
+          <>
+            {/* Meses financieros carrusel */}
+            <View className="mb-4 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+              <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Meses financieros</Text>
+                <View className="flex-row items-center gap-2">
+                  <TouchableOpacity onPress={openMonth} className="flex-row items-center gap-1 bg-indigo-50 rounded-lg px-2.5 py-1.5">
+                    <Calendar size={12} color="#4f46e5" /><Text className="text-[10px] font-semibold text-indigo-600">Abrir mes</Text>
+                  </TouchableOpacity>
+                  <View className="flex-row items-center gap-0.5 bg-white border border-slate-200 rounded-lg px-1.5 py-1">
+                    <TouchableOpacity onPress={() => setYear((y) => y - 1)} hitSlop={6} className="p-0.5"><ChevronLeft size={14} color="#94a3b8" /></TouchableOpacity>
+                    <Text className="text-xs font-semibold text-slate-700 tabular-nums min-w-[36px] text-center">{year}</Text>
+                    <TouchableOpacity onPress={() => setYear((y) => y + 1)} hitSlop={6} className="p-0.5"><ChevronRight size={14} color="#94a3b8" /></TouchableOpacity>
+                  </View>
+                </View>
+              </View>
 
-          {yearMonths.length === 0 ? (
-            <Text className="text-xs text-slate-500 px-6 py-6">No hay meses con movimientos en {year}.</Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="px-3 py-3 gap-2">
-              {yearMonths.map((mb: MonthlyBudgetWithTotals) => {
-                const isCurrent = String(mb.month ?? "").slice(0, 7) === currentMonthStr
-                return (
-                  <TouchableOpacity
-                    key={mb.id}
-                    onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })}
-                    className="w-40 rounded-xl border border-slate-200 bg-white p-3"
-                  >
-                    <View className="flex-row items-center justify-between">
-                      <Text className="text-xs font-semibold text-slate-900 capitalize">{formatMonth(mb.month)}</Text>
-                      {isCurrent && (
-                        <View className="bg-indigo-100 rounded-full px-1.5 py-0.5">
-                          <Text className="text-[8px] font-semibold text-indigo-600 uppercase">Actual</Text>
+              {yearMonths.length === 0 ? (
+                <Text className="text-xs text-slate-500 px-6 py-6">No hay meses con movimientos en {year}.</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="px-3 py-3 gap-2">
+                  {yearMonths.map((mb: MonthlyBudgetWithTotals) => {
+                    const isCurrent = String(mb.month ?? "").slice(0, 7) === currentMonthStr
+                    return (
+                      <TouchableOpacity
+                        key={mb.id}
+                        onPress={() => router.push({ pathname: "/presupuesto-detalle", params: { id: mb.id } })}
+                        className="w-40 rounded-xl border border-slate-200 bg-white p-3"
+                      >
+                        <View className="flex-row items-center justify-between">
+                          <Text className="text-xs font-semibold text-slate-900 capitalize">{formatMonth(mb.month)}</Text>
+                          {isCurrent && (
+                            <View className="bg-indigo-100 rounded-full px-1.5 py-0.5">
+                              <Text className="text-[8px] font-semibold text-indigo-600 uppercase">Actual</Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text className="text-[10px] text-slate-500 tabular-nums mt-1.5">{formatCurrency(Number(mb.totalBudgeted ?? 0))} ppto.</Text>
+                        <View className="flex-row items-center justify-between mt-2">
+                          <View className="flex-row items-center gap-2">
+                            <Text className="text-[10px] font-medium text-indigo-600">Ver detalle</Text>
+                            <ChevronRight size={11} color="#64748b" />
+                          </View>
+                          <TouchableOpacity onPress={() => handleDeleteMonth(mb)} hitSlop={8} className="p-1">
+                            <Trash2 size={13} color="#e11d48" />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Plantilla base */}
+            {templates.length > 0 && selectedTemplate ? (
+              <View className="mb-4 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+                <TouchableOpacity onPress={() => setTemplateOpen((o) => !o)} className="flex-row items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
+                  <View className="flex-1">
+                    <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Plantilla base</Text>
+                    <Text className="text-[9px] text-slate-400 mt-0.5">Se copia al abrir un mes. Cada mes se edita de forma independiente.</Text>
+                  </View>
+                  {templateOpen ? <ChevronDown size={16} color="#94a3b8" /> : <ChevronRight size={16} color="#94a3b8" />}
+                </TouchableOpacity>
+
+                {templateOpen && parentsWithChildren.length > 0 && (
+                  <TouchableOpacity onPress={() => { if (allExpanded) setExpandedParents(new Set()); else setExpandedParents(new Set(parentsWithChildren.map((p) => p.id))) }} className="px-4 py-2 bg-white">
+                    <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                  </TouchableOpacity>
+                )}
+
+                {templateOpen && parentCats.map((parent: BudgetCategory) => {
+                  const children = childCats(parent.id)
+                  const hasChildren = children.length > 0
+                  const isExpanded = expandedParents.has(parent.id)
+                  const parentTotal = hasChildren ? children.reduce((s: number, c: BudgetCategory) => s + Number(c.budgeted), 0) : Number(parent.budgeted)
+                  return (
+                    <View key={parent.id}>
+                      <TouchableOpacity
+                        onPress={() => hasChildren && toggleParent(parent.id)}
+                        activeOpacity={hasChildren ? 0.7 : 1}
+                        className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200"
+                      >
+                        {hasChildren ? (
+                          <View className="mr-1">{isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}</View>
+                        ) : (
+                          <View className="size-3.5 mr-1" />
+                        )}
+                        <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</Text>
+                        <Text className="text-xs font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(parentTotal))}</Text>
+                      </TouchableOpacity>
+
+                      {hasChildren && isExpanded && (
+                        <View className="bg-white">
+                          {children.map((child: BudgetCategory) => (
+                            <View key={child.id} className="flex-row items-center px-4 py-2 border-b border-slate-100">
+                              <View className="flex-1 flex-row items-center">
+                                <View className="size-7 rounded-full items-center justify-center bg-slate-100 mr-2.5">
+                                  <Plus size={12} color="#64748b" />
+                                </View>
+                                <Text className="text-xs font-medium text-slate-900">{child.name}</Text>
+                              </View>
+                              <Text className="text-xs font-semibold text-slate-900 tabular-nums mr-2">{capitalize(formatCurrency(Number(child.budgeted)))}</Text>
+                              <View className="flex-row items-center gap-0.5">
+                                <TouchableOpacity onPress={() => openEditCat(child)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleDeleteCat(child.id, child.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                              </View>
+                            </View>
+                          ))}
                         </View>
                       )}
-                    </View>
-                    <Text className="text-[10px] text-slate-500 tabular-nums mt-1.5">{formatCurrency(Number(mb.totalBudgeted ?? 0))} ppto.</Text>
-                    <View className="flex-row items-center justify-between mt-2">
-                      <View className="flex-row items-center gap-2">
-                        <Text className="text-[10px] font-medium text-indigo-600">Ver detalle</Text>
-                        <ChevronRight size={11} color="#64748b" />
-                      </View>
-                      <TouchableOpacity onPress={() => handleDeleteMonth(mb)} hitSlop={8} className="p-1">
-                        <Trash2 size={13} color="#e11d48" />
-                      </TouchableOpacity>
-                    </View>
-                  </TouchableOpacity>
-                )
-              })}
-            </ScrollView>
-          )}
-        </View>
 
-        {/* Plantilla base */}
-        {templates.length > 0 && selectedTemplate ? (
-          <View className="mb-4 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
-            <TouchableOpacity onPress={() => setTemplateOpen((o) => !o)} className="flex-row items-center justify-between px-4 py-2 bg-slate-50 border-b border-slate-200">
-              <View className="flex-1">
-                <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Plantilla base</Text>
-                <Text className="text-[9px] text-slate-400 mt-0.5">Se copia al abrir un mes. Cada mes se edita de forma independiente.</Text>
+                      {!hasChildren && (
+                        <>
+                          <View className="flex-row items-center px-4 py-2 border-b border-slate-100">
+                            <View className="flex-1" />
+                            <Text className="text-xs text-slate-400 mr-2">{formatCurrency(Number(parent.budgeted))}</Text>
+                            <TouchableOpacity onPress={() => openNewCat(parent.id)} className="p-1"><Plus size={12} color="#4f46e5" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => openEditCat(parent)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleDeleteCat(parent.id, parent.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  )
+                })}
+
+                {templateOpen && <View className="flex-row items-center justify-between px-4 py-3 border-t border-slate-200">
+                  <Text className="text-sm font-semibold text-slate-700">Total</Text>
+                  <Text className="text-sm font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(totalBudgeted))}</Text>
+                </View>}
+
+                {templateOpen && <TouchableOpacity onPress={() => openNewCat(null)} className="flex-row items-center justify-center gap-1.5 py-3 border-t border-slate-200">
+                  <Plus size={14} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar rubro</Text>
+                </TouchableOpacity>}
               </View>
-              {templateOpen ? <ChevronDown size={16} color="#94a3b8" /> : <ChevronRight size={16} color="#94a3b8" />}
-            </TouchableOpacity>
-
-            {templateOpen && parentsWithChildren.length > 0 && (
-              <TouchableOpacity onPress={() => { if (allExpanded) setExpandedParents(new Set()); else setExpandedParents(new Set(parentsWithChildren.map((p) => p.id))) }} className="px-4 py-2 bg-white">
-                <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
-              </TouchableOpacity>
+            ) : (
+              <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center mb-4">
+                <LayoutTemplate size={32} color="#cbd5e1" />
+                <Text className="text-xs text-slate-400 mt-2">Creando la plantilla base…</Text>
+              </View>
             )}
-
-            {templateOpen && parentCats.map((parent: BudgetCategory) => {
-              const children = childCats(parent.id)
-              const hasChildren = children.length > 0
-              const isExpanded = expandedParents.has(parent.id)
-              const parentTotal = hasChildren ? children.reduce((s: number, c: BudgetCategory) => s + Number(c.budgeted), 0) : Number(parent.budgeted)
-              return (
-                <View key={parent.id}>
-                  <TouchableOpacity
-                    onPress={() => hasChildren && toggleParent(parent.id)}
-                    activeOpacity={hasChildren ? 0.7 : 1}
-                    className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200"
-                  >
-                    {hasChildren ? (
-                      <View className="mr-1">{isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}</View>
-                    ) : (
-                      <View className="size-3.5 mr-1" />
-                    )}
-                    <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{parent.name}</Text>
-                    <Text className="text-xs font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(parentTotal))}</Text>
-                  </TouchableOpacity>
-
-                  {hasChildren && isExpanded && (
-                    <View className="bg-white">
-                      {children.map((child: BudgetCategory) => (
-                        <View key={child.id} className="flex-row items-center px-4 py-2 border-b border-slate-100">
-                          <View className="flex-1 flex-row items-center">
-                            <View className="size-7 rounded-full items-center justify-center bg-slate-100 mr-2.5">
-                              <Plus size={12} color="#64748b" />
-                            </View>
-                            <Text className="text-xs font-medium text-slate-900">{child.name}</Text>
-                          </View>
-                          <Text className="text-xs font-semibold text-slate-900 tabular-nums mr-2">{capitalize(formatCurrency(Number(child.budgeted)))}</Text>
-                          <View className="flex-row items-center gap-0.5">
-                            <TouchableOpacity onPress={() => openEditCat(child)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
-                            <TouchableOpacity onPress={() => handleDeleteCat(child.id, child.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
-                          </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-
-                  {!hasChildren && (
-                    <>
-                      <View className="flex-row items-center px-4 py-2 border-b border-slate-100">
-                        <View className="flex-1" />
-                        <Text className="text-xs text-slate-400 mr-2">{formatCurrency(Number(parent.budgeted))}</Text>
-                        <TouchableOpacity onPress={() => openNewCat(parent.id)} className="p-1"><Plus size={12} color="#4f46e5" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => openEditCat(parent)} className="p-1"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDeleteCat(parent.id, parent.name)} className="p-1"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
-                      </View>
-                    </>
-                  )}
-                </View>
-              )
-            })}
-
-            {templateOpen && <View className="flex-row items-center justify-between px-4 py-3 border-t border-slate-200">
-              <Text className="text-sm font-semibold text-slate-700">Total</Text>
-              <Text className="text-sm font-semibold text-slate-700 tabular-nums">{capitalize(formatCurrency(totalBudgeted))}</Text>
-            </View>}
-
-            {templateOpen && <TouchableOpacity onPress={() => openNewCat(null)} className="flex-row items-center justify-center gap-1.5 py-3 border-t border-slate-200">
-              <Plus size={14} color="#4f46e5" /><Text className="text-xs font-medium text-indigo-600">Agregar rubro</Text>
-            </TouchableOpacity>}
-          </View>
-        ) : (
-          <View className="bg-white rounded-xl p-5 border border-slate-100 shadow-sm items-center mb-4">
-            <LayoutTemplate size={32} color="#cbd5e1" />
-            <Text className="text-xs text-slate-400 mt-2">Creando la plantilla base…</Text>
-          </View>
+          </>
         )}
 
         <View className="h-8" />
@@ -336,10 +487,26 @@ export default function PresupuestosScreen() {
                 <Text className="text-xs font-medium text-slate-600 mb-1">Nombre</Text>
                 <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="Ej: Vivienda" placeholderTextColor="#94a3b8" value={catName} onChangeText={setCatName} />
               </View>
-              <View>
-                <Text className="text-xs font-medium text-slate-600 mb-1">Monto presupuestado</Text>
-                <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={catBudgeted} onChangeText={setCatBudgeted} keyboardType="decimal-pad" />
-              </View>
+              {!catHasSub && (
+                <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto presupuestado</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={catBudgeted} onChangeText={setCatBudgeted} keyboardType="decimal-pad" />
+                </View>
+              )}
+              {catHasSub && !editingCat && (
+                <View className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2">
+                  <Text className="text-[10px] text-amber-700">El valor se calculará automáticamente como la suma de sus subcategorías.</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                onPress={() => { setCatHasSub(!catHasSub); if (!catHasSub) setCatBudgeted("") }}
+                className="flex-row items-center gap-2"
+              >
+                <View className={`size-4 rounded border ${catHasSub ? "bg-indigo-600 border-indigo-600" : "border-slate-300 bg-white"}`}>
+                  {catHasSub && <Text className="text-white text-[10px] text-center">✓</Text>}
+                </View>
+                <Text className="text-xs text-slate-600">Tiene subcategorías</Text>
+              </TouchableOpacity>
             </View>
             <TouchableOpacity onPress={handleCatSubmit} disabled={submitting} className="h-11 rounded-xl bg-indigo-600 items-center justify-center mt-4">
               {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">{editingCat ? "Guardar cambios" : "Crear"}</Text>}

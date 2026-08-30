@@ -19,8 +19,5 @@
         "buildType": "app-bundle"
       }
     }
-  },
-  "update": {
-    "channel": "production"
   }
 }

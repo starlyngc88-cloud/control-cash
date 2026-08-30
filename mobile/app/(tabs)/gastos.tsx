@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useLocalSearchParams } from "expo-router"
 import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
@@ -48,6 +49,27 @@ export default function GastosScreen() {
   const [editingCat, setEditingCat] = useState<ExpenseCategory | null>(null)
   const [catDeleteTarget, setCatDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [catDeleteExpenses, setCatDeleteExpenses] = useState<ExpenseWithRelations[]>([])
+
+  const { hucha: huchaParam } = useLocalSearchParams<{ hucha?: string }>()
+
+  useEffect(() => {
+    if (huchaParam && !modalOpen && savings.length > 0) {
+      const timer = setTimeout(() => {
+        setEditing(null)
+        setPersonId("")
+        setAmount("")
+        setDescription("")
+        setDate(todayString())
+        setCategoryId("")
+        setBudgetCategoryId("")
+        setAssumeAvailable(false)
+        setSavingId(huchaParam)
+        setView("hucha")
+        setModalOpen(true)
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [huchaParam, savings])
 
   const load = useCallback(async () => {
     try {

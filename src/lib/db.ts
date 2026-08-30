@@ -102,6 +102,13 @@ export async function getExpenseCategories() {
 
 export async function createExpenseCategory(input: { name: string; tab?: ExpenseCategoryTab | null }) {
   const parsed = expenseCategorySchema.parse(sanitizeInput(input))
+  const { data: existing } = await supabase
+    .from("expense_categories")
+    .select("id")
+    .ilike("name", parsed.name)
+    .eq("tab", parsed.tab ?? "categoria")
+    .maybeSingle()
+  if (existing) throw new Error("Ya existe una categoría con ese nombre en esta pestaña")
   const { data, error } = await supabase.from("expense_categories").insert(parsed).select().single()
   if (error) throw error
   return data as ExpenseCategory
@@ -109,6 +116,14 @@ export async function createExpenseCategory(input: { name: string; tab?: Expense
 
 export async function updateExpenseCategory(id: string, input: { name: string; tab?: ExpenseCategoryTab | null }) {
   const parsed = expenseCategorySchema.parse(sanitizeInput(input))
+  const { data: existing } = await supabase
+    .from("expense_categories")
+    .select("id")
+    .ilike("name", parsed.name)
+    .eq("tab", parsed.tab ?? "categoria")
+    .neq("id", id)
+    .maybeSingle()
+  if (existing) throw new Error("Ya existe otra categoría con ese nombre en esta pestaña")
   const { error } = await supabase.from("expense_categories").update(parsed).eq("id", id)
   if (error) throw error
 }
@@ -133,26 +148,67 @@ export async function getExpenses(options?: { person_id?: string; limit?: number
   const personIds = [...new Set(expenses.map((e) => e.person_id))]
   const expCatIds = [...new Set(expenses.map((e) => e.expense_category_id).filter(Boolean) as string[])]
   const savingIds = [...new Set(expenses.map((e) => e.saving_id).filter(Boolean) as string[])]
-  const [people, expCats, savings] = await Promise.all([
+  const budgetCatIds = [...new Set(expenses.map((e) => e.budget_category_id).filter(Boolean) as string[])]
+  const [people, expCats, savings, budgetCats] = await Promise.all([
     supabase.from("people").select("id, name").in("id", personIds),
     expCatIds.length > 0 ? supabase.from("expense_categories").select("id, name").in("id", expCatIds) : Promise.resolve({ data: [] }),
     savingIds.length > 0 ? supabase.from("savings").select("id, name").in("id", savingIds) : Promise.resolve({ data: [] }),
+    budgetCatIds.length > 0 ? supabase.from("budget_categories").select("id, name, parent_id").in("id", budgetCatIds) : Promise.resolve({ data: [] }),
   ])
   const peopleMap = new Map((people?.data ?? []).map((p: { id: string; name: string }) => [p.id, { name: p.name }]))
   const expCatMap = new Map((expCats?.data ?? []).map((c: { id: string; name: string }) => [c.id, { id: c.id, name: c.name }]))
   const savingMap = new Map((savings?.data ?? []).map((s: { id: string; name: string }) => [s.id, { id: s.id, name: s.name }]))
+  const budgetCatMap = new Map((budgetCats?.data ?? []).map((c: { id: string; name: string; parent_id: string | null }) => [c.id, { id: c.id, name: c.name, parent_id: c.parent_id }]))
   const result = expenses.map((e) => ({
     ...e,
     people: peopleMap.get(e.person_id) ?? null,
-    budget_categories: null,
+    budget_categories: e.budget_category_id ? (budgetCatMap.get(e.budget_category_id) ?? null) : null,
     expense_categories: e.expense_category_id ? (expCatMap.get(e.expense_category_id) ?? null) : null,
     savings: e.saving_id ? (savingMap.get(e.saving_id) ?? null) : null,
   }))
-  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<Saving, "id" | "name"> | null })[]
+  return result as (Expense & { people: Pick<Person, "name"> | null; budget_categories: { id: string; name: string; parent_id: string | null } | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<Saving, "id" | "name"> | null })[]
+}
+
+async function findOrCreateExpenseCategory(name: string): Promise<string | null> {
+  if (!name) return null
+  const { data: existing } = await supabase
+    .from("expense_categories")
+    .select("id")
+    .ilike("name", name)
+    .eq("tab", "categoria")
+    .maybeSingle()
+  if (existing) return existing.id
+  const { data: created } = await supabase
+    .from("expense_categories")
+    .insert({ name, tab: "categoria" })
+    .select("id")
+    .single()
+  return created?.id ?? null
 }
 
 export async function createExpense(input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null; saving_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
+  if (parsed.expense_category_id && !parsed.saving_id) {
+    const { data: cat } = await supabase
+      .from("expense_categories")
+      .select("tab")
+      .eq("id", parsed.expense_category_id)
+      .maybeSingle()
+    if (cat?.tab === "hucha") {
+      throw new Error("Los gastos de hucha deben tener una hucha vinculada")
+    }
+  }
+  if (parsed.budget_category_id && !parsed.expense_category_id) {
+    const { data: budgetCat } = await supabase
+      .from("budget_categories")
+      .select("name")
+      .eq("id", parsed.budget_category_id)
+      .maybeSingle()
+    if (budgetCat) {
+      const expCatId = await findOrCreateExpenseCategory(budgetCat.name)
+      if (expCatId) parsed.expense_category_id = expCatId
+    }
+  }
   const { data, error } = await supabase.from("expenses").insert(parsed).select().single()
   if (error) throw error
   if (parsed.saving_id) {
@@ -199,6 +255,27 @@ export async function deleteExpense(id: string) {
 
 export async function updateExpense(id: string, input: { person_id: string; amount: number; description: string; date: string; budget_category_id?: string | null; expense_category_id?: string | null; saving_id?: string | null }) {
   const parsed = expenseSchema.parse(sanitizeInput(input))
+  if (parsed.expense_category_id && !parsed.saving_id) {
+    const { data: cat } = await supabase
+      .from("expense_categories")
+      .select("tab")
+      .eq("id", parsed.expense_category_id)
+      .maybeSingle()
+    if (cat?.tab === "hucha") {
+      throw new Error("Los gastos de hucha deben tener una hucha vinculada")
+    }
+  }
+  if (parsed.budget_category_id && !parsed.expense_category_id) {
+    const { data: budgetCat } = await supabase
+      .from("budget_categories")
+      .select("name")
+      .eq("id", parsed.budget_category_id)
+      .maybeSingle()
+    if (budgetCat) {
+      const expCatId = await findOrCreateExpenseCategory(budgetCat.name)
+      if (expCatId) parsed.expense_category_id = expCatId
+    }
+  }
   const { data: prev } = await supabase.from("expenses").select("saving_id, amount").eq("id", id).single()
   const { error } = await supabase.from("expenses").update(parsed).eq("id", id)
   if (error) throw error

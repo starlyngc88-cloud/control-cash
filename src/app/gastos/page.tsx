@@ -22,16 +22,39 @@ import { useCashflowFilter } from "@/components/contexts/CashflowFilterContext"
 import { useSearchParams } from "next/navigation"
 import { Tooltip } from "@/components/ui/tooltip"
 
-const buildGrouped = (tab: "categoria" | "disponible" | "hucha", expenseCategories: ExpenseCategory[], items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[]) => {
-    const map = new Map<string, { id: string | null; name: string; items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[] }>()
+type ExpenseRow = Expense & { people: Pick<Person, "name"> | null; budget_categories: { id: string; name: string; parent_id: string | null } | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }
+
+const buildGroupedByBudget = (items: ExpenseRow[]) => {
+    const map = new Map<string, { id: string | null; name: string; items: ExpenseRow[] }>()
+    const catInfoMap = new Map<string, { id: string; name: string; parent_id: string | null }>()
+    for (const e of items) {
+      if (e.budget_categories) catInfoMap.set(e.budget_categories.id, e.budget_categories)
+    }
+    for (const e of items) {
+      const bc = e.budget_categories
+      if (!bc) continue
+      const rootId = bc.parent_id && catInfoMap.has(bc.parent_id) ? bc.parent_id : bc.id
+      const rootCat = catInfoMap.get(rootId)
+      const rootName = rootCat?.name || bc.name
+      if (!map.has(rootId)) map.set(rootId, { id: rootId, name: rootName, items: [] })
+      map.get(rootId)!.items.push(e)
+    }
+    if (map.size === 0) {
+      map.set("__none__", { id: null, name: "Sin rubro", items })
+    }
+    return map
+  }
+
+  const buildGrouped = (tab: "disponible" | "hucha", expenseCategories: ExpenseCategory[], items: ExpenseRow[]) => {
+    const map = new Map<string, { id: string | null; name: string; items: ExpenseRow[] }>()
     for (const c of expenseCategories) {
-      if (c.tab === "disponible" || c.tab === "hucha") { if (c.tab !== tab) continue } else { if (tab !== "categoria") continue }
+      if (c.tab !== tab) continue
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
     for (const e of items) {
       const catId = e.expense_category_id ?? "__none__"
       const cat = expenseCategories.find((c) => c.id === catId)
-      if (cat && (cat.tab === "disponible" || cat.tab === "hucha")) { if (cat.tab !== tab) continue }
+      if (cat && cat.tab !== tab) continue
       const catName = e.expense_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: e.expense_category_id ?? null, name: catName, items: [] })
       map.get(catId)!.items.push(e)
@@ -48,7 +71,7 @@ export default function GastosPage() {
 }
 
 function GastosPageInner() {
-  const [expenses, setExpenses] = useState<(Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[]>([])
+  const [expenses, setExpenses] = useState<ExpenseRow[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
@@ -180,7 +203,7 @@ function GastosPageInner() {
     }
   }, [searchParams, open])
 
-  const openEdit = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }) => {
+  const openEdit = (exp: ExpenseRow) => {
     setEditing(exp)
     setPersonId(exp.person_id)
     setAmount(String(exp.amount))
@@ -321,7 +344,7 @@ function GastosPageInner() {
 
   const categoriaItems = useMemo(() => filtered.filter((e) => !!e.budget_category_id), [filtered])
 
-  const grouped = useMemo(() => buildGrouped("categoria", expenseCategories, categoriaItems), [categoriaItems, expenseCategories])
+  const grouped = useMemo(() => buildGroupedByBudget(categoriaItems), [categoriaItems])
   const groupedDisponible = useMemo(() => buildGrouped("disponible", expenseCategories, disponibleItems), [disponibleItems, expenseCategories])
   const groupedHucha = useMemo(() => buildGrouped("hucha", expenseCategories, huchaItems), [huchaItems, expenseCategories])
 
@@ -340,7 +363,7 @@ function GastosPageInner() {
   const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
   const hasItems = expenses.length > 0 || expenseCategories.length > 0
 
-  const renderExpenseRow = (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }) => (
+  const renderExpenseRow = (exp: ExpenseRow) => (
     <div key={exp.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
       <div className="flex items-center flex-1 min-w-0">
         <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-rose-100 text-rose-600">
@@ -499,6 +522,7 @@ function GastosPageInner() {
                     </button>
                   </div>
                 </div>
+                {!budgetCategoryId && !savingId && (
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-slate-700">Categoría de gastos</Label>
                   <div className="flex gap-2">
@@ -518,6 +542,7 @@ function GastosPageInner() {
                     </button>
                   </div>
                 </div>
+                )}
             </div>
             <div className="flex justify-end gap-2">
               <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
@@ -739,7 +764,7 @@ function GastosPageInner() {
 
 function GroupedExpenseList(props: {
   title: string
-  groups: Map<string, { id: string | null; name: string; items: (Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null })[] }>
+  groups: Map<string, { id: string | null; name: string; items: ExpenseRow[] }>
   expandedKeys: Set<string>
   onToggle: (key: string) => void
   onExpandAll: () => void
@@ -750,7 +775,7 @@ function GroupedExpenseList(props: {
   onDeleteCat: (catId: string, catName: string) => void
   onNew: () => void
   newLabel: string
-  renderRow: (exp: Expense & { people: Pick<Person, "name"> | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }) => React.ReactElement
+  renderRow: (exp: ExpenseRow) => React.ReactElement
   fmt: (n: number) => string
   total: number
   emptyText?: string

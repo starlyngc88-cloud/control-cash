@@ -2,17 +2,23 @@ import { useRef, useState } from "react"
 import { View, Text, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Alert, ActivityIndicator, ScrollView } from "react-native"
 import { useRouter } from "expo-router"
 import { useAuth } from "@/providers/AuthProvider"
-import { WHITELIST_EMAILS } from "@/constants/colors"
 import { Wallet } from "lucide-react-native"
 
 export default function LoginScreen() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, signUp } = useAuth()
+  const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const passwordInputRef = useRef<TextInput>(null)
-  const isLogin = true
+  const confirmInputRef = useRef<TextInput>(null)
+
+  const toggleMode = () => {
+    setIsLogin(!isLogin)
+    setConfirmPassword("")
+  }
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -20,19 +26,37 @@ export default function LoginScreen() {
       return
     }
 
-    if (!WHITELIST_EMAILS.includes(email.trim().toLowerCase())) {
-      Alert.alert("Acceso denegado", "Este correo no está autorizado.")
+    if (!isLogin && password !== confirmPassword) {
+      Alert.alert("Error", "Las contraseñas no coinciden.")
+      return
+    }
+
+    if (password.length < 6) {
+      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres.")
       return
     }
 
     setLoading(true)
-    const { error } = await signIn(email.trim(), password)
-    setLoading(false)
 
-    if (error) {
-      Alert.alert("Error", error)
+    if (isLogin) {
+      const { error } = await signIn(email.trim(), password)
+      setLoading(false)
+      if (error) {
+        Alert.alert("Error", error)
+      } else {
+        router.replace("/(tabs)")
+      }
     } else {
-      router.replace("/(tabs)")
+      const { error } = await signUp(email.trim(), password)
+      setLoading(false)
+      if (error) {
+        Alert.alert("Error", error)
+      } else {
+        Alert.alert("Cuenta creada", "Ahora iniciá sesión con tus datos.")
+        setIsLogin(true)
+        setPassword("")
+        setConfirmPassword("")
+      }
     }
   }
 
@@ -85,10 +109,27 @@ export default function LoginScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                returnKeyType="go"
-                onSubmitEditing={handleSubmit}
+                returnKeyType={isLogin ? "go" : "next"}
+                onSubmitEditing={isLogin ? handleSubmit : () => confirmInputRef.current?.focus()}
               />
             </View>
+
+            {!isLogin && (
+              <View>
+                <Text style={{ fontSize: 12, fontWeight: "500", color: "#475569", marginBottom: 6 }}>Confirmar contraseña</Text>
+                <TextInput
+                  ref={confirmInputRef}
+                  style={{ height: 44, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "white", fontSize: 14, color: "#1e293b" }}
+                  placeholder="••••••••"
+                  placeholderTextColor="#94a3b8"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  returnKeyType="go"
+                  onSubmitEditing={handleSubmit}
+                />
+              </View>
+            )}
 
             <TouchableOpacity
               onPress={handleSubmit}
@@ -99,13 +140,19 @@ export default function LoginScreen() {
                 <ActivityIndicator color="white" />
               ) : (
                 <Text style={{ fontSize: 14, fontWeight: "600", color: "white" }}>
-                  {isLogin ? "Entrar" : "Registrarse"}
+                  {isLogin ? "Entrar" : "Crear Cuenta"}
                 </Text>
               )}
             </TouchableOpacity>
 
+            <TouchableOpacity onPress={toggleMode} style={{ alignItems: "center", marginTop: 12 }}>
+              <Text style={{ fontSize: 12, color: "#64748b", fontWeight: "500" }}>
+                {isLogin ? "¿No tienes cuenta? Créala aquí" : "¿Ya tienes cuenta? Inicia sesión"}
+              </Text>
+            </TouchableOpacity>
+
             {isLogin && (
-              <TouchableOpacity onPress={() => router.push("/forgot-password")} style={{ alignItems: "center", marginTop: 12 }}>
+              <TouchableOpacity onPress={() => router.push("/forgot-password")} style={{ alignItems: "center", marginTop: 4 }}>
                 <Text style={{ fontSize: 12, color: "#4f46e5", fontWeight: "500" }}>¿Olvidaste tu contraseña?</Text>
               </TouchableOpacity>
             )}

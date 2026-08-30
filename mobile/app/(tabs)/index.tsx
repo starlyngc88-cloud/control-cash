@@ -121,6 +121,7 @@ export default function DashboardScreen() {
 
   useRealtimeSubscription("expenses", () => load(), () => load(), () => load())
   useRealtimeSubscription("income", () => load(), () => load(), () => load())
+  useRealtimeSubscription("savings", () => load(), () => load(), () => load())
 
   const onRefresh = () => {
     setRefreshing(true)

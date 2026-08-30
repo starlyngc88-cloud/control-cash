@@ -2,6 +2,8 @@ import "../global.css"
 import { Slot, usePathname, useRouter, useSegments } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { AuthProvider, useAuth } from "@/providers/AuthProvider"
+import { LanguageProvider } from "@/i18n"
+import { CashflowFilterProvider } from "@/contexts/CashflowFilterContext"
 import { useEffect } from "react"
 import { View, ActivityIndicator } from "react-native"
 import { SafeAreaProvider } from "react-native-safe-area-context"
@@ -42,8 +44,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <AuthProvider>
-          <StatusBar style="dark" />
-          <RootLayoutNav />
+          <LanguageProvider>
+            <CashflowFilterProvider>
+              <StatusBar style="dark" />
+              <RootLayoutNav />
+            </CashflowFilterProvider>
+          </LanguageProvider>
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -26,7 +26,6 @@ import {
   getPeople,
   getBudgetCategoriesForMonth,
   createExpense,
-  createIncome,
   getFutureExpenses,
   completeFutureExpenseBySaving,
 } from "@/lib/db"
@@ -275,19 +274,14 @@ export default function AhorrosPage() {
           expense_id: expense.id,
         })
       } else {
-        await createIncome({
+        await createExpense({
           person_id: movPersonId,
           amount,
           description: movNotes,
           date: movDate,
-          category_id: null,
-        })
-        await createSavingMovement({
+          expense_category_id: null,
+          budget_category_id: null,
           saving_id: movementSavingId,
-          type: "withdrawal",
-          amount,
-          notes: movNotes,
-          movement_date: movDate,
         })
       }
       setOpenMovement(false)
