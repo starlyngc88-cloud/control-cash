@@ -215,19 +215,29 @@ export default function CompromisosScreen() {
                         <TouchableOpacity onPress={() => openPayment(c.id)} className="self-start flex-row items-center gap-1 bg-indigo-600 rounded-lg px-3 py-1.5 mb-2">
                           <ArrowDownCircle size={12} color="white" /><Text className="text-[10px] font-medium text-white">Registrar pago</Text>
                         </TouchableOpacity>
-                        {pays.length > 0 ? (
-                          <View className="space-y-1">
-                            {pays.map((p: CommitmentPayment) => (
-                              <View key={p.id} className="flex-row items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-lg">
-                                <Text className="text-[10px] text-slate-500">{formatDate(p.date)}{p.notes ? ` · ${p.notes}` : ""}</Text>
-                                <View className="flex-row items-center gap-1.5">
-                                  <Text className="text-[10px] font-medium text-rose-600 tabular-nums">{formatCurrency(Number(p.amount))}</Text>
-                                  <Text className="text-[10px] text-rose-500 tabular-nums">-{formatCurrency(Number(p.capital_amount))}</Text>
+                        {pays.length > 0 ? (() => {
+                          const chronological = [...pays].reverse()
+                          const balances = new Map<string, number>()
+                          let running = Number(c.total_amount)
+                          for (const cp of chronological) {
+                            running -= Number(cp.capital_amount)
+                            balances.set(cp.id, Math.max(0, running))
+                          }
+                          return (
+                            <View className="space-y-1">
+                              {pays.map((p: CommitmentPayment) => (
+                                <View key={p.id} className="flex-row items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-lg">
+                                  <Text className="text-[10px] text-slate-500">{formatDate(p.date)}{p.notes ? ` · ${p.notes}` : ""}</Text>
+                                  <View className="flex-row items-center gap-1.5">
+                                    <Text className="text-[10px] font-medium text-rose-600 tabular-nums">{formatCurrency(Number(p.amount))}</Text>
+                                    <Text className="text-[10px] text-rose-500 tabular-nums">-{formatCurrency(Number(p.capital_amount))}</Text>
+                                    <Text className="text-[10px] text-slate-400 tabular-nums">→ {formatCurrency(balances.get(p.id) ?? 0)}</Text>
+                                  </View>
                                 </View>
-                              </View>
-                            ))}
-                          </View>
-                        ) : (
+                              ))}
+                            </View>
+                          )
+                        })() : (
                           <Text className="text-[10px] text-slate-400">Sin pagos registrados aún.</Text>
                         )}
                       </View>

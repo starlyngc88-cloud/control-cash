@@ -538,16 +538,28 @@ export default function CompromisosPage() {
                           {dict.pagar}
                         </button>
                       </div>
-                      {pays.length > 0 && (
-                        <div className="px-5 pb-2 space-y-0.5">
-                          {pays.map((p) => (
-                            <div key={p.id} className="flex items-center justify-between px-2.5 py-1 text-[10px] bg-slate-50 rounded-lg">
-                              <span className="text-slate-500">{new Date(p.date).toLocaleDateString("es-CO")}{p.notes ? ` · ${p.notes}` : ""}</span>
-                              <span className="tabular-nums font-medium text-rose-600">{fmt(p.amount)} <span className="text-rose-600 font-medium">-{fmt(p.capital_amount)}</span></span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {pays.length > 0 && (() => {
+                        const chronological = [...pays].reverse()
+                        const balances = new Map<string, number>()
+                        let running = Number(comm.total_amount)
+                        for (const cp of chronological) {
+                          running -= Number(cp.capital_amount)
+                          balances.set(cp.id, Math.max(0, running))
+                        }
+                        return (
+                          <div className="px-5 pb-2 space-y-0.5">
+                            {pays.map((p) => (
+                              <div key={p.id} className="flex items-center justify-between px-2.5 py-1 text-[10px] bg-slate-50 rounded-lg">
+                                <span className="text-slate-500">{new Date(p.date).toLocaleDateString("es-CO")}{p.notes ? ` · ${p.notes}` : ""}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="tabular-nums font-medium text-rose-600">{fmt(p.amount)} <span className="text-rose-600 font-medium">-{fmt(p.capital_amount)}</span></span>
+                                  <span className="tabular-nums text-slate-400">→ {fmt(balances.get(p.id) ?? 0)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
