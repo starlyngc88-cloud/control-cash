@@ -65,6 +65,8 @@ export default function CompromisosPage() {
   const [openPay, setOpenPay] = useState(false)
   const [payCommId, setPayCommId] = useState("")
   const [payCommName, setPayCommName] = useState("")
+  const [payCommBalance, setPayCommBalance] = useState(0)
+  const [payCommTotal, setPayCommTotal] = useState(0)
   const [payAmount, setPayAmount] = useState("")
   const [payCapital, setPayCapital] = useState("")
   const [payNotes, setPayNotes] = useState("")
@@ -230,6 +232,8 @@ export default function CompromisosPage() {
   const openPayDialog = (comm: Commitment & { budget_categories: Pick<BudgetCategory, "name"> | null }) => {
     setPayCommId(comm.id)
     setPayCommName(comm.name)
+    setPayCommBalance(Number(comm.current_balance))
+    setPayCommTotal(Number(comm.total_amount))
     setPayAmount("")
     setPayCapital("")
     setPayNotes("")
@@ -510,7 +514,8 @@ export default function CompromisosPage() {
                     {comm.budget_categories && (
                       <span className="text-[10px] text-slate-400 ml-1.5">· {comm.budget_categories.name}</span>
                     )}
-                    <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(Number(comm.current_balance))}</span>
+                    <span className="text-[10px] text-slate-400 tabular-nums line-through ml-auto">{fmt(Number(comm.total_amount))}</span>
+                    <span className="text-xs font-semibold text-rose-600 tabular-nums ml-1.5">{fmt(Number(comm.current_balance))}</span>
                     <div className="w-10 h-1 rounded-full bg-slate-200 overflow-hidden ml-2">
                       <div className="h-full rounded-full bg-green-500 transition-all" style={{ width: `${progress}%` }} />
                     </div>
@@ -583,6 +588,15 @@ export default function CompromisosPage() {
           </DialogHeader>
           <form onSubmit={handlePaySubmit} className="space-y-5">
             <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>Saldo actual: <strong className="text-slate-700">{fmt(payCommBalance)}</strong></span>
+                <span>Monto total: <strong className="text-slate-700">{fmt(payCommTotal)}</strong></span>
+              </div>
+              {payCapital && Number(payCapital) > 0 && (
+                <div className="text-xs text-emerald-600 font-medium">
+                  Saldo después del pago: {fmt(Math.max(0, payCommBalance - Number(payCapital)))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="payAmount" className="text-sm font-medium text-slate-700">{dict.pagoMonto}</Label>

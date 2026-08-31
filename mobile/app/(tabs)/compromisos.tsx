@@ -33,6 +33,8 @@ export default function CompromisosScreen() {
   const [payCapital, setPayCapital] = useState("")
   const [payNotes, setPayNotes] = useState("")
   const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0])
+  const [payCommBalance, setPayCommBalance] = useState(0)
+  const [payCommTotal, setPayCommTotal] = useState(0)
 
   const load = useCallback(async () => {
     const [com, cats, pays] = await Promise.all([getCommitments(), getAllBudgetCategories(), getCommitmentPayments()])
@@ -78,8 +80,8 @@ export default function CompromisosScreen() {
     ])
   }
 
-  const openPayment = (commId: string) => {
-    setPaymentCommId(commId); setPayAmount(""); setPayCapital(""); setPayNotes(""); setPayDate(new Date().toISOString().split("T")[0]); setPaymentModalOpen(true)
+  const openPayment = (comm: { id: string; current_balance: number; total_amount: number }) => {
+    setPaymentCommId(comm.id); setPayAmount(""); setPayCapital(""); setPayNotes(""); setPayDate(new Date().toISOString().split("T")[0]); setPayCommBalance(Number(comm.current_balance)); setPayCommTotal(Number(comm.total_amount)); setPaymentModalOpen(true)
   }
 
   const handlePayment = async () => {
@@ -203,7 +205,8 @@ export default function CompromisosScreen() {
                       <View className="w-10 h-1 rounded-full bg-slate-200 overflow-hidden ml-1.5">
                         <View className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} />
                       </View>
-                      <Text className="ml-2 text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(Number(c.current_balance))}</Text>
+                      <Text className="text-[10px] text-slate-400 tabular-nums line-through ml-auto">{formatCurrency(Number(c.total_amount))}</Text>
+                      <Text className="text-xs font-semibold text-rose-600 tabular-nums ml-1.5">{formatCurrency(Number(c.current_balance))}</Text>
                       <View className="flex-row items-center gap-0.5 ml-1.5">
                         <TouchableOpacity onPress={() => openEdit(c)} className="p-0.5"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
                         <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-0.5"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
@@ -212,7 +215,7 @@ export default function CompromisosScreen() {
                     {isExpanded && (
                       <View className="bg-white border-b border-slate-100 px-5 py-2.5">
                         {c.description ? <Text className="text-[10px] text-slate-500 mb-2">{c.description}</Text> : null}
-                        <TouchableOpacity onPress={() => openPayment(c.id)} className="self-start flex-row items-center gap-1 bg-indigo-600 rounded-lg px-3 py-1.5 mb-2">
+                        <TouchableOpacity onPress={() => openPayment(c)} className="self-start flex-row items-center gap-1 bg-indigo-600 rounded-lg px-3 py-1.5 mb-2">
                           <ArrowDownCircle size={12} color="white" /><Text className="text-[10px] font-medium text-white">Registrar pago</Text>
                         </TouchableOpacity>
                         {pays.length > 0 ? (() => {
@@ -316,6 +319,15 @@ export default function CompromisosScreen() {
               <TouchableOpacity onPress={() => setPaymentModalOpen(false)}><X size={20} color="#94a3b8" /></TouchableOpacity>
             </View>
             <View className="space-y-3">
+              <View className="flex-row items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                <Text className="text-[10px] text-slate-500">Saldo actual: <Text className="font-semibold text-slate-700">{formatCurrency(payCommBalance)}</Text></Text>
+                <Text className="text-[10px] text-slate-500">Total: <Text className="font-semibold text-slate-700">{formatCurrency(payCommTotal)}</Text></Text>
+              </View>
+              {payCapital && Number(payCapital) > 0 && (
+                <View className="bg-emerald-50 rounded-lg px-3 py-2">
+                  <Text className="text-[10px] font-medium text-emerald-600">Saldo después del pago: {formatCurrency(Math.max(0, payCommBalance - Number(payCapital)))}</Text>
+                </View>
+              )}
               <View className="flex-row gap-3">
                 <View className="flex-1">
                   <Text className="text-xs font-medium text-slate-600 mb-1">Monto del pago</Text>
