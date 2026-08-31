@@ -11,6 +11,13 @@ import DatePickerModal from "@/components/DatePickerModal"
 import { Plus, Trash2, Pencil, Search, X, Calendar, ChevronDown, ChevronRight, ArrowUpCircle, TrendingUp, List } from "lucide-react-native"
 import type { Person, ExpenseCategory, ExpenseCategoryTab, Saving } from "@/types/database"
 
+type BudgetTreeNode = {
+  id: string
+  name: string
+  children: BudgetTreeNode[]
+  items: ExpenseWithRelations[]
+}
+
 export default function GastosScreen() {
   const insets = useSafeAreaInsets()
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>([])
@@ -238,7 +245,7 @@ export default function GastosScreen() {
   })
 
   const itemsByTab = useCallback((tab: ExpenseCategoryTab) => {
-    if (tab === "categoria") return filtered.filter((e) => !!e.budget_category_id)
+    if (tab === "categoria") return filtered.filter((e) => !!e.budget_category_id && !e.saving_id)
     if (tab === "disponible") return filtered.filter((e) => !e.budget_category_id && !e.saving_id)
     return filtered.filter((e) => !!e.saving_id)
   }, [filtered])
@@ -266,7 +273,6 @@ export default function GastosScreen() {
   const total = expenses.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
   const masAlto = expenses.reduce((max: ExpenseWithRelations | null, e: ExpenseWithRelations) => Number(e.amount) > Number(max?.amount ?? 0) ? e : max, expenses[0] ?? null)
   const sinCategoria = expenses.filter((e) => !e.expense_category_id).length
-  const allExpanded = [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
   const formTab: ExpenseCategoryTab = savingId ? "hucha" : assumeAvailable ? "disponible" : "categoria"
   const formCategories = categories.filter((c) => (c.tab ?? "categoria") === formTab)
   const budgetGroups = useMemo(() => {
@@ -278,6 +284,51 @@ export default function GastosScreen() {
     }
     return Array.from(m.entries())
   }, [budgetCategories])
+
+  const categoriaItems = useMemo(() => itemsByTab("categoria"), [itemsByTab])
+
+  const budgetTree = useMemo(() => {
+    const treeMap = new Map<string, BudgetTreeNode & { budgetCategories: BudgetCategoryWithTemplate }>()
+    for (const bc of budgetCategories) {
+      treeMap.set(bc.id, { id: bc.id, name: bc.name, children: [], items: [], budgetCategories: bc })
+    }
+    const roots: BudgetTreeNode[] = []
+    for (const bc of budgetCategories) {
+      const node = treeMap.get(bc.id)!
+      if (bc.parent_id && treeMap.has(bc.parent_id)) {
+        treeMap.get(bc.parent_id)!.children.push(node)
+      } else {
+        roots.push(node)
+      }
+    }
+    for (const e of categoriaItems) {
+      const bcId = e.budget_category_id
+      if (bcId && treeMap.has(bcId)) {
+        treeMap.get(bcId)!.items.push(e)
+      }
+    }
+    const countAll = (n: BudgetTreeNode): number => {
+      if (n.children.length === 0) return n.items.length
+      return n.items.length + n.children.reduce((s, c) => s + countAll(c), 0)
+    }
+    const buildNode = (n: BudgetTreeNode): BudgetTreeNode => ({
+      ...n,
+      children: n.children.map(buildNode),
+    })
+    const result = roots.map(buildNode)
+    return result
+  }, [budgetCategories, categoriaItems])
+
+  const budgetParentIds = useMemo(() => {
+    const ids = new Set<string>()
+    const collect = (nodes: BudgetTreeNode[]) => { for (const n of nodes) { if (n.children.length > 0) ids.add(n.id); collect(n.children) } }
+    collect(budgetTree)
+    return ids
+  }, [budgetTree])
+
+  const allExpanded = view === "categoria"
+    ? budgetParentIds.size > 0 && [...budgetParentIds].every((id) => expandedCats.has(id))
+    : [...grouped.keys()].length > 0 && [...grouped.keys()].every((k) => expandedCats.has(k))
 
   if (loading) {
     return (
@@ -383,51 +434,126 @@ export default function GastosScreen() {
         </View>
 
         <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          {view === "categoria" && sorted.length > 1 && (
+            <View className="px-4 py-2 bg-amber-50 border-b border-amber-200">
+              <Text className="text-[10px] text-amber-700">
+                Mostrando rubros de {new Date(activeMonth + "-12T00:00:00").toLocaleDateString("es-CO", { month: "long", year: "numeric" })}. Seleccioná un solo mes para ver todos los rubros.
+              </Text>
+            </View>
+          )}
           <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
             <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{view === "categoria" ? "Gastos por categoría" : view === "disponible" ? "Disponible para gastar" : "Gastos por hucha"}</Text>
             <View className="flex-row items-center gap-3">
-              {grouped.size > 0 && (
-                <TouchableOpacity onPress={() => { if (allExpanded) setExpandedCats(new Set()); else setExpandedCats(new Set(grouped.keys())) }}>
-                  <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
-                </TouchableOpacity>
+              {view === "categoria" ? (
+                budgetTree.length > 0 && (
+                  <TouchableOpacity onPress={() => {
+                    if (allExpanded) {
+                      setExpandedCats(new Set())
+                    } else {
+                      const allIds = new Set<string>()
+                      const collectIds = (nodes: BudgetTreeNode[]) => {
+                        for (const n of nodes) {
+                          if (n.children.length > 0) allIds.add(n.id)
+                          collectIds(n.children)
+                        }
+                      }
+                      collectIds(budgetTree)
+                      setExpandedCats(allIds)
+                    }
+                  }}>
+                    <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                  </TouchableOpacity>
+                )
+              ) : (
+                grouped.size > 0 && (
+                  <TouchableOpacity onPress={() => { if (allExpanded) setExpandedCats(new Set()); else setExpandedCats(new Set(grouped.keys())) }}>
+                    <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
+                  </TouchableOpacity>
+                )
               )}
               <Text className="text-xs font-bold text-rose-600 tabular-nums">{formatCurrency(viewItems.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0))}</Text>
             </View>
           </View>
 
-          {grouped.size === 0 ? (
-            <View className="px-4 py-8 items-center">
-              <Text className="text-xs text-slate-500">{view === "categoria" ? "No hay gastos con rubro." : view === "disponible" ? "No hay gastos asumidos del disponible." : "No hay gastos vinculados a una hucha."}</Text>
-            </View>
+          {view === "categoria" ? (
+            budgetTree.length === 0 ? (
+              <View className="px-4 py-8 items-center">
+                <Text className="text-xs text-slate-500">No hay gastos con rubro.</Text>
+              </View>
+            ) : (
+              budgetTree.map((root) => {
+                const countAll = (n: BudgetTreeNode): number => {
+                  if (n.children.length === 0) return n.items.length
+                  return n.items.length + n.children.reduce((s, c) => s + countAll(c), 0)
+                }
+                const totalAll = (n: BudgetTreeNode): number => {
+                  if (n.children.length === 0) return n.items.reduce((s, e) => s + Number(e.amount), 0)
+                  return n.items.reduce((s, e) => s + Number(e.amount), 0) + n.children.reduce((s, c) => s + totalAll(c), 0)
+                }
+                const renderBudgetNode = (node: BudgetTreeNode, depth: number) => {
+                  const hasChildren = node.children.length > 0
+                  const isExpanded = expandedCats.has(node.id)
+                  const nodeTotal = node.children.length === 0
+                    ? node.items.reduce((s, e) => s + Number(e.amount), 0)
+                    : node.items.reduce((s, e) => s + Number(e.amount), 0) + node.children.reduce((s, c) => s + totalAll(c), 0)
+                  const nodeCount = countAll(node)
+                  return (
+                    <View key={node.id}>
+                      <View className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200" style={{ paddingLeft: 16 + depth * 14 }}>
+                        <TouchableOpacity onPress={() => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next })} className="mr-2">
+                          {hasChildren ? (
+                            isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />
+                          ) : (
+                            <View style={{ width: 14 }} />
+                          )}
+                        </TouchableOpacity>
+                        <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{node.name}</Text>
+                        <Text className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</Text>
+                        <Text className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(nodeTotal)}</Text>
+                      </View>
+                      {isExpanded && hasChildren && node.children.map((child) => renderBudgetNode(child, depth + 1))}
+                      {isExpanded && !hasChildren && node.items.map(renderRow)}
+                    </View>
+                  )
+                }
+                return renderBudgetNode(root, 0)
+              })
+            )
           ) : (
-            Array.from(grouped.entries()).map(([key, group]) => {
-              const isExpanded = expandedCats.has(key)
-              const catTotal = group.items.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
-              const cat = categories.find((c) => c.id === group.id)
-              return (
-                <View key={key}>
-                  <View className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-                    <TouchableOpacity onPress={() => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next })} className="mr-2">
-                      {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
-                    </TouchableOpacity>
-                    {cat && (
-                      <>
-                        <TouchableOpacity onPress={() => { setEditingCat(cat); setCatManagerName(cat.name); setCatManagerTab(cat.tab ?? "categoria"); setCatManagerOpen(true) }} className="p-0.5 mr-0.5">
-                          <Pencil size={12} color="#94a3b8" />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDeleteCat(cat.id, cat.name)} className="p-0.5 mr-0.5">
-                          <Trash2 size={12} color="#e11d48" />
-                        </TouchableOpacity>
-                      </>
-                    )}
-                    <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{group.name}</Text>
-                    <Text className="text-[10px] text-slate-400 ml-1.5">({group.items.length})</Text>
-                    <Text className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(catTotal)}</Text>
+            grouped.size === 0 ? (
+              <View className="px-4 py-8 items-center">
+                <Text className="text-xs text-slate-500">{view === "disponible" ? "No hay gastos asumidos del disponible." : "No hay gastos vinculados a una hucha."}</Text>
+              </View>
+            ) : (
+              Array.from(grouped.entries()).map(([key, group]) => {
+                const isExpanded = expandedCats.has(key)
+                const catTotal = group.items.reduce((s: number, e: ExpenseWithRelations) => s + Number(e.amount), 0)
+                const cat = categories.find((c) => c.id === group.id)
+                return (
+                  <View key={key}>
+                    <View className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                      <TouchableOpacity onPress={() => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next })} className="mr-2">
+                        {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
+                      </TouchableOpacity>
+                      {cat && (
+                        <>
+                          <TouchableOpacity onPress={() => { setEditingCat(cat); setCatManagerName(cat.name); setCatManagerTab(cat.tab ?? "categoria"); setCatManagerOpen(true) }} className="p-0.5 mr-0.5">
+                            <Pencil size={12} color="#94a3b8" />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => handleDeleteCat(cat.id, cat.name)} className="p-0.5 mr-0.5">
+                            <Trash2 size={12} color="#e11d48" />
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{group.name}</Text>
+                      <Text className="text-[10px] text-slate-400 ml-1.5">({group.items.length})</Text>
+                      <Text className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(catTotal)}</Text>
+                    </View>
+                    {isExpanded && group.items.map(renderRow)}
                   </View>
-                  {isExpanded && group.items.map(renderRow)}
-                </View>
-              )
-            })
+                )
+              })
+            )
           )}
 
           <View className="bg-white px-4 py-2.5 border-t border-slate-200 items-end">

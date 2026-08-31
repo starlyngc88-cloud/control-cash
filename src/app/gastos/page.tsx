@@ -24,25 +24,58 @@ import { Tooltip } from "@/components/ui/tooltip"
 
 type ExpenseRow = Expense & { people: Pick<Person, "name"> | null; budget_categories: { id: string; name: string; parent_id: string | null } | null; expense_categories: Pick<ExpenseCategory, "id" | "name"> | null; savings: Pick<import("@/types").Saving, "id" | "name"> | null }
 
-const buildGroupedByBudget = (items: ExpenseRow[]) => {
-    const map = new Map<string, { id: string | null; name: string; items: ExpenseRow[] }>()
-    const catInfoMap = new Map<string, { id: string; name: string; parent_id: string | null }>()
+type BudgetGroupNode = {
+  id: string
+  name: string
+  items: ExpenseRow[]
+  children: BudgetGroupNode[]
+  depth: number
+}
+
+const buildGroupedByBudget = (items: ExpenseRow[], budgetCategories: (BudgetCategory & { budget_templates: Pick<import("@/types").BudgetTemplate, "name"> })[]): Map<string, BudgetGroupNode> => {
+    const catMap = new Map<string, BudgetCategory>()
+    for (const bc of budgetCategories) catMap.set(bc.id, bc)
+
+    const nodeMap = new Map<string, BudgetGroupNode>()
+    for (const bc of budgetCategories) {
+      nodeMap.set(bc.id, { id: bc.id, name: bc.name, items: [], children: [], depth: 0 })
+    }
+
     for (const e of items) {
-      if (e.budget_categories) catInfoMap.set(e.budget_categories.id, e.budget_categories)
+      const bcId = e.budget_category_id
+      if (bcId && nodeMap.has(bcId)) {
+        nodeMap.get(bcId)!.items.push(e)
+      }
     }
-    for (const e of items) {
-      const bc = e.budget_categories
-      if (!bc) continue
-      const rootId = bc.parent_id && catInfoMap.has(bc.parent_id) ? bc.parent_id : bc.id
-      const rootCat = catInfoMap.get(rootId)
-      const rootName = rootCat?.name || bc.name
-      if (!map.has(rootId)) map.set(rootId, { id: rootId, name: rootName, items: [] })
-      map.get(rootId)!.items.push(e)
+
+    const roots: BudgetGroupNode[] = []
+    for (const bc of budgetCategories) {
+      const node = nodeMap.get(bc.id)!
+      const parent = bc.parent_id ? catMap.get(bc.parent_id) : null
+      if (parent && bc.parent_id && nodeMap.has(bc.parent_id)) {
+        nodeMap.get(bc.parent_id)!.children.push(node)
+        node.depth = 1
+      } else {
+        roots.push(node)
+        node.depth = 0
+      }
     }
-    if (map.size === 0) {
-      map.set("__none__", { id: null, name: "Sin rubro", items })
+
+    const countAll = (n: BudgetGroupNode): number => {
+      if (n.children.length === 0) return n.items.length
+      return n.items.length + n.children.reduce((s, c) => s + countAll(c), 0)
     }
-    return map
+
+    const result = new Map<string, BudgetGroupNode>()
+    for (const r of roots) {
+      result.set(r.id, r)
+    }
+
+    if (result.size === 0 && items.length > 0) {
+      result.set("__none__", { id: "__none__", name: "Sin rubro", items, children: [], depth: 0 })
+    }
+
+    return result
   }
 
   const buildGrouped = (tab: "disponible" | "hucha", expenseCategories: ExpenseCategory[], items: ExpenseRow[]) => {
@@ -342,9 +375,9 @@ function GastosPageInner() {
 
   const huchaItems = useMemo(() => filtered.filter((e) => !!e.saving_id), [filtered])
 
-  const categoriaItems = useMemo(() => filtered.filter((e) => !!e.budget_category_id), [filtered])
+  const categoriaItems = useMemo(() => filtered.filter((e) => !!e.budget_category_id && !e.saving_id), [filtered])
 
-  const grouped = useMemo(() => buildGroupedByBudget(categoriaItems), [categoriaItems])
+  const grouped = useMemo(() => buildGroupedByBudget(categoriaItems, budgetCategories), [categoriaItems, budgetCategories])
   const groupedDisponible = useMemo(() => buildGrouped("disponible", expenseCategories, disponibleItems), [disponibleItems, expenseCategories])
   const groupedHucha = useMemo(() => buildGrouped("hucha", expenseCategories, huchaItems), [huchaItems, expenseCategories])
 
@@ -655,19 +688,25 @@ function GastosPageInner() {
               <p className="text-xs text-slate-500">{search ? "Sin resultados para la búsqueda" : g.empty}</p>
             </div>
           ) : (
-            <GroupedExpenseList
-              title="Gastos por categoría"
+            <BudgetCategoryTree
               groups={grouped}
               expandedKeys={expandedCats}
               onToggle={(key) => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next })}
-              onExpandAll={() => { if (allExpanded) setExpandedCats(new Set()); else setExpandedCats(new Set([...grouped.keys()])) }}
-              allExpanded={allExpanded}
-              showCatActions
-              expenseCategories={expenseCategories}
-              onEditCat={(cat) => { setEditingCat(cat); setCatName(cat.name); setCatTab(cat.tab ?? "categoria"); setOpenCat(true) }}
-              onDeleteCat={handleDeleteCat}
-              onNew={openNew}
-              newLabel={g.newGasto}
+              onExpandAll={() => {
+                const parentIds = new Set<string>()
+                for (const [, node] of grouped) {
+                  const collect = (n: BudgetGroupNode) => { if (n.children.length > 0) parentIds.add(n.id); n.children.forEach(collect) }
+                  collect(node)
+                }
+                if ([...parentIds].every((id) => expandedCats.has(id))) setExpandedCats(new Set())
+                else setExpandedCats(parentIds)
+              }}
+              allExpanded={[...grouped.values()].every((node) => {
+                const parentIds = new Set<string>()
+                const collect = (n: BudgetGroupNode) => { if (n.children.length > 0) parentIds.add(n.id); n.children.forEach(collect) }
+                collect(node)
+                return parentIds.size === 0 || [...parentIds].every((id) => expandedCats.has(id))
+              })}
               renderRow={renderExpenseRow}
               fmt={fmt}
               total={categoriaItems.reduce((s, e) => s + Number(e.amount), 0)}
@@ -758,6 +797,79 @@ function GastosPageInner() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+function BudgetCategoryTree(props: {
+  groups: Map<string, BudgetGroupNode>
+  expandedKeys: Set<string>
+  onToggle: (key: string) => void
+  onExpandAll: () => void
+  allExpanded: boolean
+  renderRow: (exp: ExpenseRow) => React.ReactElement
+  fmt: (n: number) => string
+  total: number
+}) {
+  const { groups, expandedKeys, onToggle, onExpandAll, allExpanded, renderRow, fmt, total } = props
+
+  const countAll = (n: BudgetGroupNode): number => {
+    if (n.children.length === 0) return n.items.length
+    return n.items.length + n.children.reduce((s, c) => s + countAll(c), 0)
+  }
+
+  const totalAll = (n: BudgetGroupNode): number => {
+    if (n.children.length === 0) return n.items.reduce((s, e) => s + Number(e.amount), 0)
+    return n.items.reduce((s, e) => s + Number(e.amount), 0) + n.children.reduce((s, c) => s + totalAll(c), 0)
+  }
+
+  const renderNode = (node: BudgetGroupNode, depth: number): React.ReactElement => {
+    const hasChildren = node.children.length > 0
+    const isExpanded = expandedKeys.has(node.id)
+    const nodeTotal = totalAll(node)
+    const nodeCount = countAll(node)
+    const indentPx = 16 + depth * 14
+    return (
+      <div key={node.id}>
+        <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200" style={{ paddingLeft: `${indentPx}px` }}>
+          <button onClick={() => onToggle(node.id)} className="text-slate-400 hover:text-slate-600 mr-2">
+            {hasChildren ? (isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />) : <span className="inline-block w-3.5" />}
+          </button>
+          <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex-1">{node.name}</span>
+          <span className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</span>
+          <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(nodeTotal)}</span>
+        </div>
+        {isExpanded && hasChildren && node.children.map((child) => renderNode(child, depth + 1))}
+        {isExpanded && !hasChildren && node.items.map(renderRow)}
+      </div>
+    )
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gastos por categoría</span>
+        <div className="flex items-center gap-3">
+          <button onClick={onExpandAll} className="text-xs text-slate-400 hover:text-slate-600 underline underline-offset-2">
+            {allExpanded ? "Contraer todo" : "Expandir todo"}
+          </button>
+          <span className="text-sm font-bold text-rose-600 tabular-nums">{fmt(total)}</span>
+        </div>
+      </div>
+      {groups.size === 0 ? (
+        <div className="px-4 py-8 text-center">
+          <p className="text-xs text-slate-500">No hay gastos con rubro.</p>
+        </div>
+      ) : (
+        <div>
+          {Array.from(groups.values()).map((node) => renderNode(node, 0))}
+        </div>
+      )}
+      <div className="bg-white px-4 py-2.5 border-t border-slate-200 flex items-center justify-end">
+        <button className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          <Plus className="size-3" /> Nuevo gasto
+        </button>
+      </div>
     </div>
   )
 }
