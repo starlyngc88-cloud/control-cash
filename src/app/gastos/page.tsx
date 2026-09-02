@@ -11,8 +11,8 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings } from "@/lib/db"
-import type { Person, Expense, ExpenseCategory, BudgetCategory } from "@/types"
+import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, updateBudgetCategory, deleteBudgetCategory, getMovementsByBudgetCategory } from "@/lib/db"
+import type { Person, Expense, ExpenseCategory, BudgetCategory, Income } from "@/types"
 import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight, X } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
@@ -141,6 +141,18 @@ function GastosPageInner() {
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
   const [catDeleteExpenses, setCatDeleteExpenses] = useState<Expense[]>([])
   const [catSelectionPending, setCatSelectionPending] = useState(false)
+
+  const [openBudgetCatEdit, setOpenBudgetCatEdit] = useState(false)
+  const [editingBudgetCat, setEditingBudgetCat] = useState<BudgetCategory | null>(null)
+  const [budgetCatName, setBudgetCatName] = useState("")
+  const [budgetCatBudgeted, setBudgetCatBudgeted] = useState("")
+  const [budgetCatHasChildren, setBudgetCatHasChildren] = useState(false)
+
+  const [budgetCatToDelete, setBudgetCatToDelete] = useState<{ id: string; name: string } | null>(null)
+
+  const [selectedBudgetCatId, setSelectedBudgetCatId] = useState<string | null>(null)
+  const [movements, setMovements] = useState<(Expense & { people: Pick<Person, "name"> | null })[]>([])
+  const [loadingMovements, setLoadingMovements] = useState(false)
 
   const [headerDropdownOpen, setHeaderDropdownOpen] = useState(false)
   const headerDropdownRef = useRef<HTMLDivElement>(null)
@@ -358,6 +370,67 @@ function GastosPageInner() {
       setError(friendlyError(err))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const openEditBudgetCat = (cat: BudgetCategory, hasChildren: boolean) => {
+    setEditingBudgetCat(cat)
+    setBudgetCatName(cat.name)
+    setBudgetCatBudgeted(String(cat.budgeted))
+    setBudgetCatHasChildren(hasChildren)
+    setOpenBudgetCatEdit(true)
+  }
+
+  const handleBudgetCatEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingBudgetCat || !budgetCatName.trim()) return
+    setSubmitting(true)
+    try {
+      if (budgetCatHasChildren) {
+        await updateBudgetCategory(editingBudgetCat.id, { name: budgetCatName.trim(), budgeted: 0 })
+      } else {
+        await updateBudgetCategory(editingBudgetCat.id, { name: budgetCatName.trim(), budgeted: parseFloat(budgetCatBudgeted || "0") })
+      }
+      setOpenBudgetCatEdit(false)
+      setEditingBudgetCat(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const confirmDeleteBudgetCat = async () => {
+    if (!budgetCatToDelete) return
+    setSubmitting(true)
+    try {
+      await deleteBudgetCategory(budgetCatToDelete.id)
+      setBudgetCatToDelete(null)
+      load()
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSelectBudgetCat = async (catId: string) => {
+    if (selectedBudgetCatId === catId) {
+      setSelectedBudgetCatId(null)
+      setMovements([])
+      return
+    }
+    setSelectedBudgetCatId(catId)
+    setLoadingMovements(true)
+    try {
+      const childIds = budgetCategories.filter((c) => c.parent_id === catId).map((c) => c.id)
+      const res = await getMovementsByBudgetCategory(catId, childIds, startDate, endDate)
+      setMovements(res)
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setLoadingMovements(false)
     }
   }
 
@@ -710,6 +783,11 @@ function GastosPageInner() {
               renderRow={renderExpenseRow}
               fmt={fmt}
               total={categoriaItems.reduce((s, e) => s + Number(e.amount), 0)}
+              budgetCategories={budgetCategories}
+              onEditBudgetCat={openEditBudgetCat}
+              onDeleteBudgetCat={(catId, catName) => setBudgetCatToDelete({ id: catId, name: catName })}
+              selectedBudgetCatId={selectedBudgetCatId}
+              onSelectBudgetCat={handleSelectBudgetCat}
             />
           )}
         </>
@@ -797,6 +875,106 @@ function GastosPageInner() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Budget Category Edit Dialog */}
+      <Dialog open={openBudgetCatEdit} onOpenChange={(v) => { if (!v) setEditingBudgetCat(null); setOpenBudgetCatEdit(v) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar rubro</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Modificá el nombre y monto de este rubro.</p>
+          </DialogHeader>
+          <form onSubmit={handleBudgetCatEditSubmit} className="space-y-5">
+            <div className="bg-slate-50 rounded-lg p-4 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="budgetCatName" className="text-sm font-medium text-slate-700">Nombre</Label>
+                <Input id="budgetCatName" value={budgetCatName} onChange={(e) => setBudgetCatName(e.target.value)} required />
+              </div>
+              {budgetCatHasChildren ? (
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-slate-700">Monto</Label>
+                  <p className="text-xs text-slate-500">Calculado automáticamente de las subcategorías</p>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <Label htmlFor="budgetCatBudgeted" className="text-sm font-medium text-slate-700">Monto</Label>
+                  <Input id="budgetCatBudgeted" type="number" step="0.01" min="0" value={budgetCatBudgeted} onChange={(e) => setBudgetCatBudgeted(e.target.value)} required />
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+              <Button type="submit" disabled={submitting}>{submitting ? "Guardando..." : "Guardar cambios"}</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Budget Category Delete Dialog */}
+      <Dialog open={!!budgetCatToDelete} onOpenChange={(v) => { if (!v) setBudgetCatToDelete(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>¿Eliminar &ldquo;{budgetCatToDelete?.name}&rdquo;?</DialogTitle>
+            <p className="text-xs text-slate-500 mt-1">Los gastos asociados quedarán sin rubro.</p>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-1">
+            <DialogClose render={<Button variant="outline" type="button">Cancelar</Button>} />
+            <Button variant="destructive" onClick={confirmDeleteBudgetCat} disabled={submitting}>
+              {submitting ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Movements section */}
+      {selectedBudgetCatId && view === "categoria" && (
+        <div className="mt-4 bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              Movimientos de: {budgetCategories.find((c) => c.id === selectedBudgetCatId)?.name ?? ""}
+            </span>
+            <button
+              onClick={() => { setSelectedBudgetCatId(null); setMovements([]) }}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          {loadingMovements ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-xs text-slate-500">Cargando movimientos...</p>
+            </div>
+          ) : movements.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-xs text-slate-500">No hay gastos para este rubro.</p>
+            </div>
+          ) : (
+            <div>
+              {movements.map((exp) => (
+                <div key={exp.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                  <div className="flex items-center flex-1 min-w-0">
+                    <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-rose-100 text-rose-600">
+                      <ArrowUpCircle className="size-3" />
+                    </div>
+                    <div className="ml-2.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</p>
+                        <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+                      </div>
+                      {exp.people?.name && <p className="text-[10px] text-slate-500">{exp.people.name}</p>}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-rose-600 tabular-nums shrink-0 ml-3">- {fmt(Number(exp.amount))}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="bg-white px-4 py-2 border-t border-slate-200 flex items-center justify-end">
+            <span className="text-xs text-slate-500">
+              {movements.length} gasto(s)
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -810,8 +988,23 @@ function BudgetCategoryTree(props: {
   renderRow: (exp: ExpenseRow) => React.ReactElement
   fmt: (n: number) => string
   total: number
+  budgetCategories: BudgetCategory[]
+  onEditBudgetCat: (cat: BudgetCategory, hasChildren: boolean) => void
+  onDeleteBudgetCat: (catId: string, catName: string) => void
+  selectedBudgetCatId: string | null
+  onSelectBudgetCat: (catId: string) => void
 }) {
-  const { groups, expandedKeys, onToggle, onExpandAll, allExpanded, renderRow, fmt, total } = props
+  const { groups, expandedKeys, onToggle, onExpandAll, allExpanded, renderRow, fmt, total, budgetCategories, onEditBudgetCat, onDeleteBudgetCat, selectedBudgetCatId, onSelectBudgetCat } = props
+
+  const childrenMap = useMemo(() => {
+    const map = new Map<string, boolean>()
+    for (const bc of budgetCategories) {
+      if (bc.parent_id) {
+        map.set(bc.parent_id, true)
+      }
+    }
+    return map
+  }, [budgetCategories])
 
   const countAll = (n: BudgetGroupNode): number => {
     if (n.children.length === 0) return n.items.length
@@ -829,15 +1022,40 @@ function BudgetCategoryTree(props: {
     const nodeTotal = totalAll(node)
     const nodeCount = countAll(node)
     const indentPx = 16 + depth * 14
+    const isSelected = selectedBudgetCatId === node.id
+    const cat = budgetCategories.find((c) => c.id === node.id)
+    const catHasChildren = childrenMap.has(node.id)
+    const isChild = depth > 0
     return (
       <div key={node.id}>
-        <div className="flex items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200" style={{ paddingLeft: `${indentPx}px` }}>
+        <div
+          className={`flex items-center px-4 py-2.5 border-b border-slate-200 transition-colors ${isSelected ? "bg-indigo-50" : "bg-slate-50 hover:bg-slate-100"}`}
+          style={{ paddingLeft: `${indentPx}px` }}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onSelectBudgetCat(node.id)}
+            className="accent-indigo-600 rounded mr-1.5 shrink-0"
+          />
           <button onClick={() => onToggle(node.id)} className="text-slate-400 hover:text-slate-600 mr-2">
             {hasChildren ? (isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />) : <span className="inline-block w-3.5" />}
           </button>
-          <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider flex-1">{node.name}</span>
+          {cat && (
+            <div className="flex items-center gap-0.5 mr-1.5">
+              <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => onEditBudgetCat(cat, catHasChildren)} title="Editar rubro">
+                <Pencil className="size-3" />
+              </button>
+              <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => onDeleteBudgetCat(cat.id, cat.name)} title="Eliminar rubro">
+                <Trash2 className="size-3" />
+              </button>
+            </div>
+          )}
+          <span className={`text-xs ${isChild ? "font-medium text-slate-600" : "font-semibold text-slate-700 uppercase tracking-wider"}`}>
+            {isChild ? `└ ${node.name}` : node.name}
+          </span>
           <span className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</span>
-          <span className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{fmt(nodeTotal)}</span>
+          <span className={`ml-2 text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{fmt(nodeTotal)}</span>
         </div>
         {isExpanded && hasChildren && node.children.map((child) => renderNode(child, depth + 1))}
         {isExpanded && !hasChildren && node.items.map(renderRow)}

@@ -302,6 +302,29 @@ export async function updateExpense(id: string, input: { person_id: string; amou
   }
 }
 
+export async function getMovementsByBudgetCategory(budgetCategoryId: string, childIds: string[] = [], startDate?: string, endDate?: string) {
+  const allIds = [budgetCategoryId, ...childIds]
+  let expenseQuery = supabase
+    .from("expenses")
+    .select("*")
+    .in("budget_category_id", allIds)
+    .order("date", { ascending: false })
+  if (startDate) expenseQuery = expenseQuery.gte("date", startDate)
+  if (endDate) expenseQuery = expenseQuery.lte("date", endDate)
+
+  const { data: expenses, error: expenseError } = await expenseQuery
+  if (expenseError) throw expenseError
+
+  const exps = (expenses ?? []) as Expense[]
+  const personIds = [...new Set(exps.map((e) => e.person_id))]
+  const { data: people } = personIds.length > 0
+    ? await supabase.from("people").select("id, name").in("id", personIds)
+    : { data: [] }
+  const peopleMap = new Map((people ?? []).map((p: { id: string; name: string }) => [p.id, { name: p.name }]))
+
+  return exps.map((e) => ({ ...e, people: peopleMap.get(e.person_id) ?? null }))
+}
+
 /* ---- Dashboard totals ---- */
 
 export async function getDashboardData(months: string[]) {
