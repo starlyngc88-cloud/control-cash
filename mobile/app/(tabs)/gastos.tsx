@@ -586,31 +586,13 @@ export default function GastosScreen() {
                             <View style={{ width: 14 }} />
                           )}
                         </TouchableOpacity>
-                        {!isChild && cat && (
-                          <View className="flex-row items-center gap-0.5 mr-1.5">
-                            <TouchableOpacity onPress={() => openBudgetCatEditHandler(cat, catHasChildren)} className="p-0.5">
-                              <Pencil size={12} color="#94a3b8" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setBudgetCatDeleteTarget({ id: cat.id, name: cat.name })} className="p-0.5">
-                              <Trash2 size={12} color="#e11d48" />
-                            </TouchableOpacity>
-                          </View>
-                        )}
+
                         <Text className={`text-xs ${isChild ? "font-medium text-slate-600" : "font-semibold text-slate-700 uppercase tracking-wider"}`}>
                           {isChild ? `└ ${node.name}` : node.name}
                         </Text>
                         <Text className="text-[10px] text-slate-400 ml-auto">({nodeCount})</Text>
                         <Text className={`ml-2 text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{formatCurrency(nodeTotal)}</Text>
-                        {isChild && cat && (
-                          <View className="flex-row items-center gap-0.5 ml-1.5">
-                            <TouchableOpacity onPress={() => openBudgetCatEditHandler(cat, catHasChildren)} className="p-0.5">
-                              <Pencil size={12} color="#94a3b8" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setBudgetCatDeleteTarget({ id: cat.id, name: cat.name })} className="p-0.5">
-                              <Trash2 size={12} color="#e11d48" />
-                            </TouchableOpacity>
-                          </View>
-                        )}
+
                       </View>
                       {isExpanded && hasChildren && node.children.map((child) => renderBudgetNode(child, depth + 1))}
                       {isExpanded && !hasChildren && node.items.map(renderRow)}
@@ -699,7 +681,17 @@ export default function GastosScreen() {
                         {exp.people?.name && <Text className="text-[10px] text-slate-500">{exp.people.name}</Text>}
                       </View>
                     </View>
-                    <Text className="text-xs font-semibold text-rose-600 tabular-nums shrink-0 ml-3">- {formatCurrency(Number(exp.amount))}</Text>
+                    <View className="flex-row items-center gap-3 shrink-0 ml-3">
+                      <Text className="text-xs font-semibold text-rose-600 tabular-nums">- {formatCurrency(Number(exp.amount))}</Text>
+                      <View className="flex-row items-center gap-0.5">
+                        <TouchableOpacity onPress={() => openEdit(exp)} className="p-0.5">
+                          <Pencil size={12} color="#94a3b8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(exp.id)} className="p-0.5">
+                          <Trash2 size={12} color="#e11d48" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   </View>
                 ))}
               </View>
