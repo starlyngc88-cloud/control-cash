@@ -1054,7 +1054,7 @@ function BudgetCategoryTree(props: {
           <span className={`text-xs ${isChild ? "font-medium text-slate-600" : "font-semibold text-slate-700 uppercase tracking-wider"}`}>
             {isChild ? `└ ${node.name}` : node.name}
           </span>
-          <span className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</span>
+          <span className="text-[10px] text-slate-400 ml-auto">({nodeCount})</span>
           <span className={`ml-2 text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{fmt(nodeTotal)}</span>
         </div>
         {isExpanded && hasChildren && node.children.map((child) => renderNode(child, depth + 1))}
