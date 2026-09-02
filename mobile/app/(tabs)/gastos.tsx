@@ -586,7 +586,7 @@ export default function GastosScreen() {
                             <View style={{ width: 14 }} />
                           )}
                         </TouchableOpacity>
-                        {cat && (
+                        {!isChild && cat && (
                           <View className="flex-row items-center gap-0.5 mr-1.5">
                             <TouchableOpacity onPress={() => openBudgetCatEditHandler(cat, catHasChildren)} className="p-0.5">
                               <Pencil size={12} color="#94a3b8" />
@@ -599,8 +599,18 @@ export default function GastosScreen() {
                         <Text className={`text-xs ${isChild ? "font-medium text-slate-600" : "font-semibold text-slate-700 uppercase tracking-wider"}`}>
                           {isChild ? `└ ${node.name}` : node.name}
                         </Text>
-                        <Text className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</Text>
-                        <Text className={`ml-auto text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{formatCurrency(nodeTotal)}</Text>
+                        <Text className="text-[10px] text-slate-400 ml-auto">({nodeCount})</Text>
+                        <Text className={`ml-2 text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{formatCurrency(nodeTotal)}</Text>
+                        {isChild && cat && (
+                          <View className="flex-row items-center gap-0.5 ml-1.5">
+                            <TouchableOpacity onPress={() => openBudgetCatEditHandler(cat, catHasChildren)} className="p-0.5">
+                              <Pencil size={12} color="#94a3b8" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setBudgetCatDeleteTarget({ id: cat.id, name: cat.name })} className="p-0.5">
+                              <Trash2 size={12} color="#e11d48" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
                       </View>
                       {isExpanded && hasChildren && node.children.map((child) => renderBudgetNode(child, depth + 1))}
                       {isExpanded && !hasChildren && node.items.map(renderRow)}
