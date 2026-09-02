@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams } from "expo-router"
-import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
+import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, updateBudgetCategory, deleteBudgetCategory, getMovementsByBudgetCategory, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
@@ -56,6 +56,16 @@ export default function GastosScreen() {
   const [editingCat, setEditingCat] = useState<ExpenseCategory | null>(null)
   const [catDeleteTarget, setCatDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [catDeleteExpenses, setCatDeleteExpenses] = useState<ExpenseWithRelations[]>([])
+
+  const [budgetCatEditOpen, setBudgetCatEditOpen] = useState(false)
+  const [editingBudgetCat, setEditingBudgetCat] = useState<BudgetCategoryWithTemplate | null>(null)
+  const [budgetCatName, setBudgetCatName] = useState("")
+  const [budgetCatBudgeted, setBudgetCatBudgeted] = useState("")
+  const [budgetCatHasChildren, setBudgetCatHasChildren] = useState(false)
+  const [budgetCatDeleteTarget, setBudgetCatDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [selectedBudgetCatId, setSelectedBudgetCatId] = useState<string | null>(null)
+  const [movements, setMovements] = useState<ExpenseWithRelations[]>([])
+  const [loadingMovements, setLoadingMovements] = useState(false)
 
   const { hucha: huchaParam } = useLocalSearchParams<{ hucha?: string }>()
 
@@ -234,6 +244,66 @@ export default function GastosScreen() {
       load()
     } catch { Alert.alert("Error", "No se pudo eliminar.") }
     finally { setSubmitting(false) }
+  }
+
+  const openBudgetCatEditHandler = (cat: BudgetCategoryWithTemplate, hasChildren: boolean) => {
+    setEditingBudgetCat(cat)
+    setBudgetCatName(cat.name)
+    setBudgetCatBudgeted(String(cat.budgeted))
+    setBudgetCatHasChildren(hasChildren)
+    setBudgetCatEditOpen(true)
+  }
+
+  const handleBudgetCatEditSubmit = async () => {
+    if (!editingBudgetCat || !budgetCatName.trim()) return
+    setSubmitting(true)
+    try {
+      if (budgetCatHasChildren) {
+        await updateBudgetCategory(editingBudgetCat.id, { name: budgetCatName.trim(), budgeted: 0 })
+      } else {
+        await updateBudgetCategory(editingBudgetCat.id, { name: budgetCatName.trim(), budgeted: parseFloat(budgetCatBudgeted || "0") })
+      }
+      setBudgetCatEditOpen(false)
+      setEditingBudgetCat(null)
+      load()
+    } catch { Alert.alert("Error", "No se pudo guardar.") }
+    finally { setSubmitting(false) }
+  }
+
+  const confirmDeleteBudgetCat = async () => {
+    if (!budgetCatDeleteTarget) return
+    setSubmitting(true)
+    try {
+      await deleteBudgetCategory(budgetCatDeleteTarget.id)
+      setBudgetCatDeleteTarget(null)
+      if (selectedBudgetCatId === budgetCatDeleteTarget.id) {
+        setSelectedBudgetCatId(null)
+        setMovements([])
+      }
+      load()
+    } catch { Alert.alert("Error", "No se pudo eliminar.") }
+    finally { setSubmitting(false) }
+  }
+
+  const handleSelectBudgetCat = async (catId: string) => {
+    if (selectedBudgetCatId === catId) {
+      setSelectedBudgetCatId(null)
+      setMovements([])
+      return
+    }
+    setSelectedBudgetCatId(catId)
+    setLoadingMovements(true)
+    try {
+      const childIds = budgetCategories.filter((c) => c.parent_id === catId).map((c) => c.id)
+      const startDate = sorted.length > 0 ? `${sorted[0]}-01` : undefined
+      const endDate = sorted.length > 0 ? (() => {
+        const [y, m] = sorted[sorted.length - 1].split("-").map(Number)
+        return `${y}-${String(m).padStart(2, "0")}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`
+      })() : undefined
+      const res = await getMovementsByBudgetCategory(catId, childIds, startDate, endDate)
+      setMovements(res)
+    } catch { Alert.alert("Error", "No se pudieron cargar los movimientos.") }
+    finally { setLoadingMovements(false) }
   }
 
   const filtered = expenses.filter((e) => {
@@ -497,9 +567,18 @@ export default function GastosScreen() {
                     ? node.items.reduce((s, e) => s + Number(e.amount), 0)
                     : node.items.reduce((s, e) => s + Number(e.amount), 0) + node.children.reduce((s, c) => s + totalAll(c), 0)
                   const nodeCount = countAll(node)
+                  const isSelected = selectedBudgetCatId === node.id
+                  const isChild = depth > 0
+                  const cat = budgetCategories.find((c) => c.id === node.id)
+                  const catHasChildren = budgetParentIds.has(node.id)
                   return (
                     <View key={node.id}>
-                      <View className="flex-row items-center px-4 py-2.5 bg-slate-50 border-b border-slate-200" style={{ paddingLeft: 16 + depth * 14 }}>
+                      <View className={`flex-row items-center px-4 py-2.5 border-b border-slate-200 ${isSelected ? "bg-indigo-50" : "bg-slate-50"}`} style={{ paddingLeft: 16 + depth * 14 }}>
+                        <TouchableOpacity onPress={() => handleSelectBudgetCat(node.id)} className="mr-1.5">
+                          <View className={`size-4 rounded border items-center justify-center ${isSelected ? "bg-indigo-600 border-indigo-600" : "border-slate-300 bg-white"}`}>
+                            {isSelected && <Text className="text-white text-[8px]">✓</Text>}
+                          </View>
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => setExpandedCats((prev) => { const next = new Set(prev); if (next.has(node.id)) next.delete(node.id); else next.add(node.id); return next })} className="mr-2">
                           {hasChildren ? (
                             isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />
@@ -507,9 +586,21 @@ export default function GastosScreen() {
                             <View style={{ width: 14 }} />
                           )}
                         </TouchableOpacity>
-                        <Text className="flex-1 text-xs font-semibold text-slate-700 uppercase tracking-wider">{node.name}</Text>
+                        {cat && (
+                          <View className="flex-row items-center gap-0.5 mr-1.5">
+                            <TouchableOpacity onPress={() => openBudgetCatEditHandler(cat, catHasChildren)} className="p-0.5">
+                              <Pencil size={12} color="#94a3b8" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setBudgetCatDeleteTarget({ id: cat.id, name: cat.name })} className="p-0.5">
+                              <Trash2 size={12} color="#e11d48" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        <Text className={`text-xs ${isChild ? "font-medium text-slate-600" : "font-semibold text-slate-700 uppercase tracking-wider"}`}>
+                          {isChild ? `└ ${node.name}` : node.name}
+                        </Text>
                         <Text className="text-[10px] text-slate-400 ml-1.5">({nodeCount})</Text>
-                        <Text className="ml-auto text-xs font-semibold text-rose-600 tabular-nums">{formatCurrency(nodeTotal)}</Text>
+                        <Text className={`ml-auto text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{formatCurrency(nodeTotal)}</Text>
                       </View>
                       {isExpanded && hasChildren && node.children.map((child) => renderBudgetNode(child, depth + 1))}
                       {isExpanded && !hasChildren && node.items.map(renderRow)}
@@ -562,6 +653,53 @@ export default function GastosScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {selectedBudgetCatId && view === "categoria" && (
+          <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden mt-3">
+            <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+              <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                Movimientos de: {budgetCategories.find((c) => c.id === selectedBudgetCatId)?.name ?? ""}
+              </Text>
+              <TouchableOpacity onPress={() => { setSelectedBudgetCatId(null); setMovements([]) }}>
+                <X size={16} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            {loadingMovements ? (
+              <View className="px-4 py-8 items-center">
+                <ActivityIndicator size="small" color="#4f46e5" />
+                <Text className="text-xs text-slate-500 mt-2">Cargando movimientos...</Text>
+              </View>
+            ) : movements.length === 0 ? (
+              <View className="px-4 py-8 items-center">
+                <Text className="text-xs text-slate-500">No hay gastos para este rubro.</Text>
+              </View>
+            ) : (
+              <View>
+                {movements.map((exp) => (
+                  <View key={exp.id} className="flex-row items-center px-4 py-2 border-b border-slate-100 last:border-b-0">
+                    <View className="flex-1 flex-row items-center min-w-0">
+                      <View className="size-7 rounded-full bg-rose-100 items-center justify-center">
+                        <ArrowUpCircle size={13} color="#e11d48" />
+                      </View>
+                      <View className="ml-2.5 flex-1 min-w-0">
+                        <View className="flex-row items-center gap-1.5">
+                          <Text className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</Text>
+                          <Text className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
+                        </View>
+                        {exp.people?.name && <Text className="text-[10px] text-slate-500">{exp.people.name}</Text>}
+                      </View>
+                    </View>
+                    <Text className="text-xs font-semibold text-rose-600 tabular-nums shrink-0 ml-3">- {formatCurrency(Number(exp.amount))}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            <View className="bg-white px-4 py-2 border-t border-slate-200 items-end">
+              <Text className="text-xs text-slate-500">{movements.length} gasto(s)</Text>
+            </View>
+          </View>
+        )}
+
         <View className="h-8" />
       </ScrollView>
 
@@ -810,6 +948,69 @@ export default function GastosScreen() {
               </TouchableOpacity>
               <TouchableOpacity onPress={confirmDeleteCat} disabled={submitting} className="flex-1 h-10 rounded-xl bg-rose-600 items-center justify-center">
                 {submitting ? <ActivityIndicator color="white" /> : <Text className="text-xs font-semibold text-white">{catDeleteExpenses.length > 0 ? `Eliminar (${catDeleteExpenses.length} gastos)` : "Eliminar"}</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={budgetCatEditOpen} animationType="slide" transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
+          <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ paddingBottom: insets.bottom + 20 }}>
+            <View className="flex-row items-center justify-between mb-4">
+              <Text className="text-base font-semibold text-slate-800">Editar rubro</Text>
+              <TouchableOpacity onPress={() => { setBudgetCatEditOpen(false); setEditingBudgetCat(null) }}>
+                <X size={20} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+            <View className="space-y-3">
+              <View>
+                <Text className="text-xs font-medium text-slate-600 mb-1">Nombre</Text>
+                <TextInput
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
+                  placeholder="Nombre del rubro"
+                  placeholderTextColor="#94a3b8"
+                  value={budgetCatName}
+                  onChangeText={setBudgetCatName}
+                />
+              </View>
+              {budgetCatHasChildren ? (
+                <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto</Text>
+                  <Text className="text-[10px] text-slate-400">Calculado automáticamente de las subcategorías</Text>
+                </View>
+              ) : (
+                <View>
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto</Text>
+                  <TextInput
+                    className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800"
+                    placeholder="0"
+                    placeholderTextColor="#94a3b8"
+                    value={budgetCatBudgeted}
+                    onChangeText={setBudgetCatBudgeted}
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+              )}
+              <TouchableOpacity onPress={handleBudgetCatEditSubmit} disabled={submitting} className="h-10 rounded-xl bg-indigo-600 items-center justify-center">
+                {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">Guardar cambios</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal visible={!!budgetCatDeleteTarget} animationType="fade" transparent>
+        <View className="flex-1 justify-center px-6">
+          <View className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xl">
+            <Text className="text-sm font-semibold text-slate-800 mb-1">¿Eliminar &ldquo;{budgetCatDeleteTarget?.name}&rdquo;?</Text>
+            <Text className="text-[10px] text-slate-400 mb-4">Los gastos asociados quedarán sin rubro.</Text>
+            <View className="flex-row gap-2">
+              <TouchableOpacity onPress={() => setBudgetCatDeleteTarget(null)} className="flex-1 h-10 rounded-xl border border-slate-200 items-center justify-center">
+                <Text className="text-xs font-semibold text-slate-600">Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={confirmDeleteBudgetCat} disabled={submitting} className="flex-1 h-10 rounded-xl bg-rose-600 items-center justify-center">
+                {submitting ? <ActivityIndicator color="white" /> : <Text className="text-xs font-semibold text-white">Eliminar</Text>}
               </TouchableOpacity>
             </View>
           </View>
