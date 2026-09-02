@@ -1041,7 +1041,7 @@ function BudgetCategoryTree(props: {
           <button onClick={() => onToggle(node.id)} className="text-slate-400 hover:text-slate-600 mr-2">
             {hasChildren ? (isExpanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />) : <span className="inline-block w-3.5" />}
           </button>
-          {cat && (
+          {!isChild && cat && (
             <div className="flex items-center gap-0.5 mr-1.5">
               <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => onEditBudgetCat(cat, catHasChildren)} title="Editar rubro">
                 <Pencil className="size-3" />
@@ -1056,6 +1056,16 @@ function BudgetCategoryTree(props: {
           </span>
           <span className="text-[10px] text-slate-400 ml-auto">({nodeCount})</span>
           <span className={`ml-2 text-xs font-semibold tabular-nums ${nodeTotal > 0 ? "text-rose-600" : "text-slate-600"}`}>{fmt(nodeTotal)}</span>
+          {isChild && cat && (
+            <div className="flex items-center gap-0.5 ml-1.5">
+              <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => onEditBudgetCat(cat, catHasChildren)} title="Editar rubro">
+                <Pencil className="size-3" />
+              </button>
+              <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => onDeleteBudgetCat(cat.id, cat.name)} title="Eliminar rubro">
+                <Trash2 className="size-3" />
+              </button>
+            </div>
+          )}
         </div>
         {isExpanded && hasChildren && node.children.map((child) => renderNode(child, depth + 1))}
         {isExpanded && !hasChildren && node.items.map(renderRow)}
