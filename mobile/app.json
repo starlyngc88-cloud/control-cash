@@ -49,8 +49,7 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-updates",
-      "./modules/notifications"
+      "expo-updates"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,4 +1,4 @@
-package expo.modules.notifications
+package expo.modules.notificationswallet
 
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -17,7 +17,7 @@ class NotificationsModule : Module() {
                 context.contentResolver,
                 "enabled_notification_listeners"
             ) ?: ""
-            flat.contains("${context.packageName}/expo.modules.notifications.NotificationListener")
+            flat.contains("${context.packageName}/expo.modules.notificationswallet.WalletNotificationListener")
         }
 
         Function("openNotificationSettings") {
@@ -28,15 +28,11 @@ class NotificationsModule : Module() {
         }
 
         AsyncFunction("startListening") {
-            NotificationListenerService.startListening()
+            NotificationEventManager.module = this@NotificationsModule
         }
 
         AsyncFunction("stopListening") {
-            NotificationListenerService.stopListening()
+            NotificationEventManager.module = null
         }
-    }
-
-    companion object {
-        var listener: NotificationListener? = null
     }
 }
