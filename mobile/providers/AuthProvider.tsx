@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { supabase } from "@/lib/supabase"
+import { findOrCreatePersonForUser } from "@/services/api"
+import type { Person } from "@/types/database"
 import type { Session, User } from "@supabase/supabase-js"
 
 const DEBUG_LOGS = typeof __DEV__ !== "undefined" ? __DEV__ : true
@@ -8,6 +10,7 @@ type AuthContextType = {
   user: User | null
   session: Session | null
   loading: boolean
+  person: Person | null
   signIn: (email: string, password: string) => Promise<{ error: string | null }>
   signUp: (email: string, password: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -16,7 +19,7 @@ type AuthContextType = {
 }
 
 const AuthContext = createContext<AuthContextType>({
-  user: null, session: null, loading: true,
+  user: null, session: null, loading: true, person: null,
   signIn: async () => ({ error: "Not initialized" }),
   signUp: async () => ({ error: "Not initialized" }),
   signOut: async () => {},
@@ -24,10 +27,20 @@ const AuthContext = createContext<AuthContextType>({
   updatePassword: async () => ({ error: "Not initialized" }),
 })
 
+async function loadPerson(userId: string, email: string): Promise<Person | null> {
+  try {
+    return await findOrCreatePersonForUser(userId, email)
+  } catch (err) {
+    console.error("[KellyCash][Mobile][Auth] Failed to load/create person", err)
+    return null
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [person, setPerson] = useState<Person | null>(null)
 
   useEffect(() => {
     let active = true
@@ -51,6 +64,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
         setLoading(false)
+        if (session?.user) {
+          loadPerson(session.user.id, session.user.email ?? "").then((p) => {
+            if (active) setPerson(p)
+          })
+        }
       })
       .catch((error) => {
         console.error("[KellyCash][Mobile][Auth] getSession failed", error)
@@ -70,6 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       setLoading(false)
+      if (session?.user) {
+        loadPerson(session.user.id, session.user.email ?? "").then((p) => {
+          if (active) setPerson(p)
+        })
+      } else {
+        setPerson(null)
+      }
     })
 
     return () => {
@@ -107,13 +132,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { error: `⚠️ ${msg}` }
     }
 
-    const { data: existing } = await supabase
-      .from("user_roles")
-      .select("id")
-      .eq("user_id", allowed.id)
-      .maybeSingle()
-    if (!existing) {
-      await supabase.from("user_roles").insert({ user_id: allowed.id, role: "user" })
+    const { data: { session: newSession } } = await supabase.auth.getSession()
+    const authUserId = newSession?.user?.id
+    if (authUserId) {
+      const { data: existing } = await supabase
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", authUserId)
+        .maybeSingle()
+      if (!existing) {
+        await supabase.from("user_roles").insert({ user_id: authUserId, role: "user" })
+      }
     }
 
     return { error: null }
@@ -123,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)
+    setPerson(null)
   }
 
   const resetPassword = async (email: string) => {
@@ -138,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut, resetPassword, updatePassword }}>
+    <AuthContext.Provider value={{ user, session, loading, person, signIn, signUp, signOut, resetPassword, updatePassword }}>
       {children}
     </AuthContext.Provider>
   )

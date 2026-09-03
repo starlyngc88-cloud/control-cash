@@ -84,6 +84,41 @@ export async function deletePerson(id: string) {
   return supabase.from("people").delete().eq("id", id)
 }
 
+export async function getPersonForUser(userId: string): Promise<Person | null> {
+  const { data } = await supabase
+    .from("people")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle()
+  return data ?? null
+}
+
+export async function findOrCreatePersonForUser(userId: string, email: string): Promise<Person> {
+  const existing = await getPersonForUser(userId)
+  if (existing) return existing
+
+  const displayName = email.split("@")[0]
+  const { data: byName } = await supabase
+    .from("people")
+    .select("*")
+    .ilike("name", displayName)
+    .maybeSingle()
+
+  if (byName) {
+    await supabase.from("people").update({ user_id: userId }).eq("id", byName.id)
+    return { ...byName, user_id: userId }
+  }
+
+  const { data: created, error } = await supabase
+    .from("people")
+    .insert({ name: displayName, user_id: userId })
+    .select()
+    .single()
+
+  if (error || !created) throw error ?? new Error("No se pudo crear la persona")
+  return created as Person
+}
+
 export async function getExpenses(opts?: { startDate?: string; endDate?: string }): Promise<ExpenseWithRelations[]> {
   assertSupabaseConfigured()
   await debugAuthState("getExpenses")
@@ -757,6 +792,23 @@ export async function deleteBudgetCategory(id: string) {
 }
 export async function setBudgetCategoryPaid(id: string, is_paid: boolean) {
   return supabase.from("budget_categories").update({ is_paid }).eq("id", id)
+}
+
+export async function findOrCreateWalletCategory(): Promise<string | null> {
+  const { data: existing } = await supabase
+    .from("expense_categories")
+    .select("id")
+    .eq("name", "WALLET")
+    .maybeSingle()
+  if (existing) return existing.id
+
+  const { data: created, error } = await supabase
+    .from("expense_categories")
+    .insert({ name: "WALLET", tab: "disponible" })
+    .select("id")
+    .single()
+  if (error || !created) return null
+  return created.id
 }
 
 export async function getMovementsByBudgetCategory(budgetCategoryId: string, childIds: string[] = [], startDate?: string, endDate?: string): Promise<ExpenseWithRelations[]> {

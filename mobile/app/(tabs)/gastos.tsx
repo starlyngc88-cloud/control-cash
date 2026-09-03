@@ -2,13 +2,14 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useLocalSearchParams } from "expo-router"
+import { useAuth } from "@/providers/AuthProvider"
 import { getExpenses, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpense, updateExpense, deleteExpense, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, updateBudgetCategory, deleteBudgetCategory, getMovementsByBudgetCategory, type ExpenseWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
 import DatePickerModal from "@/components/DatePickerModal"
-import { Plus, Trash2, Pencil, Search, X, Calendar, ChevronDown, ChevronRight, ArrowUpCircle, TrendingUp, List } from "lucide-react-native"
+import { Plus, Trash2, Pencil, Search, X, Calendar, ChevronDown, ChevronRight, ArrowUpCircle, TrendingUp, List, CreditCard } from "lucide-react-native"
 import type { Person, ExpenseCategory, ExpenseCategoryTab, Saving } from "@/types/database"
 
 type BudgetTreeNode = {
@@ -20,6 +21,7 @@ type BudgetTreeNode = {
 
 export default function GastosScreen() {
   const insets = useSafeAreaInsets()
+  const { person: authPerson } = useAuth()
   const [expenses, setExpenses] = useState<ExpenseWithRelations[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [categories, setCategories] = useState<ExpenseCategory[]>([])
@@ -125,7 +127,7 @@ export default function GastosScreen() {
 
   const openNew = () => {
     setEditing(null)
-    setPersonId("")
+    setPersonId(authPerson?.id ?? "")
     setAmount("")
     setDescription("")
     setDate(todayString())
@@ -316,7 +318,8 @@ export default function GastosScreen() {
 
   const itemsByTab = useCallback((tab: ExpenseCategoryTab) => {
     if (tab === "categoria") return filtered.filter((e) => !!e.budget_category_id && !e.saving_id)
-    if (tab === "disponible") return filtered.filter((e) => !e.budget_category_id && !e.saving_id)
+    if (tab === "disponible") return filtered.filter((e) => !e.budget_category_id && !e.saving_id && e.expense_categories?.name !== "WALLET")
+    if (tab === "wallet") return filtered.filter((e) => e.expense_categories?.name === "WALLET")
     return filtered.filter((e) => !!e.saving_id)
   }, [filtered])
 
@@ -328,8 +331,6 @@ export default function GastosScreen() {
       map.set(c.id, { id: c.id, name: c.name, items: [] })
     }
     for (const e of items) {
-      const cat = categories.find((c) => c.id === e.expense_category_id)
-      if (cat && (cat.tab ?? "categoria") !== tab) continue
       const catId = e.expense_category_id ?? "__none__"
       const catName = e.expense_categories?.name || "Sin categoría"
       if (!map.has(catId)) map.set(catId, { id: e.expense_category_id ?? null, name: catName, items: [] })
@@ -386,6 +387,9 @@ export default function GastosScreen() {
       children: n.children.map(buildNode),
     })
     const result = roots.map(buildNode)
+    if (result.length === 0 && categoriaItems.length > 0) {
+      result.push({ id: "__none__", name: "Sin rubro", items: categoriaItems, children: [] })
+    }
     return result
   }, [budgetCategories, categoriaItems])
 
@@ -495,9 +499,9 @@ export default function GastosScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load() }} tintColor="#4f46e5" />}
       >
         <View className="flex-row gap-1 mb-3 border-b border-slate-200">
-          {([["categoria", "Categoría"], ["disponible", "Disponible"], ["hucha", "Hucha"]] as [ExpenseCategoryTab, string][]).map(([key, label]) => (
+          {([["categoria", "Categoría"], ["disponible", "Disponible"], ["hucha", "Hucha"], ["wallet", "Wallet"]] as [ExpenseCategoryTab, string][]).map(([key, label]) => (
             <TouchableOpacity key={key} onPress={() => setView(key)} className={`flex-row items-center gap-1.5 px-3 py-2 border-b-2 ${view === key ? "border-indigo-600" : "border-transparent"}`}>
-              {key === "categoria" ? <List size={14} color={view === key ? "#4f46e5" : "#64748b"} /> : key === "disponible" ? <ArrowUpCircle size={14} color={view === key ? "#4f46e5" : "#64748b"} /> : <TrendingUp size={14} color={view === key ? "#4f46e5" : "#64748b"} />}
+              {key === "categoria" ? <List size={14} color={view === key ? "#4f46e5" : "#64748b"} /> : key === "disponible" ? <ArrowUpCircle size={14} color={view === key ? "#4f46e5" : "#64748b"} /> : key === "wallet" ? <CreditCard size={14} color={view === key ? "#4f46e5" : "#64748b"} /> : <TrendingUp size={14} color={view === key ? "#4f46e5" : "#64748b"} />}
               <Text className={`text-xs font-medium ${view === key ? "text-indigo-600" : "text-slate-500"}`}>{label}</Text>
             </TouchableOpacity>
           ))}
@@ -512,7 +516,7 @@ export default function GastosScreen() {
             </View>
           )}
           <View className="flex-row items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
-            <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{view === "categoria" ? "Gastos por categoría" : view === "disponible" ? "Disponible para gastar" : "Gastos por hucha"}</Text>
+            <Text className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">{view === "categoria" ? "Gastos por categoría" : view === "disponible" ? "Disponible para gastar" : view === "wallet" ? "Pagos Wallet" : "Gastos por hucha"}</Text>
             <View className="flex-row items-center gap-3">
               {view === "categoria" ? (
                 budgetTree.length > 0 && (
@@ -534,7 +538,7 @@ export default function GastosScreen() {
                     <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
                   </TouchableOpacity>
                 )
-              ) : (
+              ) : view === "wallet" ? null : (
                 grouped.size > 0 && (
                   <TouchableOpacity onPress={() => { if (allExpanded) setExpandedCats(new Set()); else setExpandedCats(new Set(grouped.keys())) }}>
                     <Text className="text-[10px] text-slate-400 underline">{allExpanded ? "Contraer todo" : "Expandir todo"}</Text>
@@ -601,6 +605,44 @@ export default function GastosScreen() {
                 }
                 return renderBudgetNode(root, 0)
               })
+            )
+          ) : view === "wallet" ? (
+            viewItems.length === 0 ? (
+              <View className="px-4 py-8 items-center">
+                <CreditCard size={32} color="#cbd5e1" />
+                <Text className="text-xs text-slate-500 mt-2">No hay pagos capturados de Wallet.</Text>
+                <Text className="text-[10px] text-slate-400 mt-1">Los pagos aparecerán aquí automáticamente.</Text>
+              </View>
+            ) : (
+              <View>
+                {viewItems.map((exp) => (
+                  <View key={exp.id} className="flex-row items-center px-4 py-2.5 border-b border-slate-100">
+                    <View className="flex-1 flex-row items-center min-w-0">
+                      <View className="size-7 rounded-full bg-blue-100 items-center justify-center">
+                        <CreditCard size={13} color="#2563eb" />
+                      </View>
+                      <View className="ml-2.5 flex-1 min-w-0">
+                        <View className="flex-row items-center gap-1.5">
+                          <Text className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</Text>
+                          <Text className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</Text>
+                        </View>
+                        {exp.people?.name && <Text className="text-[10px] text-slate-500">{exp.people.name}</Text>}
+                      </View>
+                    </View>
+                    <View className="flex-row items-center gap-3 shrink-0 ml-3">
+                      <Text className="text-xs font-semibold text-rose-600 tabular-nums">- {formatCurrency(Number(exp.amount))}</Text>
+                      <View className="flex-row items-center gap-0.5">
+                        <TouchableOpacity onPress={() => openEdit(exp)} className="p-0.5">
+                          <Pencil size={12} color="#94a3b8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => handleDelete(exp.id)} className="p-0.5">
+                          <Trash2 size={12} color="#e11d48" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
             )
           ) : (
             grouped.size === 0 ? (

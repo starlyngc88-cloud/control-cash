@@ -34,6 +34,7 @@
     },
     "updates": {
       "url": "https://u.expo.dev/435c376c-51e3-4bf9-a591-717fff256db9",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 300
     },
     "plugins": [
@@ -48,7 +49,8 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-updates"
+      "expo-updates",
+      "./modules/notifications"
     ],
     "experiments": {
       "typedRoutes": true

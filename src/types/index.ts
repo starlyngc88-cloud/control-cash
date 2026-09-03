@@ -20,7 +20,7 @@ export interface Income {
   created_at: string
 }
 
-export type ExpenseCategoryTab = "categoria" | "disponible" | "hucha"
+export type ExpenseCategoryTab = "categoria" | "disponible" | "hucha" | "wallet"
 
 export interface ExpenseCategory {
   id: string

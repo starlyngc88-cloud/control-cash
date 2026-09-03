@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useAuth } from "@/providers/AuthProvider"
 import { getSavings, createSaving, updateSaving, deleteSaving, createSavingMovement, getSavingsDashboard, getSavingCategories, createSavingCategory, updateSavingCategory, deleteSavingCategory, getFutureExpenses, getPeople, completeFutureExpenseBySaving, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
@@ -9,6 +10,7 @@ import type { FutureExpense, Person, SavingCategory } from "@/types/database"
 
 export default function HuchaScreen() {
   const insets = useSafeAreaInsets()
+  const { person: authPerson } = useAuth()
   const [savings, setSavings] = useState<SavingWithRelations[]>([])
   const [categories, setCategories] = useState<SavingCategory[]>([])
   const [movementsCount, setMovementsCount] = useState(0)
@@ -144,7 +146,7 @@ export default function HuchaScreen() {
       Alert.alert("Objetivo incompleto", `El objetivo aún no está completo. Llevás ${formatCurrency(Number(saving.current_amount))} de ${formatCurrency(Number(fe.expected_amount))}.`)
       return
     }
-    setCompleteSavingId(saving.id); setCompletePersonId(""); setCompleteModalOpen(true)
+    setCompleteSavingId(saving.id); setCompletePersonId(authPerson?.id ?? ""); setCompleteModalOpen(true)
   }
 
   const handleCompleteFromSaving = async () => {

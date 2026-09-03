@@ -2,6 +2,8 @@ import "../global.css"
 import { Slot, usePathname, useRouter, useSegments } from "expo-router"
 import { StatusBar } from "expo-status-bar"
 import { AuthProvider, useAuth } from "@/providers/AuthProvider"
+import { UpdateProvider } from "@/providers/UpdateProvider"
+import { useWalletNotifications } from "@/hooks/useWalletNotifications"
 import { LanguageProvider } from "@/i18n"
 import { CashflowFilterProvider } from "@/contexts/CashflowFilterContext"
 import { useEffect } from "react"
@@ -14,6 +16,8 @@ function RootLayoutNav() {
   const segments = useSegments()
   const pathname = usePathname()
   const router = useRouter()
+
+  useWalletNotifications()
 
   useEffect(() => {
     if (loading) return
@@ -43,14 +47,16 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <LanguageProvider>
-            <CashflowFilterProvider>
-              <StatusBar style="dark" />
-              <RootLayoutNav />
-            </CashflowFilterProvider>
-          </LanguageProvider>
-        </AuthProvider>
+        <UpdateProvider>
+          <AuthProvider>
+            <LanguageProvider>
+              <CashflowFilterProvider>
+                <StatusBar style="dark" />
+                <RootLayoutNav />
+              </CashflowFilterProvider>
+            </LanguageProvider>
+          </AuthProvider>
+        </UpdateProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   )

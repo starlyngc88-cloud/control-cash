@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
+import { useAuth } from "@/providers/AuthProvider"
 import { getFutureExpenses, getFutureExpenseCategories, createFutureExpense, createFutureExpenseCategory, updateFutureExpense, updateFutureExpenseCategory, deleteFutureExpense, deleteFutureExpenseCategory, updateFutureExpenseStatus, completeFutureExpense, getPeople, getSavings, type FutureExpenseWithRelations, type SavingWithRelations } from "@/services/api"
 import { formatCurrency } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
@@ -13,6 +14,7 @@ const STATUS_LABELS: Record<string, string> = { planned: "Planeado", completed: 
 export default function GastosFuturosScreen() {
   const insets = useSafeAreaInsets()
   const router = useRouter()
+  const { person: authPerson } = useAuth()
   const [items, setItems] = useState<FutureExpenseWithRelations[]>([])
   const [categories, setCategories] = useState<FutureExpenseCategory[]>([])
   const [people, setPeople] = useState<Person[]>([])
@@ -102,7 +104,7 @@ export default function GastosFuturosScreen() {
       const balance = Number(item.savings?.current_amount ?? 0)
       const target = Number(item.expected_amount)
       if (balance < target) { Alert.alert("Objetivo incompleto", `El objetivo aún no está completo. Llevás ${formatCurrency(balance)} de ${formatCurrency(target)}.`); return }
-      setCompleteId(id); setCompletePersonId("")
+      setCompleteId(id); setCompletePersonId(authPerson?.id ?? "")
       return
     }
     Alert.alert("Cambiar estado", `¿Marcar como "${STATUS_LABELS[status]}"?`, [

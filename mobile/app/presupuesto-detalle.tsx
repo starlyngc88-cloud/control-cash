@@ -2,6 +2,7 @@ import { useLocalSearchParams, router } from "expo-router"
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useAuth } from "@/providers/AuthProvider"
 import { getMonthlyBudgetDashboard, createExpense, createBudgetCategory, updateBudgetCategory, deleteBudgetCategory, setBudgetCategoryPaid, getMonthlyBudgets, getPeople, type MonthCategoryNode } from "@/services/api"
 import { formatCurrency, formatMonth } from "@/utils/format"
 import { X, ChevronDown, ChevronRight, Pencil, Plus, Trash2, CheckCircle2, ChevronLeft } from "lucide-react-native"
@@ -30,6 +31,7 @@ function pctChip(ppct: number, isPaid: boolean) {
 export default function PresupuestoDetalleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const insets = useSafeAreaInsets()
+  const { person: authPerson } = useAuth()
   const [monthlyBudget, setMonthlyBudget] = useState<{ month: string; templateName: string } | null>(null)
   const [totals, setTotals] = useState({ totalIngresos: 0, totalBudgeted: 0, totalGastos: 0, balance: 0 })
   const [roots, setRoots] = useState<MonthCategoryNode[]>([])
@@ -92,7 +94,7 @@ export default function PresupuestoDetalleScreen() {
     setExpCatName(cat.name)
     setExpAmount("")
     setExpDesc("")
-    setExpPerson(people[0]?.id ?? "")
+    setExpPerson(authPerson?.id ?? people[0]?.id ?? "")
     setExpDate(new Date().toISOString().split("T")[0])
     setExpenseModalOpen(true)
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { useAuth } from "@/providers/AuthProvider"
 import { getIncomes, getPeople, getIncomeCategories, createIncome, updateIncome, deleteIncome, createIncomeCategory, updateIncomeCategory, deleteIncomeCategory, type IncomeWithRelations } from "@/services/api"
 import { formatCurrency, toLocalDateString, todayString } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
@@ -12,6 +13,7 @@ import type { Person, IncomeCategory } from "@/types/database"
 
 export default function IngresosScreen() {
   const insets = useSafeAreaInsets()
+  const { person: authPerson } = useAuth()
   const [incomes, setIncomes] = useState<IncomeWithRelations[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [categories, setCategories] = useState<IncomeCategory[]>([])
@@ -70,7 +72,7 @@ export default function IngresosScreen() {
 
   const openNew = () => {
     setEditing(null)
-    setPersonId(""); setAmount(""); setDescription(""); setDate(todayString()); setCategoryId("")
+    setPersonId(authPerson?.id ?? ""); setAmount(""); setDescription(""); setDate(todayString()); setCategoryId("")
     setModalOpen(true)
   }
 

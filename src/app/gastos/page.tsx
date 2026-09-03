@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { getExpenses, createExpense, updateExpense, deleteExpense, getPeople, getExpenseCategories, getBudgetCategoriesForMonth, createExpenseCategory, updateExpenseCategory, deleteExpenseCategory, getSavings, updateBudgetCategory, deleteBudgetCategory, getMovementsByBudgetCategory } from "@/lib/db"
 import type { Person, Expense, ExpenseCategory, BudgetCategory, Income } from "@/types"
-import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight, X } from "lucide-react"
+import { Plus, Trash2, Pencil, ArrowUpCircle, Search, TrendingUp, List, ChevronDown, ChevronRight, X, CreditCard } from "lucide-react"
 import { useLanguage } from "@/i18n/useLanguage"
 import { friendlyError } from "@/lib/errors"
 import { toLocalDateString, todayString } from "@/lib/utils"
@@ -130,13 +130,13 @@ function GastosPageInner() {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([])
   const [budgetCategories, setBudgetCategories] = useState<(BudgetCategory & { budget_templates: Pick<import("@/types").BudgetTemplate, "name"> })[]>([])
   const [search, setSearch] = useState("")
-  const [view, setView] = useState<"categoria" | "disponible" | "hucha">("categoria")
+  const [view, setView] = useState<"categoria" | "disponible" | "hucha" | "wallet">("categoria")
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set())
 
   const [openCat, setOpenCat] = useState(false)
   const [editingCat, setEditingCat] = useState<import("@/types").ExpenseCategory | null>(null)
   const [catName, setCatName] = useState("")
-  const [catTab, setCatTab] = useState<"categoria" | "disponible" | "hucha">("categoria")
+  const [catTab, setCatTab] = useState<"categoria" | "disponible" | "hucha" | "wallet">("categoria")
 
   const [catToDelete, setCatToDelete] = useState<{ id: string; name: string } | null>(null)
   const [catDeleteExpenses, setCatDeleteExpenses] = useState<Expense[]>([])
@@ -171,7 +171,7 @@ function GastosPageInner() {
     setOpen(true)
   }, [])
 
-  const openNewCat = useCallback((selectAfter = false, tab?: "categoria" | "disponible" | "hucha") => {
+  const openNewCat = useCallback((selectAfter = false, tab?: "categoria" | "disponible" | "hucha" | "wallet") => {
     setEditingCat(null)
     setCatName("")
     setCatTab(tab ?? view)
@@ -444,9 +444,11 @@ function GastosPageInner() {
     )
   }, [expenses, search])
 
-    const disponibleItems = useMemo(() => filtered.filter((e) => !e.budget_category_id && !e.saving_id), [filtered])
+    const disponibleItems = useMemo(() => filtered.filter((e) => !e.budget_category_id && !e.saving_id && e.expense_categories?.name !== "WALLET"), [filtered])
 
   const huchaItems = useMemo(() => filtered.filter((e) => !!e.saving_id), [filtered])
+
+  const walletItems = useMemo(() => filtered.filter((e) => e.expense_categories?.name === "WALLET"), [filtered])
 
   const categoriaItems = useMemo(() => filtered.filter((e) => !!e.budget_category_id && !e.saving_id), [filtered])
 
@@ -454,7 +456,7 @@ function GastosPageInner() {
   const groupedDisponible = useMemo(() => buildGrouped("disponible", expenseCategories, disponibleItems), [disponibleItems, expenseCategories])
   const groupedHucha = useMemo(() => buildGrouped("hucha", expenseCategories, huchaItems), [huchaItems, expenseCategories])
 
-  const formTab: "categoria" | "disponible" | "hucha" = savingId ? "hucha" : assumeAvailable ? "disponible" : "categoria"
+  const formTab: "categoria" | "disponible" | "hucha" | "wallet" = savingId ? "hucha" : assumeAvailable ? "disponible" : "categoria"
   const formCategories = useMemo(
     () => expenseCategories.filter((c) => (c.tab === "disponible" || c.tab === "hucha") ? c.tab === formTab : formTab === "categoria"),
     [expenseCategories, formTab]
@@ -739,7 +741,8 @@ function GastosPageInner() {
           { key: "categoria", label: g.viewCategoria, icon: <List className="size-4" /> },
           { key: "disponible", label: g.viewDisponible, icon: <ArrowUpCircle className="size-4" /> },
           { key: "hucha", label: g.viewHucha, icon: <TrendingUp className="size-4" /> },
-        ] as { key: "categoria" | "disponible" | "hucha"; label: string; icon: React.ReactNode }[]).map((v) => (
+          { key: "wallet", label: "Wallet", icon: <CreditCard className="size-4" /> },
+        ] as { key: "categoria" | "disponible" | "hucha" | "wallet"; label: string; icon: React.ReactNode }[]).map((v) => (
           <button
             key={v.key}
             onClick={() => setView(v.key)}
@@ -833,6 +836,52 @@ function GastosPageInner() {
           total={huchaItems.reduce((s, e) => s + Number(e.amount), 0)}
           emptyText="No hay gastos vinculados a una hucha."
         />
+      )}
+
+      {view === "wallet" && (
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Pagos Wallet</span>
+            <span className="text-sm font-bold text-rose-600 tabular-nums">{fmt(walletItems.reduce((s, e) => s + Number(e.amount), 0))}</span>
+          </div>
+          {walletItems.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <CreditCard className="size-8 text-slate-300 mx-auto mb-2" />
+              <p className="text-xs text-slate-500">No hay pagos capturados de Wallet.</p>
+              <p className="text-[10px] text-slate-400 mt-1">Los pagos aparecerán aquí automáticamente.</p>
+            </div>
+          ) : (
+            <div>
+              {walletItems.map((exp) => (
+                <div key={exp.id} className="flex items-center px-4 py-2 hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-b-0">
+                  <div className="flex items-center flex-1 min-w-0">
+                    <div className="h-7 w-7 flex-shrink-0 rounded-full flex items-center justify-center bg-blue-100 text-blue-600">
+                      <CreditCard className="size-3" />
+                    </div>
+                    <div className="ml-2.5 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-slate-900 truncate">{exp.description || "Sin concepto"}</p>
+                        <span className="text-[10px] text-slate-400 shrink-0">{new Date(exp.date + "T12:00:00").toLocaleDateString("es-CO", { day: "numeric", month: "short" })}</span>
+                      </div>
+                      {exp.people?.name && <p className="text-[10px] text-slate-500">{exp.people.name}</p>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0 ml-3">
+                    <span className="text-xs font-semibold text-rose-600 tabular-nums">- {fmt(Number(exp.amount))}</span>
+                    <div className="flex items-center gap-0.5">
+                      <button className="text-slate-400 hover:text-indigo-600 transition-colors p-0.5" onClick={() => openEdit(exp)}>
+                        <Pencil className="size-3" />
+                      </button>
+                      <button className="text-slate-400 hover:text-rose-600 transition-colors p-0.5" onClick={() => handleDelete(exp.id)}>
+                        <Trash2 className="size-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Category Delete Dialog */}
