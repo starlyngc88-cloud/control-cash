@@ -9,7 +9,7 @@ import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { useMonthFilter } from "@/hooks/useMonthFilter"
 import DateFilter from "@/components/DateFilter"
 import DatePickerModal from "@/components/DatePickerModal"
-import { Plus, Trash2, Pencil, Search, X, Calendar, ChevronDown, ChevronRight, ArrowUpCircle, TrendingUp, List, CreditCard } from "lucide-react-native"
+import { Plus, Trash2, Pencil, Search, X, Calendar, ChevronDown, ChevronRight, ArrowUpCircle, TrendingUp, List, CreditCard, Bell, BellOff } from "lucide-react-native"
 import type { Person, ExpenseCategory, ExpenseCategoryTab, Saving } from "@/types/database"
 
 type BudgetTreeNode = {
@@ -68,8 +68,23 @@ export default function GastosScreen() {
   const [selectedBudgetCatId, setSelectedBudgetCatId] = useState<string | null>(null)
   const [movements, setMovements] = useState<ExpenseWithRelations[]>([])
   const [loadingMovements, setLoadingMovements] = useState(false)
+  const [notifEnabled, setNotifEnabled] = useState<boolean | null>(null)
 
   const { hucha: huchaParam } = useLocalSearchParams<{ hucha?: string }>()
+
+  useEffect(() => {
+    if (view !== "wallet") return
+    let mounted = true
+    ;(async () => {
+      try {
+        const { isListenerEnabled } = await import("@/modules/notifications")
+        if (mounted) setNotifEnabled(isListenerEnabled())
+      } catch {
+        if (mounted) setNotifEnabled(null)
+      }
+    })()
+    return () => { mounted = false }
+  }, [view])
 
   useEffect(() => {
     if (huchaParam && !modalOpen && savings.length > 0) {
@@ -607,7 +622,28 @@ export default function GastosScreen() {
               })
             )
           ) : view === "wallet" ? (
-            viewItems.length === 0 ? (
+            <View>
+              {notifEnabled === false && (
+                <View className="mx-4 mt-3 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <View className="flex-row items-center gap-2 mb-1.5">
+                    <BellOff size={14} color="#d97706" />
+                    <Text className="text-xs font-semibold text-amber-800">Notificaciones desactivadas</Text>
+                  </View>
+                  <Text className="text-[10px] text-amber-700 mb-2.5">Para capturar pagos de Wallet automáticamente, activá el acceso a notificaciones de Android.</Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        const { openNotificationSettings } = await import("@/modules/notifications")
+                        openNotificationSettings()
+                      } catch {}
+                    }}
+                    className="self-start bg-amber-600 rounded-lg px-3 py-1.5"
+                  >
+                    <Text className="text-[10px] font-semibold text-white">Configurar notificaciones</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {viewItems.length === 0 ? (
               <View className="px-4 py-8 items-center">
                 <CreditCard size={32} color="#cbd5e1" />
                 <Text className="text-xs text-slate-500 mt-2">No hay pagos capturados de Wallet.</Text>
@@ -643,7 +679,8 @@ export default function GastosScreen() {
                   </View>
                 ))}
               </View>
-            )
+            )}
+            </View>
           ) : (
             grouped.size === 0 ? (
               <View className="px-4 py-8 items-center">

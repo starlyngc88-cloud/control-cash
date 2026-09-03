@@ -5,25 +5,42 @@ export type ParsedPayment = {
   raw: string
 }
 
+function normalizeAmount(raw: string): number | null {
+  let cleaned = raw.replace(/\s/g, "")
+
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".")
+  } else if (/^\d+,\d{1,2}$/.test(cleaned)) {
+    cleaned = cleaned.replace(",", ".")
+  } else {
+    cleaned = cleaned.replace(/,/g, "")
+  }
+
+  const amount = parseFloat(cleaned)
+  return !isNaN(amount) && amount > 0 ? amount : null
+}
+
 function extractAmount(text: string): number | null {
   const patterns = [
     /\$\s*([\d.,]+)/,
+    /€\s*([\d.,\s]+)/,
+    /([\d.,\s]+)\s*€/,
     /COP\s*([\d.,]+)/,
     /USD\s*([\d.,]+)/,
-    /([\d.,]+)\s*(?:COP|USD|\$)/,
-    /monto[:\s]*\$?\s*([\d.,]+)/i,
-    /pago[:\s]*\$?\s*([\d.,]+)/i,
-    /total[:\s]*\$?\s*([\d.,]+)/i,
-    /([\d]{1,3}(?:\.[\d]{3})+(?:,\d{2})?)/,
+    /EUR\s*([\d.,\s]+)/,
+    /([\d.,\s]+)\s*(?:COP|USD|EUR)/,
+    /monto[:\s]*[$€]?\s*([\d.,\s]+)/i,
+    /pago[:\s]*[$€]?\s*([\d.,\s]+)/i,
+    /total[:\s]*[$€]?\s*([\d.,\s]+)/i,
+    /([\d]{1,3}(?:\.\d{3})+(?:,\d{2})?)/,
     /([\d]+,\d{2})/,
   ]
 
   for (const pattern of patterns) {
     const match = text.match(pattern)
     if (match) {
-      const raw = match[1].replace(/\./g, "").replace(",", ".")
-      const amount = parseFloat(raw)
-      if (!isNaN(amount) && amount > 0) return amount
+      const amount = normalizeAmount(match[1])
+      if (amount !== null) return amount
     }
   }
   return null
