@@ -51,6 +51,7 @@ export interface Expense {
   date: string
   expense_category_id: string | null
   budget_category_id: string | null
+  user_id?: string | null
   saving_id?: string | null
   created_at?: string
 }

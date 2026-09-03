@@ -804,7 +804,7 @@ export async function findOrCreateWalletCategory(): Promise<string | null> {
 
   const { data: created, error } = await supabase
     .from("expense_categories")
-    .insert({ name: "WALLET", tab: "disponible" })
+    .insert({ name: "WALLET", tab: "wallet" })
     .select("id")
     .single()
   if (error || !created) return null
