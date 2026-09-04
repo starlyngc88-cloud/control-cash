@@ -21,19 +21,27 @@ export function useWalletNotifications() {
 
     async function setup() {
       try {
-        const { addNotificationListener, startListening, isListenerEnabled } = await import("@/modules/notifications")
+        const mod = await import("@/modules/notifications")
+          .then((m) => m)
+          .catch(() => null)
+
+        if (!mod) {
+          log("Módulo de notificaciones no disponible (nativo no compilado)")
+          return
+        }
+
         const currentPersonId = person?.id
         if (!currentPersonId) return
 
-        if (!isListenerEnabled()) {
+        if (!mod.isListenerEnabled()) {
           log("Notification listener no está habilitado. El usuario debe activarlo en Settings.")
           return
         }
 
-        await startListening()
+        await mod.startListening()
         log("Notification listener iniciado")
 
-        listenerRef.current = addNotificationListener(async (event) => {
+        listenerRef.current = mod.addNotificationListener(async (event) => {
           const pkg = event.packageName.toLowerCase()
           const isWallet = WALLET_PACKAGES.some((w) => pkg.includes(w))
           if (!isWallet) return

@@ -16,28 +16,41 @@ type NotificationListenerType = {
   stopListening(): Promise<void>
 }
 
-const ExpoNotificationsWallet: NotificationListenerType = requireNativeModule("ExpoNotificationsWallet")
+let _module: NotificationListenerType | undefined
+
+function getModule(): NotificationListenerType {
+  if (!_module) {
+    _module = requireNativeModule<NotificationListenerType>("ExpoNotificationsWallet")
+  }
+  return _module!
+}
 
 export function isListenerEnabled(): boolean {
-  return ExpoNotificationsWallet.isListenerEnabled()
+  try {
+    return getModule().isListenerEnabled()
+  } catch {
+    return false
+  }
 }
 
 export function openNotificationSettings(): void {
-  ExpoNotificationsWallet.openNotificationSettings()
+  try {
+    getModule().openNotificationSettings()
+  } catch {}
 }
 
 export async function startListening(): Promise<void> {
-  return ExpoNotificationsWallet.startListening()
+  return getModule().startListening()
 }
 
 export async function stopListening(): Promise<void> {
-  return ExpoNotificationsWallet.stopListening()
+  return getModule().stopListening()
 }
 
 export function addNotificationListener(
   listener: (event: NotificationEvent) => void
 ): { remove: () => void } {
-  const subscription = ExpoNotificationsWallet.addListener("onNotificationReceived", listener)
+  const subscription = getModule().addListener("onNotificationReceived", listener)
   return subscription
 }
 
