@@ -26,7 +26,7 @@
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "package": "com.kellycash.mobile",
-      "permissions": [],
+      "permissions": ["POST_NOTIFICATIONS"],
       "softwareKeyboardLayoutMode": "resize"
     },
     "updates": {

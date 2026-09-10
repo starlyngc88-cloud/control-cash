@@ -46,16 +46,33 @@ function extractAmount(text: string): number | null {
   return null
 }
 
+function extractCardName(text: string): string | null {
+  const match = text.match(/con\s+(.+?)$/i)
+  if (match) {
+    const card = match[1].trim()
+    if (card.length > 1) return card
+  }
+  return null
+}
+
 function extractDescription(title: string, text: string): string {
   const cleanText = text
-    .replace(/\$[\d.,]+/g, "")
-    .replace(/COP|USD/gi, "")
+    .replace(/[$€]\s*[\d.,]+/g, "")
+    .replace(/[\d.,]+\s*€/g, "")
+    .replace(/COP|USD|EUR/gi, "")
     .replace(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/g, "")
     .replace(/\d{1,2}:\d{2}/g, "")
+    .replace(/\*\*\d+/g, "")
+    .replace(/✅/g, "")
+    .replace(/con\s+/gi, "")
     .trim()
 
+  const merchant = title.length > 3 ? title.trim() : null
+  const cardName = extractCardName(text)
+
+  if (merchant && cardName) return `${merchant} - ${cardName}`
+  if (merchant) return merchant
   if (cleanText.length > 3) return cleanText
-  if (title.length > 3) return title
   return "Pago Wallet"
 }
 

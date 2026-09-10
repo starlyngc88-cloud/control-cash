@@ -7,7 +7,7 @@ import { useWalletNotifications } from "@/hooks/useWalletNotifications"
 import { LanguageProvider } from "@/i18n"
 import { CashflowFilterProvider } from "@/contexts/CashflowFilterContext"
 import { useEffect } from "react"
-import { View, ActivityIndicator } from "react-native"
+import { View, ActivityIndicator, Platform, PermissionsAndroid } from "react-native"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 import { GestureHandlerRootView } from "react-native-gesture-handler"
 
@@ -18,6 +18,12 @@ function RootLayoutNav() {
   const router = useRouter()
 
   useWalletNotifications()
+
+  useEffect(() => {
+    if (Platform.OS === "android" && Platform.Version >= 33) {
+      PermissionsAndroid.request("android.permission.POST_NOTIFICATIONS").catch(() => {})
+    }
+  }, [])
 
   useEffect(() => {
     if (loading) return

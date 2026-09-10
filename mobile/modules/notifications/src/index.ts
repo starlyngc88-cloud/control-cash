@@ -28,7 +28,8 @@ function getModule(): NotificationListenerType {
 export function isListenerEnabled(): boolean {
   try {
     return getModule().isListenerEnabled()
-  } catch {
+  } catch (e) {
+    console.warn("[KellyCash] isListenerEnabled failed:", e)
     return false
   }
 }
@@ -36,7 +37,10 @@ export function isListenerEnabled(): boolean {
 export function openNotificationSettings(): void {
   try {
     getModule().openNotificationSettings()
-  } catch {}
+  } catch (e) {
+    console.warn("[KellyCash] openNotificationSettings failed:", e)
+    throw e
+  }
 }
 
 export async function startListening(): Promise<void> {

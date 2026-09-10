@@ -522,6 +522,32 @@ export default function GastosScreen() {
           ))}
         </View>
 
+        {notifEnabled !== true && (
+          <View className="mx-0 mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <View className="flex-row items-center gap-2 mb-1.5">
+              <BellOff size={14} color="#d97706" />
+              <Text className="text-xs font-semibold text-amber-800">Notificaciones desactivadas</Text>
+            </View>
+            <Text className="text-[10px] text-amber-700 mb-2.5">Para capturar pagos de Wallet automáticamente, activá el acceso a notificaciones de Android.</Text>
+            <TouchableOpacity
+              onPress={async () => {
+                try {
+                  const { openNotificationSettings } = await import("@/modules/notifications")
+                  openNotificationSettings()
+                } catch (e) {
+                  Alert.alert(
+                    "Notificaciones",
+                    "No se pudo abrir la configuración de notificaciones. Verificá que la app tenga permiso de notificaciones."
+                  )
+                }
+              }}
+              className="self-start bg-amber-600 rounded-lg px-3 py-1.5"
+            >
+              <Text className="text-[10px] font-semibold text-white">Configurar notificaciones</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View className="bg-white rounded-xl border border-slate-100 shadow-sm overflow-hidden">
           {view === "categoria" && sorted.length > 1 && (
             <View className="px-4 py-2 bg-amber-50 border-b border-amber-200">
@@ -623,26 +649,6 @@ export default function GastosScreen() {
             )
           ) : view === "wallet" ? (
             <View>
-              {notifEnabled === false && (
-                <View className="mx-4 mt-3 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
-                  <View className="flex-row items-center gap-2 mb-1.5">
-                    <BellOff size={14} color="#d97706" />
-                    <Text className="text-xs font-semibold text-amber-800">Notificaciones desactivadas</Text>
-                  </View>
-                  <Text className="text-[10px] text-amber-700 mb-2.5">Para capturar pagos de Wallet automáticamente, activá el acceso a notificaciones de Android.</Text>
-                  <TouchableOpacity
-                    onPress={async () => {
-                      try {
-                        const { openNotificationSettings } = await import("@/modules/notifications")
-                        openNotificationSettings()
-                      } catch {}
-                    }}
-                    className="self-start bg-amber-600 rounded-lg px-3 py-1.5"
-                  >
-                    <Text className="text-[10px] font-semibold text-white">Configurar notificaciones</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
               {viewItems.length === 0 ? (
               <View className="px-4 py-8 items-center">
                 <CreditCard size={32} color="#cbd5e1" />

@@ -10,7 +10,7 @@ export function todayString(): string {
 }
 
 export function formatCurrency(amount: number): string {
-  return `$${amount.toLocaleString("es-CO", { minimumFractionDigits: 2 })}`
+  return `\u20AC${amount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`
 }
 
 export function formatDate(dateStr: string): string {
