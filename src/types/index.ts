@@ -142,3 +142,16 @@ export interface CommitmentPayment {
   notes: string
   created_at: string
 }
+
+export interface AmortizationSchedule {
+  id: string
+  commitment_id: string
+  payment_date: string
+  cuota: number
+  capital: number
+  interest: number
+  fees: number
+  remaining_balance: number
+  is_paid: boolean
+  created_at: string
+}

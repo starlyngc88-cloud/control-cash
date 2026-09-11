@@ -253,11 +253,10 @@ export default function CompromisosScreen() {
                 const pays = paymentsMap[c.id] ?? []
                 const progress = Number(c.total_amount) > 0 ? Math.round((1 - Number(c.current_balance) / Number(c.total_amount)) * 100) : 0
                 return (
-                  <View key={c.id}>
+                    <View key={c.id}>
+                    <TouchableOpacity onPress={() => toggleComm(c.id)} activeOpacity={0.7}>
                     <View className="flex-row items-center px-4 py-2.5 border-b border-slate-200">
-                      <TouchableOpacity onPress={() => toggleComm(c.id)} className="mr-1.5">
-                        {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
-                      </TouchableOpacity>
+                      {isExpanded ? <ChevronDown size={14} color="#94a3b8" /> : <ChevronRight size={14} color="#94a3b8" />}
                       <View className="flex-1 mr-2 min-w-0">
                         <Text className="text-xs font-semibold text-slate-700 truncate">{c.name}</Text>
                         {c.budget_categories?.name ? <Text className="text-[10px] text-slate-400">· {c.budget_categories.name}</Text> : null}
@@ -269,10 +268,11 @@ export default function CompromisosScreen() {
                       <Text className="text-[10px] text-slate-400 tabular-nums line-through ml-auto">{formatCurrency(Number(c.total_amount))}</Text>
                       <Text className="text-xs font-semibold text-rose-600 tabular-nums ml-1.5">{formatCurrency(Number(c.current_balance))}</Text>
                       <View className="flex-row items-center gap-0.5 ml-1.5">
-                        <TouchableOpacity onPress={() => openEdit(c)} className="p-0.5"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
-                        <TouchableOpacity onPress={() => handleDelete(c.id)} className="p-0.5"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
+                        <TouchableOpacity onPress={(e: any) => { e.stopPropagation(); openEdit(c); }} className="p-0.5"><Pencil size={12} color="#94a3b8" /></TouchableOpacity>
+                        <TouchableOpacity onPress={(e: any) => { e.stopPropagation(); handleDelete(c.id); }} className="p-0.5"><Trash2 size={12} color="#e11d48" /></TouchableOpacity>
                       </View>
                     </View>
+                    </TouchableOpacity>
                     {isExpanded && (
                       <View className="bg-white border-b border-slate-100 px-5 py-3">
                         {c.description ? <Text className="text-[10px] text-slate-500 mb-2">{c.description}</Text> : null}

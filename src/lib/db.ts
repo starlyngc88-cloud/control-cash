@@ -1,6 +1,6 @@
 import { supabase } from "./supabase"
-import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, ExpenseCategoryTab, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment } from "@/types"
-import { personSchema, incomeSchema, expenseSchema, expenseCategorySchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, incomeCategorySchema } from "./validation"
+import type { Person, Income, IncomeCategory, Expense, ExpenseCategory, ExpenseCategoryTab, BudgetTemplate, BudgetCategory, MonthlyBudget, Saving, SavingMovement, FutureExpense, FutureExpenseCategory, SavingCategory, Commitment, CommitmentPayment, AmortizationSchedule } from "@/types"
+import { personSchema, incomeSchema, expenseSchema, expenseCategorySchema, budgetTemplateSchema, budgetCategorySchema, monthlyBudgetSchema, savingCategorySchema, savingSchema, savingMovementSchema, futureExpenseCategorySchema, futureExpenseSchema, commitmentSchema, commitmentPaymentSchema, amortizationScheduleSchema, incomeCategorySchema } from "./validation"
 import { sanitizeInput } from "./sanitize"
 
 /* ---- People ---- */
@@ -1005,6 +1005,141 @@ export async function createCommitmentPayment(input: { commitment_id: string; am
   const { error: updateError } = await supabase.from("commitments").update({ current_balance: newBalance }).eq("id", parsed.commitment_id)
   if (updateError) throw updateError
   return pay as CommitmentPayment
+}
+
+export async function deleteCommitmentPayment(id: string) {
+  const { error } = await supabase.from("commitment_payments").delete().eq("id", id)
+  if (error) throw error
+}
+
+export async function updateCommitmentPayment(id: string, input: { amount: number; capital_amount: number; date: string; notes: string }) {
+  const { error } = await supabase.from("commitment_payments").update(input).eq("id", id)
+  if (error) throw error
+}
+
+/* ---- Amortization Schedules ---- */
+
+export async function getAmortizationSchedules(commitmentId: string) {
+  const { data, error } = await supabase.from("amortization_schedules")
+    .select("*").eq("commitment_id", commitmentId).order("payment_date")
+  if (error) throw error
+  return data as AmortizationSchedule[]
+}
+
+export async function upsertAmortizationSchedules(rows: Omit<AmortizationSchedule, "id" | "created_at">[]) {
+  if (rows.length === 0) return
+  const { error } = await supabase.from("amortization_schedules").upsert(rows, {
+    onConflict: "commitment_id,payment_date",
+    ignoreDuplicates: false,
+  })
+  if (error) throw error
+}
+
+export async function deleteAmortizationSchedules(commitmentId: string) {
+  const { error } = await supabase.from("amortization_schedules").delete().eq("commitment_id", commitmentId)
+  if (error) throw error
+}
+
+export async function markAmortizationPaid(scheduleId: string) {
+  const { error } = await supabase.from("amortization_schedules").update({ is_paid: true }).eq("id", scheduleId)
+  if (error) throw error
+}
+
+export function calculateFrenchAmortization(params: {
+  principal: number
+  annualRate: number
+  termMonths: number
+  fees: number
+  startDate: string
+}): { payment_date: string; cuota: number; capital: number; interest: number; fees: number; remaining_balance: number }[] {
+  const { principal, annualRate, termMonths, fees, startDate } = params
+  const monthlyRate = annualRate / 100 / 12
+  const rows: { payment_date: string; cuota: number; capital: number; interest: number; fees: number; remaining_balance: number }[] = []
+
+  let balance = principal
+  const cuota = monthlyRate === 0
+    ? principal / termMonths
+    : principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / (Math.pow(1 + monthlyRate, termMonths) - 1)
+
+  const start = new Date(startDate)
+
+  for (let i = 0; i < termMonths; i++) {
+    const interest = balance * monthlyRate
+    const capital = cuota - interest
+    balance = Math.max(0, balance - capital)
+
+    const payDate = new Date(start)
+    payDate.setMonth(payDate.getMonth() + i + 1)
+
+    rows.push({
+      payment_date: payDate.toISOString().split("T")[0],
+      cuota: Math.round(cuota * 100) / 100,
+      capital: Math.round(capital * 100) / 100,
+      interest: Math.round(interest * 100) / 100,
+      fees,
+      remaining_balance: Math.round(balance * 100) / 100,
+    })
+  }
+
+  return rows
+}
+
+export function calculateAmortizationFromCuota(params: {
+  principal: number
+  monthlyCuota: number
+  fees: number
+  termMonths: number
+  startDate: string
+}): { payment_date: string; cuota: number; capital: number; interest: number; fees: number; remaining_balance: number }[] {
+  const { principal, monthlyCuota, fees, termMonths, startDate } = params
+  const rows: { payment_date: string; cuota: number; capital: number; interest: number; fees: number; remaining_balance: number }[] = []
+
+  const capitalPlusInterest = monthlyCuota - fees
+  if (capitalPlusInterest <= 0 || principal <= 0) return rows
+
+  let lo = 0, hi = 1
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2
+    const pv = capitalPlusInterest * ((1 - Math.pow(1 + mid, -termMonths)) / mid)
+    if (Math.abs(pv - principal) < 0.01) break
+    if (pv > principal) lo = mid
+    else hi = mid
+  }
+  const monthlyRate = (lo + hi) / 2
+
+  const start = new Date(startDate)
+  rows.push({
+    payment_date: start.toISOString().split("T")[0],
+    cuota: 0,
+    capital: 0,
+    interest: 0,
+    fees: 0,
+    remaining_balance: principal,
+  })
+
+  let balance = principal
+
+  for (let i = 0; i < termMonths; i++) {
+    if (balance <= 0.01) break
+    const interest = balance * monthlyRate
+    const capital = Math.min(capitalPlusInterest - interest, balance)
+    const actualCuota = capital + interest + fees
+    balance = Math.max(0, balance - capital)
+
+    const payDate = new Date(start)
+    payDate.setMonth(payDate.getMonth() + i + 1)
+
+    rows.push({
+      payment_date: payDate.toISOString().split("T")[0],
+      cuota: Math.round(actualCuota * 100) / 100,
+      capital: Math.round(capital * 100) / 100,
+      interest: Math.round(interest * 100) / 100,
+      fees,
+      remaining_balance: Math.round(balance * 100) / 100,
+    })
+  }
+
+  return rows
 }
 
 /* ---- Financial Insights ---- */

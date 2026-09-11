@@ -101,6 +101,17 @@ export const commitmentPaymentSchema = z.object({
   notes: z.string().trim().max(MAX_DESC).default(""),
 })
 
+export const amortizationScheduleSchema = z.object({
+  commitment_id: z.string().uuid(),
+  payment_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"),
+  cuota: z.number().min(0).finite(),
+  capital: z.number().min(0).finite(),
+  interest: z.number().min(0).finite(),
+  fees: z.number().min(0).finite().default(0),
+  remaining_balance: z.number().min(0).finite(),
+  is_paid: z.boolean().default(false),
+})
+
 export const allowedUserSchema = z.object({
   email: z.string().email("Email inválido").toLowerCase().trim(),
   active: z.boolean().optional().default(true),
@@ -119,4 +130,5 @@ export type FutureExpenseCategoryInput = z.input<typeof futureExpenseCategorySch
 export type FutureExpenseInput = z.input<typeof futureExpenseSchema>
 export type CommitmentInput = z.input<typeof commitmentSchema>
 export type CommitmentPaymentInput = z.input<typeof commitmentPaymentSchema>
+export type AmortizationScheduleInput = z.input<typeof amortizationScheduleSchema>
 export type AllowedUserInput = z.input<typeof allowedUserSchema>
