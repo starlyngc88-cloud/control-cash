@@ -9,6 +9,7 @@ dist/
 
 # EAS builds from git in managed workflow; android/ is a local prebuild artifact
 /android/
+local.properties
 
 # Native module build artifacts
 modules/*/android/build/

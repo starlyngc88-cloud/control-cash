@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, TouchableOpacity, Modal, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { useRouter } from "expo-router"
-import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, getAllBudgetCategories, type CommitmentWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
+import { getCommitments, createCommitment, updateCommitment, deleteCommitment, getCommitmentPayments, createCommitmentPayment, updateCommitmentPayment, deleteCommitmentPayment, getAllBudgetCategories, type CommitmentWithRelations, type BudgetCategoryWithTemplate } from "@/services/api"
 import { formatCurrency, formatDate } from "@/utils/format"
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription"
 import { Plus, ShieldCheck, Pencil, Trash2, X, ArrowDownCircle, Search, ChevronDown, ChevronRight } from "lucide-react-native"
@@ -31,10 +31,12 @@ export default function CompromisosScreen() {
   const [commCategoryId, setCommCategoryId] = useState("")
   const [payAmount, setPayAmount] = useState("")
   const [payCapital, setPayCapital] = useState("")
+  const [payInterests, setPayInterests] = useState("")
   const [payNotes, setPayNotes] = useState("")
   const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0])
   const [payCommBalance, setPayCommBalance] = useState(0)
   const [payCommTotal, setPayCommTotal] = useState(0)
+  const [editingPayment, setEditingPayment] = useState<CommitmentPayment | null>(null)
 
   const load = useCallback(async () => {
     const [com, cats, pays] = await Promise.all([getCommitments(), getAllBudgetCategories(), getCommitmentPayments()])
@@ -80,18 +82,77 @@ export default function CompromisosScreen() {
     ])
   }
 
-  const openPayment = (comm: { id: string; current_balance: number; total_amount: number }) => {
-    setPaymentCommId(comm.id); setPayAmount(""); setPayCapital(""); setPayNotes(""); setPayDate(new Date().toISOString().split("T")[0]); setPayCommBalance(Number(comm.current_balance)); setPayCommTotal(Number(comm.total_amount)); setPaymentModalOpen(true)
+  const openPayment = (comm: { id: string; current_balance: number; total_amount: number }, payment?: CommitmentPayment) => {
+    setPaymentCommId(comm.id)
+    setPayCommBalance(Number(comm.current_balance))
+    setPayCommTotal(Number(comm.total_amount))
+    if (payment) {
+      setEditingPayment(payment)
+      setPayAmount(String(payment.amount))
+      setPayCapital(String(payment.capital_amount))
+      const interests = Number(payment.amount) - Number(payment.capital_amount)
+      setPayInterests(interests > 0 ? String(interests) : "")
+      setPayNotes(payment.notes ?? "")
+      setPayDate(payment.date)
+    } else {
+      setEditingPayment(null)
+      setPayAmount("")
+      setPayCapital("")
+      setPayInterests("")
+      setPayNotes("")
+      setPayDate(new Date().toISOString().split("T")[0])
+    }
+    setPaymentModalOpen(true)
+  }
+
+  const handlePayAmountChange = (val: string) => {
+    setPayAmount(val)
+    const total = parseFloat(val) || 0
+    const capital = parseFloat(payCapital) || 0
+    if (total > 0 && capital > 0) {
+      setPayInterests(String(Math.max(0, total - capital)))
+    } else {
+      setPayInterests("")
+    }
+  }
+
+  const handlePayCapitalChange = (val: string) => {
+    setPayCapital(val)
+    const total = parseFloat(payAmount) || 0
+    const capital = parseFloat(val) || 0
+    if (total > 0 && capital > 0) {
+      setPayInterests(String(Math.max(0, total - capital)))
+    } else {
+      setPayInterests("")
+    }
+  }
+
+  const handlePayInterestsChange = (val: string) => {
+    setPayInterests(val)
+    const total = parseFloat(payAmount) || 0
+    const interests = parseFloat(val) || 0
+    if (total > 0 && interests >= 0) {
+      setPayCapital(String(Math.max(0, total - interests)))
+    }
   }
 
   const handlePayment = async () => {
     if (!payAmount || !payCapital || !paymentCommId) { Alert.alert("Error", "Completá monto y capital."); return }
     setSubmitting(true)
     try {
-      await createCommitmentPayment({ commitment_id: paymentCommId, amount: parseFloat(payAmount), capital_amount: parseFloat(payCapital), date: payDate, notes: payNotes.trim() })
+      const data = { commitment_id: paymentCommId, amount: parseFloat(payAmount), capital_amount: parseFloat(payCapital), date: payDate, notes: payNotes.trim() }
+      if (editingPayment) await updateCommitmentPayment(editingPayment.id, data)
+      else await createCommitmentPayment(data)
       setPaymentModalOpen(false); load()
     } catch { Alert.alert("Error", "No se pudo registrar.") }
     finally { setSubmitting(false) }
+  }
+
+  const handleDeletePayment = (payment: CommitmentPayment) => {
+    Alert.alert("Eliminar pago", `¿Eliminar el pago del ${formatDate(payment.date)}?`, [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Eliminar", style: "destructive", onPress: async () => { await deleteCommitmentPayment(payment.id); load() } },
+    ])
   }
 
   const toggleComm = (id: string) => {
@@ -213,10 +274,31 @@ export default function CompromisosScreen() {
                       </View>
                     </View>
                     {isExpanded && (
-                      <View className="bg-white border-b border-slate-100 px-5 py-2.5">
+                      <View className="bg-white border-b border-slate-100 px-5 py-3">
                         {c.description ? <Text className="text-[10px] text-slate-500 mb-2">{c.description}</Text> : null}
+                        {pays.length > 0 && (() => {
+                          const totalPaid = pays.reduce((s, p) => s + Number(p.amount), 0)
+                          const totalCapital = pays.reduce((s, p) => s + Number(p.capital_amount), 0)
+                          const totalInterests = totalPaid - totalCapital
+                          return (
+                            <View className="flex-row gap-3 mb-2 bg-slate-50 rounded-lg px-3 py-2">
+                              <View className="flex-1">
+                                <Text className="text-[9px] text-slate-400">Pagado</Text>
+                                <Text className="text-[10px] font-semibold text-slate-700">{formatCurrency(totalPaid)}</Text>
+                              </View>
+                              <View className="flex-1">
+                                <Text className="text-[9px] text-slate-400">Capital</Text>
+                                <Text className="text-[10px] font-semibold text-emerald-600">{formatCurrency(totalCapital)}</Text>
+                              </View>
+                              <View className="flex-1">
+                                <Text className="text-[9px] text-slate-400">Intereses</Text>
+                                <Text className="text-[10px] font-semibold text-amber-600">{formatCurrency(totalInterests)}</Text>
+                              </View>
+                            </View>
+                          )
+                        })()}
                         <TouchableOpacity onPress={() => openPayment(c)} className="self-start flex-row items-center gap-1 bg-indigo-600 rounded-lg px-3 py-1.5 mb-2">
-                          <ArrowDownCircle size={12} color="white" /><Text className="text-[10px] font-medium text-white">Registrar pago</Text>
+                          <ArrowDownCircle size={12} color="white" /><Text className="text-[10px] font-medium text-white">{editingPayment ? "Editar pago" : "Registrar pago"}</Text>
                         </TouchableOpacity>
                         {pays.length > 0 ? (() => {
                           const chronological = [...pays].reverse()
@@ -228,16 +310,26 @@ export default function CompromisosScreen() {
                           }
                           return (
                             <View className="space-y-1">
-                              {pays.map((p: CommitmentPayment) => (
-                                <View key={p.id} className="flex-row items-center justify-between px-2.5 py-1.5 bg-slate-50 rounded-lg">
-                                  <Text className="text-[10px] text-slate-500">{formatDate(p.date)}{p.notes ? ` · ${p.notes}` : ""}</Text>
-                                  <View className="flex-row items-center gap-1.5">
-                                    <Text className="text-[10px] font-medium text-rose-600 tabular-nums">{formatCurrency(Number(p.amount))}</Text>
-                                    <Text className="text-[10px] text-rose-500 tabular-nums">-{formatCurrency(Number(p.capital_amount))}</Text>
-                                    <Text className="text-[10px] text-slate-400 tabular-nums">→ {formatCurrency(balances.get(p.id) ?? 0)}</Text>
+                              {pays.map((p: CommitmentPayment) => {
+                                const interests = Number(p.amount) - Number(p.capital_amount)
+                                return (
+                                  <View key={p.id} className="px-2.5 py-2 bg-slate-50 rounded-lg">
+                                    <View className="flex-row items-center justify-between mb-1">
+                                      <Text className="text-[10px] text-slate-500">{formatDate(p.date)}{p.notes ? ` · ${p.notes}` : ""}</Text>
+                                      <View className="flex-row items-center gap-1">
+                                        <TouchableOpacity onPress={() => openPayment(c, p)} className="p-0.5"><Pencil size={11} color="#94a3b8" /></TouchableOpacity>
+                                        <TouchableOpacity onPress={() => handleDeletePayment(p)} className="p-0.5"><Trash2 size={11} color="#e11d48" /></TouchableOpacity>
+                                      </View>
+                                    </View>
+                                    <View className="flex-row items-center gap-2">
+                                      <Text className="text-[10px] font-medium text-slate-600">{formatCurrency(Number(p.amount))}</Text>
+                                      <Text className="text-[9px] text-emerald-600">→{formatCurrency(Number(p.capital_amount))}</Text>
+                                      {interests > 0 && <Text className="text-[9px] text-amber-600">IVA {formatCurrency(interests)}</Text>}
+                                      <Text className="text-[9px] text-slate-400 ml-auto">Saldo {formatCurrency(balances.get(p.id) ?? 0)}</Text>
+                                    </View>
                                   </View>
-                                </View>
-                              ))}
+                                )
+                              })}
                             </View>
                           )
                         })() : (
@@ -315,7 +407,7 @@ export default function CompromisosScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} className="flex-1 justify-end">
           <View className="bg-white rounded-t-2xl p-5 border-t border-slate-200 shadow-xl" style={{ paddingBottom: insets.bottom + 20 }}>
             <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-base font-semibold text-slate-800">Registrar pago</Text>
+              <Text className="text-base font-semibold text-slate-800">{editingPayment ? "Editar pago" : "Registrar pago"}</Text>
               <TouchableOpacity onPress={() => setPaymentModalOpen(false)}><X size={20} color="#94a3b8" /></TouchableOpacity>
             </View>
             <View className="space-y-3">
@@ -328,14 +420,18 @@ export default function CompromisosScreen() {
                   <Text className="text-[10px] font-medium text-emerald-600">Saldo después del pago: {formatCurrency(Math.max(0, payCommBalance - Number(payCapital)))}</Text>
                 </View>
               )}
+              <View>
+                <Text className="text-xs font-medium text-slate-600 mb-1">Monto del pago</Text>
+                <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payAmount} onChangeText={handlePayAmountChange} keyboardType="decimal-pad" />
+              </View>
               <View className="flex-row gap-3">
                 <View className="flex-1">
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Monto del pago</Text>
-                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Abono a capital</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payCapital} onChangeText={handlePayCapitalChange} keyboardType="decimal-pad" />
                 </View>
                 <View className="flex-1">
-                  <Text className="text-xs font-medium text-slate-600 mb-1">Abono a capital</Text>
-                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payCapital} onChangeText={setPayCapital} keyboardType="decimal-pad" />
+                  <Text className="text-xs font-medium text-slate-600 mb-1">Intereses / IVA</Text>
+                  <TextInput className="h-10 px-3 rounded-xl border border-slate-200 bg-white text-sm text-slate-800" placeholder="0" placeholderTextColor="#94a3b8" value={payInterests} onChangeText={handlePayInterestsChange} keyboardType="decimal-pad" />
                 </View>
               </View>
               <View>
@@ -348,7 +444,7 @@ export default function CompromisosScreen() {
               </View>
             </View>
             <TouchableOpacity onPress={handlePayment} disabled={submitting} className="h-11 rounded-xl bg-emerald-600 items-center justify-center mt-4">
-              {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">Registrar pago</Text>}
+              {submitting ? <ActivityIndicator color="white" /> : <Text className="text-sm font-semibold text-white">{editingPayment ? "Guardar cambios" : "Registrar pago"}</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

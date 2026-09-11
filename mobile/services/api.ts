@@ -726,6 +726,34 @@ export async function createCommitmentPayment(data: Partial<CommitmentPayment>) 
   return payment
 }
 
+export async function updateCommitmentPayment(id: string, data: Partial<CommitmentPayment>) {
+  if (data.commitment_id && data.capital_amount !== undefined) {
+    const { data: old } = await supabase.from("commitment_payments").select("capital_amount, commitment_id").eq("id", id).single()
+    if (old) {
+      const oldCapital = Number(old.capital_amount)
+      const newCapital = Number(data.capital_amount)
+      const diff = oldCapital - newCapital
+      const { data: comm } = await supabase.from("commitments").select("current_balance").eq("id", old.commitment_id).single()
+      const newBalance = Math.max(0, Number(comm?.current_balance ?? 0) + diff)
+      await supabase.from("commitments").update({ current_balance: newBalance }).eq("id", old.commitment_id)
+    }
+  }
+  const { data: payment, error } = await supabase.from("commitment_payments").update(data).eq("id", id).select().single()
+  if (error) throw error
+  return payment
+}
+
+export async function deleteCommitmentPayment(id: string) {
+  const { data: old } = await supabase.from("commitment_payments").select("capital_amount, commitment_id").eq("id", id).single()
+  if (old) {
+    const { data: comm } = await supabase.from("commitments").select("current_balance").eq("id", old.commitment_id).single()
+    const newBalance = Number(comm?.current_balance ?? 0) + Number(old.capital_amount)
+    await supabase.from("commitments").update({ current_balance: newBalance }).eq("id", old.commitment_id)
+  }
+  const { error } = await supabase.from("commitment_payments").delete().eq("id", id)
+  if (error) throw error
+}
+
 export async function getBudgetTemplates(): Promise<BudgetTemplate[]> {
   const { data } = await supabase.from("budget_templates").select("*").order("name")
   return data ?? []
